@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 const { pool, initSchema } = require('./db/init');
 const { TEST_TYPES } = require('./db/testTypes');
-const { generateRequestPdf } = require('./lib/pdfExport');
+const { renderPrintHtml } = require('./lib/printView');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -222,20 +222,16 @@ app.put('/api/requests/:id', async (req, res) => {
   }
 });
 
-app.get('/api/requests/:id/pdf', async (req, res) => {
+app.get('/requests/:id/print', async (req, res) => {
   try {
     const data = await getFullRequest(req.params.id);
-    if (!data) return res.status(404).json({ error: 'Not found' });
+    if (!data) return res.status(404).send('Permintaan tidak ditemukan');
 
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${(data.job_number || 'permintaan-uji').replace(/[^a-z0-9.-]+/gi, '_')}.pdf"`);
-
-    const doc = generateRequestPdf(data);
-    doc.pipe(res);
-    doc.end();
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPrintHtml(data));
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Gagal membuat PDF' });
+    res.status(500).send('Gagal membuat halaman cetak');
   }
 });
 

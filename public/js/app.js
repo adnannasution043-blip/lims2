@@ -128,7 +128,7 @@
     contentEl.querySelectorAll('[data-edit]').forEach(btn =>
       btn.addEventListener('click', () => openForm(btn.dataset.edit)));
     contentEl.querySelectorAll('[data-pdf]').forEach(btn =>
-      btn.addEventListener('click', () => window.open(`/api/requests/${btn.dataset.pdf}/pdf`, '_blank')));
+      btn.addEventListener('click', () => window.open(`/requests/${btn.dataset.pdf}/print`, '_blank')));
     contentEl.querySelectorAll('[data-del]').forEach(btn =>
       btn.addEventListener('click', () => deleteRequest(btn.dataset.del)));
   }
@@ -192,7 +192,7 @@
     document.getElementById('btnBack').addEventListener('click', () => { state.view = 'list'; render(); });
     if (state.editingId) {
       document.getElementById('btnExportPdf').addEventListener('click', () =>
-        window.open(`/api/requests/${state.editingId}/pdf`, '_blank'));
+        window.open(`/requests/${state.editingId}/print`, '_blank'));
     }
 
     contentEl.innerHTML = `
