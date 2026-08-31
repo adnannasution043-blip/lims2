@@ -106,6 +106,7 @@
         <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
         <td>
           <button class="btn btn-sm" data-edit="${r.id}">Buka</button>
+          <button class="btn btn-sm" data-pdf="${r.id}">Export PDF</button>
           <button class="btn btn-sm btn-danger" data-del="${r.id}">Hapus</button>
         </td>
       </tr>`).join('');
@@ -126,6 +127,8 @@
 
     contentEl.querySelectorAll('[data-edit]').forEach(btn =>
       btn.addEventListener('click', () => openForm(btn.dataset.edit)));
+    contentEl.querySelectorAll('[data-pdf]').forEach(btn =>
+      btn.addEventListener('click', () => window.open(`/api/requests/${btn.dataset.pdf}/pdf`, '_blank')));
     contentEl.querySelectorAll('[data-del]').forEach(btn =>
       btn.addEventListener('click', () => deleteRequest(btn.dataset.del)));
   }
@@ -182,8 +185,15 @@
     const f = state.formData || {};
     pageTitle.textContent = state.editingId ? 'Edit Permintaan Uji' : 'Permintaan Uji Baru';
     pageSubtitle.textContent = 'Tinjauan Permintaan Pengujian — Testing Requirements Review';
-    topbarActions.innerHTML = `<button class="btn" id="btnBack">&larr; Kembali ke Daftar</button>`;
+    topbarActions.innerHTML = `
+      <button class="btn" id="btnBack">&larr; Kembali ke Daftar</button>
+      ${state.editingId ? `<button type="button" class="btn" id="btnExportPdf">Export PDF</button>` : ''}
+    `;
     document.getElementById('btnBack').addEventListener('click', () => { state.view = 'list'; render(); });
+    if (state.editingId) {
+      document.getElementById('btnExportPdf').addEventListener('click', () =>
+        window.open(`/api/requests/${state.editingId}/pdf`, '_blank'));
+    }
 
     contentEl.innerHTML = `
       <form id="reqForm">

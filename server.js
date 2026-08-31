@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const { pool, initSchema } = require('./db/init');
 const { TEST_TYPES } = require('./db/testTypes');
+const { generateRequestPdf } = require('./lib/pdfExport');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -218,6 +219,23 @@ app.put('/api/requests/:id', async (req, res) => {
     res.status(500).json({ error: 'Gagal memperbarui data', detail: String(err.message || err) });
   } finally {
     client.release();
+  }
+});
+
+app.get('/api/requests/:id/pdf', async (req, res) => {
+  try {
+    const data = await getFullRequest(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Not found' });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${(data.job_number || 'permintaan-uji').replace(/[^a-z0-9.-]+/gi, '_')}.pdf"`);
+
+    const doc = generateRequestPdf(data);
+    doc.pipe(res);
+    doc.end();
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal membuat PDF' });
   }
 });
 
