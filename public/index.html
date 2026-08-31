@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DETECH LIMS — Permintaan Uji</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="app-shell">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">DE<span>TECH</span></div>
+      <div class="brand-sub">Material Testing Laboratory</div>
+    </div>
+
+    <nav class="nav">
+      <a class="nav-item" data-nav="dashboard">
+        <span class="nav-icon">&#8962;</span> Dashboard
+      </a>
+      <a class="nav-item active" data-nav="permintaan-uji">
+        <span class="nav-icon">&#128203;</span> Permintaan Uji
+      </a>
+      <a class="nav-item" data-nav="penerimaan-sampel">
+        <span class="nav-icon">&#8595;</span> Penerimaan Sampel
+      </a>
+      <a class="nav-item" data-nav="analisis-sampel">
+        <span class="nav-icon">&#9879;</span> Analisis Sampel
+      </a>
+      <a class="nav-item" data-nav="hasil-laporan">
+        <span class="nav-icon">&#128196;</span> Hasil &amp; Laporan
+      </a>
+      <a class="nav-item" data-nav="manajemen-data">
+        <span class="nav-icon">&#128451;</span> Manajemen Data
+      </a>
+      <a class="nav-item" data-nav="qaqc">
+        <span class="nav-icon">&#128737;</span> QA/QC
+      </a>
+      <a class="nav-item" data-nav="inventori">
+        <span class="nav-icon">&#128230;</span> Inventori
+      </a>
+      <a class="nav-item" data-nav="metode">
+        <span class="nav-icon">&#128218;</span> Metode
+      </a>
+      <a class="nav-item" data-nav="peralatan">
+        <span class="nav-icon">&#128300;</span> Peralatan
+      </a>
+      <a class="nav-item" data-nav="pengguna">
+        <span class="nav-icon">&#128101;</span> Pengguna
+      </a>
+      <a class="nav-item" data-nav="pengaturan">
+        <span class="nav-icon">&#9881;</span> Pengaturan
+      </a>
+    </nav>
+
+    <a class="nav-item nav-exit" data-nav="keluar">
+      <span class="nav-icon">&#8618;</span> Keluar
+    </a>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <h1 id="pageTitle">Permintaan Uji</h1>
+        <p id="pageSubtitle" class="muted">Tinjauan Permintaan Pengujian &mdash; Testing Requirements Review</p>
+      </div>
+      <div class="topbar-actions" id="topbarActions"></div>
+    </header>
+
+    <main class="content" id="content">
+      <!-- rendered by app.js -->
+    </main>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

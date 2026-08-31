@@ -1,0 +1,14 @@
+{
+  "name": "detech-lims",
+  "version": "0.1.0",
+  "description": "DETECH LIMS - Tahap 1: Tinjauan Permintaan Pengujian (Testing Requirements Review)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.23.0"
+  }
+}
