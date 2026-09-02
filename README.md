@@ -1,7 +1,8 @@
-# DETECH LIMS — Tahap 1: Permintaan Uji
+# DETECH LIMS — Tahap 1: Permintaan Uji & Work Order
 
 Halaman pertama dari project LIMS DETECH: replika digital form **DPI-LP-FR-24 Rev.4
-— Tinjauan Permintaan Pengujian (Testing Requirements Review)**.
+— Tinjauan Permintaan Pengujian (Testing Requirements Review)**, dilanjutkan dengan
+**DPI-LP-FR-25 Rev.3 — Work Order** yang dibuat per permintaan (1 permintaan final = 1 Work Order).
 
 ## Stack
 
@@ -37,19 +38,27 @@ Buka http://localhost:3000
 
 ```
 detech-lims/
-├── server.js           # Express app + semua REST API (async, pakai pg Pool)
+├── server.js               # Express app + semua REST API (async, pakai pg Pool)
 ├── db/
-│   ├── init.js          # Pool koneksi Postgres + schema (test_requests, coupon_tests, test_items)
-│   └── testTypes.js      # 13 jenis pengujian tetap sesuai form asli
+│   ├── init.js              # Pool koneksi Postgres + schema (test_requests, coupon_tests,
+│   │                         # test_items, work_orders, work_order_sample_marks)
+│   ├── testTypes.js         # 13 jenis pengujian tetap sesuai form Tinjauan Permintaan Pengujian
+│   └── workOrderSteps.js    # 6 tahapan proses tetap (Receiving..Doc. Checked) untuk Work Order
+├── lib/
+│   ├── printCommon.js       # Helper bersama: logo DETECH (data URI), esc(), format tanggal
+│   ├── printView.js         # HTML cetak Tinjauan Permintaan Pengujian (DPI-LP-FR-24)
+│   └── workOrderPrintView.js# HTML cetak Work Order (DPI-LP-FR-25)
 ├── .env.example
 └── public/
     ├── index.html
-    ├── css/style.css     # Tema warna mengikuti mockup dashboard (gold/amber + navy)
-    └── js/app.js         # List view + form view, semua logic di sisi client
+    ├── img/detech-logo.png  # Logo asli, diekstrak dari contoh PDF
+    ├── css/style.css        # Tema warna mengikuti mockup dashboard (gold/amber + navy)
+    └── js/app.js            # List/form view Permintaan Uji & Work Order, semua logic di client
 ```
 
 ## Fitur tahap ini
 
+**Tinjauan Permintaan Pengujian (DPI-LP-FR-24)**
 - Daftar semua Tinjauan Permintaan Pengujian yang tersimpan (draft/final)
 - Form baru / edit, mengikuti seluruh field form asli:
   - Informasi umum (No. Pekerjaan otomatis ter-generate `DE.yymmdd.seq`, Perusahaan, PO, dll)
@@ -58,13 +67,23 @@ detech-lims/
     tabel 13 jenis pengujian (checkbox, jumlah, metode tes), termasuk field
     tambahan Charpy (T°, WM, BM, HAZ)
   - Tanda tangan pelanggan & penerima
-- Simpan sebagai Draft atau Finalisasi
-- Hapus permintaan
+- Simpan sebagai Draft atau Finalisasi, atau hapus permintaan
+- Export ke PDF: buka halaman cetak HTML (`/requests/:id/print`) yang niru layout form asli,
+  lalu print/simpan-sebagai-PDF lewat browser
+
+**Work Order (DPI-LP-FR-25)**
+- Dibuat per permintaan yang sudah **Final** (tombol "+ Work Order" di daftar Permintaan Uji) —
+  relasi 1:1, info pelanggan & coupon test otomatis diambil dari permintaan terkait
+- Field khas Work Order: Tgl. Testing, Our Reference, Contact Person, Sample Marking per
+  coupon test, PIC tiap tahap proses (Receiving/Machining/Inspection/Testing/Reporting/Doc.
+  Checked), dan approval (Prepared by/Checked by/Approved by)
+- Tabel jenis pengujian pada Work Order hanya menampilkan yang sudah dicentang di permintaan
+  asal (bukan semua 13 baris seperti form Tinjauan Permintaan Pengujian)
+- Daftar Work Order sendiri di menu sidebar, simpan Draft/Final, hapus, dan export PDF
+  (`/work-orders/:id/print`) dengan pendekatan cetak yang sama
 
 ## Belum dikerjakan (menyusul di tahap berikutnya)
 
-- Halaman Work Order (sengaja dilewati sesuai instruksi)
-- Export/print ke PDF yang match layout form asli
 - Menu-menu lain di sidebar (Dashboard, Penerimaan Sampel, dst.) — saat ini
   tampil tapi non-aktif sebagai placeholder
 - Autentikasi/login

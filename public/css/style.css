@@ -265,6 +265,20 @@ table.data-table tr:hover td { background: var(--gold-light); }
 }
 
 .field textarea { resize: vertical; min-height: 54px; }
+.field input:disabled { background: var(--bg); color: var(--text-muted); }
+
+/* Work Order: sample marking per coupon */
+
+.wo-coupon-row {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 16px;
+  align-items: start;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.wo-coupon-row:last-child { border-bottom: none; }
+.wo-coupon-row .wo-coupon-summary { font-size: 13px; line-height: 1.6; }
 
 /* Y/N review rows */
 

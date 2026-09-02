@@ -3,6 +3,8 @@ const path = require('path');
 const { pool, initSchema } = require('./db/init');
 const { TEST_TYPES } = require('./db/testTypes');
 const { renderPrintHtml } = require('./lib/printView');
+const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
+const { PROCESS_STEPS } = require('./db/workOrderSteps');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -49,11 +51,37 @@ async function serializeCouponRows(testRequestId) {
 }
 
 async function getFullRequest(id) {
-  const { rows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [id]);
+  const { rows } = await pool.query(
+    `SELECT tr.*, wo.id AS work_order_id
+     FROM test_requests tr
+     LEFT JOIN work_orders wo ON wo.test_request_id = tr.id
+     WHERE tr.id = $1`,
+    [id]
+  );
   const req = rows[0];
   if (!req) return null;
   req.coupon_tests = await serializeCouponRows(id);
   return req;
+}
+
+async function getFullWorkOrder(id) {
+  const { rows } = await pool.query(`SELECT * FROM work_orders WHERE id = $1`, [id]);
+  const wo = rows[0];
+  if (!wo) return null;
+
+  const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [wo.test_request_id]);
+  wo.test_request = reqRows[0] || null;
+
+  const couponRows = await serializeCouponRows(wo.test_request_id);
+  const { rows: marks } = await pool.query(
+    `SELECT coupon_row_no, sample_marking FROM work_order_sample_marks WHERE work_order_id = $1`,
+    [id]
+  );
+  const markByRow = {};
+  marks.forEach(m => { markByRow[m.coupon_row_no] = m.sample_marking; });
+  wo.coupon_tests = couponRows.map(c => ({ ...c, sample_marking: markByRow[c.row_no] || '' }));
+
+  return wo;
 }
 
 async function insertCouponRows(client, testRequestId, couponRows) {
@@ -110,8 +138,11 @@ app.get('/api/next-job-number', async (req, res) => {
 app.get('/api/requests', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, job_number, company, project_name, received_date, status, created_at
-       FROM test_requests ORDER BY id DESC`
+      `SELECT tr.id, tr.job_number, tr.company, tr.project_name, tr.received_date, tr.status, tr.created_at,
+              wo.id AS work_order_id
+       FROM test_requests tr
+       LEFT JOIN work_orders wo ON wo.test_request_id = tr.id
+       ORDER BY tr.id DESC`
     );
     res.json(rows);
   } catch (err) {
@@ -243,6 +274,139 @@ app.delete('/api/requests/:id', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal menghapus data' });
+  }
+});
+
+// ---------- Work Order (DPI-LP-FR-25) ----------
+
+app.get('/api/work-order-steps', (req, res) => {
+  res.json({ steps: PROCESS_STEPS });
+});
+
+app.get('/api/work-orders', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT wo.id, wo.test_request_id, wo.testing_date, wo.status, wo.created_at,
+              tr.job_number, tr.company, tr.project_name
+       FROM work_orders wo
+       JOIN test_requests tr ON tr.id = wo.test_request_id
+       ORDER BY wo.id DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat data' });
+  }
+});
+
+app.get('/api/work-orders/:id', async (req, res) => {
+  try {
+    const data = await getFullWorkOrder(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Not found' });
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat data' });
+  }
+});
+
+app.post('/api/requests/:id/work-order', async (req, res) => {
+  try {
+    const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [req.params.id]);
+    const testRequest = reqRows[0];
+    if (!testRequest) return res.status(404).json({ error: 'Permintaan tidak ditemukan' });
+    if (testRequest.status !== 'final') {
+      return res.status(400).json({ error: 'Permintaan harus difinalisasi dulu sebelum membuat Work Order' });
+    }
+
+    const { rows: existing } = await pool.query(
+      `SELECT id FROM work_orders WHERE test_request_id = $1`, [req.params.id]
+    );
+    if (existing.length) {
+      return res.status(409).json({ error: 'Work Order untuk permintaan ini sudah ada', workOrderId: existing[0].id });
+    }
+
+    const { rows: [wo] } = await pool.query(
+      `INSERT INTO work_orders (test_request_id) VALUES ($1) RETURNING id`,
+      [req.params.id]
+    );
+    res.status(201).json(await getFullWorkOrder(wo.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal membuat Work Order' });
+  }
+});
+
+app.put('/api/work-orders/:id', async (req, res) => {
+  const id = req.params.id;
+  const b = req.body || {};
+  const client = await pool.connect();
+  try {
+    const { rows: existing } = await client.query(`SELECT id FROM work_orders WHERE id = $1`, [id]);
+    if (!existing.length) {
+      client.release();
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE work_orders SET
+         testing_date=$1, our_reference=$2, contact_person=$3,
+         receiving_pic=$4, machining_pic=$5, inspection_pic=$6, testing_pic=$7, reporting_pic=$8, doc_checked_pic=$9,
+         prepared_by_name=$10, checked_by_name=$11, approved_by_name=$12, approval_date=$13,
+         status=$14, updated_at=NOW()
+       WHERE id=$15`,
+      [
+        b.testing_date || '', b.our_reference || '', b.contact_person || '',
+        b.receiving_pic || '', b.machining_pic || '', b.inspection_pic || '',
+        b.testing_pic || '', b.reporting_pic || '', b.doc_checked_pic || '',
+        b.prepared_by_name || '', b.checked_by_name || '', b.approved_by_name || '', b.approval_date || '',
+        b.status || 'draft', id
+      ]
+    );
+
+    for (const mark of (b.sample_marks || [])) {
+      await client.query(
+        `INSERT INTO work_order_sample_marks (work_order_id, coupon_row_no, sample_marking)
+         VALUES ($1,$2,$3)
+         ON CONFLICT (work_order_id, coupon_row_no) DO UPDATE SET sample_marking = EXCLUDED.sample_marking`,
+        [id, mark.row_no, mark.sample_marking || '']
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json(await getFullWorkOrder(id));
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memperbarui Work Order', detail: String(err.message || err) });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/work-orders/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM work_orders WHERE id = $1`, [req.params.id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus Work Order' });
+  }
+});
+
+app.get('/work-orders/:id/print', async (req, res) => {
+  try {
+    const data = await getFullWorkOrder(req.params.id);
+    if (!data) return res.status(404).send('Work Order tidak ditemukan');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderWorkOrderPrintHtml(data));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Gagal membuat halaman cetak');
   }
 });
 

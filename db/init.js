@@ -89,6 +89,49 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_coupon_tests_request ON coupon_tests(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_test_items_coupon ON test_items(coupon_test_id);
+
+    -- Work Order (DPI-LP-FR-25): satu per Tinjauan Permintaan Pengujian yang sudah final.
+    -- Info pelanggan & coupon test tidak diduplikasi di sini, cukup dibaca dari test_requests/
+    -- coupon_tests lewat test_request_id — tabel ini hanya menyimpan data yang memang khas
+    -- Work Order (tanggal testing, PIC tiap tahap proses, approval).
+    CREATE TABLE IF NOT EXISTS work_orders (
+      id SERIAL PRIMARY KEY,
+      test_request_id INTEGER NOT NULL UNIQUE REFERENCES test_requests(id) ON DELETE CASCADE,
+
+      testing_date TEXT,
+      our_reference TEXT,
+      contact_person TEXT,
+
+      receiving_pic TEXT,
+      machining_pic TEXT,
+      inspection_pic TEXT,
+      testing_pic TEXT,
+      reporting_pic TEXT,
+      doc_checked_pic TEXT,
+
+      prepared_by_name TEXT,
+      checked_by_name TEXT,
+      approved_by_name TEXT,
+      approval_date TEXT,
+
+      status TEXT DEFAULT 'draft',        -- 'draft' | 'final'
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Sample Marking per baris coupon test, dikaitkan lewat row_no (bukan coupon_tests.id)
+    -- karena PUT /api/requests/:id men-delete+insert ulang seluruh coupon_tests setiap
+    -- request disimpan — mengikat lewat id akan membuat data ini gampang lepas/orphan.
+    CREATE TABLE IF NOT EXISTS work_order_sample_marks (
+      id SERIAL PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      coupon_row_no INTEGER NOT NULL,
+      sample_marking TEXT,
+      UNIQUE(work_order_id, coupon_row_no)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_work_orders_request ON work_orders(test_request_id);
+    CREATE INDEX IF NOT EXISTS idx_wo_sample_marks_wo ON work_order_sample_marks(work_order_id);
   `);
 }
 
