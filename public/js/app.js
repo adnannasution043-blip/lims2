@@ -356,28 +356,32 @@
 
         <div class="card">
           <p class="section-title">Tanda Tangan</p>
-          <div class="form-grid">
-            <div class="field">
-              <label>Nama Pelanggan <span class="en">Customer Name</span></label>
-              <input type="text" name="customer_name" value="${esc(f.customer_name)}">
+          <div class="signature-columns">
+            <div class="signature-column">
+              <div class="field">
+                <label>Nama Pelanggan <span class="en">Customer Name</span></label>
+                <input type="text" name="customer_name" value="${esc(f.customer_name)}">
+              </div>
+              <div class="field">
+                <label>Tanggal <span class="en">Customer Date</span></label>
+                <input type="date" name="customer_date" value="${esc(f.customer_date)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('customer_signature', 'Tanda Tangan Pelanggan', 'Customer Signature', f.customer_signature)}
+              </div>
             </div>
-            <div class="field">
-              <label>Tanggal <span class="en">Customer Date</span></label>
-              <input type="date" name="customer_date" value="${esc(f.customer_date)}">
-            </div>
-            <div class="field full">
-              ${signaturePadHtml('customer_signature', 'Tanda Tangan Pelanggan', 'Customer Signature', f.customer_signature)}
-            </div>
-            <div class="field">
-              <label>Diterima Oleh <span class="en">Received By</span></label>
-              <input type="text" name="received_by_name" value="${esc(f.received_by_name)}">
-            </div>
-            <div class="field">
-              <label>Tanggal <span class="en">Received Date</span></label>
-              <input type="date" name="received_by_date" value="${esc(f.received_by_date)}">
-            </div>
-            <div class="field full">
-              ${signaturePadHtml('received_by_signature', 'Tanda Tangan Penerima', 'Received By Signature', f.received_by_signature)}
+            <div class="signature-column">
+              <div class="field">
+                <label>Diterima Oleh <span class="en">Received By</span></label>
+                <input type="text" name="received_by_name" value="${esc(f.received_by_name)}">
+              </div>
+              <div class="field">
+                <label>Tanggal <span class="en">Received Date</span></label>
+                <input type="date" name="received_by_date" value="${esc(f.received_by_date)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('received_by_signature', 'Tanda Tangan Penerima', 'Received By Signature', f.received_by_signature)}
+              </div>
             </div>
           </div>
         </div>
