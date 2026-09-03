@@ -277,6 +277,9 @@ app.get('/api/requests/:id', async (req, res) => {
 
 app.post('/api/requests', async (req, res) => {
   const b = req.body || {};
+  if ((b.status || 'draft') === 'final' && !b.confirmation_agreed) {
+    return res.status(400).json({ error: 'Konfirmasi persetujuan permintaan harus dicentang sebelum Finalisasi' });
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -289,8 +292,8 @@ app.post('/api/requests', async (req, res) => {
          uncertainty_clarification, capability_test_methods, contract_differences, equipment_availability,
          witness_status, witness_date, specimen_status, lhu_target_date, lhu_handling,
          customer_name, customer_date, customer_signature, received_by_name, received_by_date, received_by_signature,
-         status
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+         confirmation_agreed, status
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
        RETURNING id`,
       [
         jobNumber, b.received_date || '', b.company || '', b.po_number || '', b.customer_id || '',
@@ -301,7 +304,7 @@ app.post('/api/requests', async (req, res) => {
         b.lhu_target_date || '', b.lhu_handling || '',
         b.customer_name || '', b.customer_date || '', signatureToBuffer(b.customer_signature),
         b.received_by_name || '', b.received_by_date || '', signatureToBuffer(b.received_by_signature),
-        b.status || 'draft'
+        !!b.confirmation_agreed, b.status || 'draft'
       ]
     );
 
@@ -324,6 +327,9 @@ app.post('/api/requests', async (req, res) => {
 app.put('/api/requests/:id', async (req, res) => {
   const id = req.params.id;
   const b = req.body || {};
+  if ((b.status || 'draft') === 'final' && !b.confirmation_agreed) {
+    return res.status(400).json({ error: 'Konfirmasi persetujuan permintaan harus dicentang sebelum Finalisasi' });
+  }
   const client = await pool.connect();
   try {
     const { rows: existingRows } = await client.query(`SELECT id FROM test_requests WHERE id = $1`, [id]);
@@ -344,8 +350,8 @@ app.put('/api/requests/:id', async (req, res) => {
          lhu_target_date=$17, lhu_handling=$18,
          customer_name=$19, customer_date=$20, customer_signature=$21,
          received_by_name=$22, received_by_date=$23, received_by_signature=$24,
-         status=$25, updated_at=NOW()
-       WHERE id=$26`,
+         confirmation_agreed=$25, status=$26, updated_at=NOW()
+       WHERE id=$27`,
       [
         b.job_number || '', b.received_date || '', b.company || '', b.po_number || '', b.customer_id || '',
         b.on_behalf_owner || '', b.project_name || '', b.address || '', b.phone || '',
@@ -355,6 +361,7 @@ app.put('/api/requests/:id', async (req, res) => {
         b.lhu_target_date || '', b.lhu_handling || '',
         b.customer_name || '', b.customer_date || '', signatureToBuffer(b.customer_signature),
         b.received_by_name || '', b.received_by_date || '', signatureToBuffer(b.received_by_signature),
+        !!b.confirmation_agreed,
         b.status || 'draft', id
       ]
     );

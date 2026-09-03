@@ -49,6 +49,7 @@ async function initSchema() {
       received_by_name TEXT,
       received_by_date TEXT,
       received_by_signature BYTEA,        -- PNG bytes captured from the signature pad
+      confirmation_agreed BOOLEAN DEFAULT FALSE,  -- final "I agree to this request" checklist
 
       status TEXT DEFAULT 'draft',        -- 'draft' | 'final'
       created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -59,6 +60,7 @@ async function initSchema() {
     -- so CREATE TABLE IF NOT EXISTS above is a no-op there — add the columns explicitly.
     ALTER TABLE test_requests ADD COLUMN IF NOT EXISTS customer_signature BYTEA;
     ALTER TABLE test_requests ADD COLUMN IF NOT EXISTS received_by_signature BYTEA;
+    ALTER TABLE test_requests ADD COLUMN IF NOT EXISTS confirmation_agreed BOOLEAN DEFAULT FALSE;
 
     CREATE TABLE IF NOT EXISTS coupon_tests (
       id SERIAL PRIMARY KEY,

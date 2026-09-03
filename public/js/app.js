@@ -390,6 +390,17 @@
           </div>
         </div>
 
+        <div class="card">
+          <p class="section-title">Konfirmasi Persetujuan</p>
+          <label class="confirm-checkbox">
+            <input type="checkbox" id="confirmationAgreed" ${f.confirmation_agreed ? 'checked' : ''}>
+            <span>
+              Saya menyatakan bahwa seluruh data pada formulir Tinjauan Permintaan Pengujian ini telah saya periksa dengan benar dan saya <strong>menyetujui</strong> pengajuan permintaan pengujian ini sesuai dengan persyaratan yang berlaku.
+              <span class="en">I confirm that all information on this Testing Requirements Review form has been checked and is correct, and I agree to submit this testing request in accordance with the applicable requirements.</span>
+            </span>
+          </label>
+        </div>
+
         <div class="form-actions">
           <div>
             ${state.editingId ? `<button type="button" class="btn btn-danger" id="btnDelete">Hapus Permintaan</button>` : ''}
@@ -658,6 +669,12 @@
     payload.equipment_availability = collectYN(form, 'equipment_availability');
     payload.status = state.pendingStatus || 'draft';
     payload.coupon_tests = state.couponRows;
+    payload.confirmation_agreed = document.getElementById('confirmationAgreed').checked;
+
+    if (payload.status === 'final' && !payload.confirmation_agreed) {
+      toast('Centang konfirmasi persetujuan terlebih dahulu sebelum Finalisasi', 'error');
+      return;
+    }
 
     contentEl.querySelectorAll('canvas.signature-pad').forEach(canvas => {
       payload[canvas.dataset.sig] = canvas.dataset.hasSignature === 'true' ? canvas.toDataURL('image/png') : '';
