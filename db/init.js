@@ -132,7 +132,20 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_work_orders_request ON work_orders(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_wo_sample_marks_wo ON work_order_sample_marks(work_order_id);
+
+    CREATE TABLE IF NOT EXISTS welding_processes (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
+
+  // Seed default welding processes (idempotent — only inserts what's missing).
+  await pool.query(
+    `INSERT INTO welding_processes (name) VALUES ($1),($2),($3),($4),($5),($6),($7)
+     ON CONFLICT (name) DO NOTHING`,
+    ['GTAW', 'SMAW', 'GMAW', 'FCAW', 'SAW', 'GTAW + SMAW', 'Brazing']
+  );
 }
 
 module.exports = { pool, initSchema };

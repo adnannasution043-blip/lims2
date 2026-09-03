@@ -120,10 +120,34 @@ async function insertCouponRows(client, testRequestId, couponRows) {
   }
 }
 
+async function upsertWeldingProcesses(client, couponRows) {
+  const names = [...new Set(
+    (couponRows || [])
+      .map(row => (row.welding_process || '').trim())
+      .filter(Boolean)
+  )];
+  for (const name of names) {
+    await client.query(
+      `INSERT INTO welding_processes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+      [name]
+    );
+  }
+}
+
 // ---------- API routes ----------
 
 app.get('/api/test-types', (req, res) => {
   res.json({ testTypes: TEST_TYPES });
+});
+
+app.get('/api/welding-processes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT name FROM welding_processes ORDER BY id ASC`);
+    res.json({ weldingProcesses: rows.map(r => r.name) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master welding process' });
+  }
 });
 
 app.get('/api/next-job-number', async (req, res) => {
@@ -191,6 +215,9 @@ app.post('/api/requests', async (req, res) => {
     );
 
     await insertCouponRows(client, inserted.id, b.coupon_tests);
+    if ((b.status || 'draft') === 'final') {
+      await upsertWeldingProcesses(client, b.coupon_tests);
+    }
     await client.query('COMMIT');
 
     res.status(201).json(await getFullRequest(inserted.id));
@@ -241,6 +268,9 @@ app.put('/api/requests/:id', async (req, res) => {
 
     await client.query(`DELETE FROM coupon_tests WHERE test_request_id = $1`, [id]);
     await insertCouponRows(client, Number(id), b.coupon_tests);
+    if ((b.status || 'draft') === 'final') {
+      await upsertWeldingProcesses(client, b.coupon_tests);
+    }
 
     await client.query('COMMIT');
     res.json(await getFullRequest(id));

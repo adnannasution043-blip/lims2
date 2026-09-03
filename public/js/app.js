@@ -7,6 +7,7 @@
 
   let TEST_TYPES = [];
   let WO_STEPS = [];
+  let WELDING_PROCESSES = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -233,6 +234,9 @@
     }
 
     contentEl.innerHTML = `
+      <datalist id="weldingProcessList">
+        ${WELDING_PROCESSES.map(p => `<option value="${esc(p)}">`).join('')}
+      </datalist>
       <form id="reqForm">
 
         <div class="card">
@@ -458,7 +462,7 @@
             </div>
             <div class="field">
               <label>Welding Process</label>
-              <input type="text" data-row="${idx}" data-field="welding_process" value="${esc(row.welding_process)}">
+              <input type="text" list="weldingProcessList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="welding_process" value="${esc(row.welding_process)}">
             </div>
             <div class="field">
               <label>Welding Position</label>
@@ -577,6 +581,7 @@
           body: JSON.stringify(payload)
         });
       }
+      if (payload.status === 'final') await loadWeldingProcesses();
       toast('Permintaan tersimpan', 'success');
       state.view = 'list';
       render();
@@ -847,6 +852,15 @@
     else renderForm();
   }
 
+  async function loadWeldingProcesses() {
+    try {
+      const r = await api('/api/welding-processes');
+      WELDING_PROCESSES = r.weldingProcesses;
+    } catch (e) {
+      WELDING_PROCESSES = [];
+    }
+  }
+
   async function init() {
     try {
       const r = await api('/api/test-types');
@@ -860,6 +874,7 @@
     } catch (e) {
       WO_STEPS = [];
     }
+    await loadWeldingProcesses();
     render();
   }
 
