@@ -137,6 +137,7 @@ async function upsertMasterValues(client, table, couponRows, field) {
 async function upsertCouponMasters(client, couponRows) {
   await upsertMasterValues(client, 'welding_processes', couponRows, 'welding_process');
   await upsertMasterValues(client, 'welding_positions', couponRows, 'welding_position');
+  await upsertMasterValues(client, 'ref_codes', couponRows, 'ref_code');
 }
 
 // ---------- API routes ----------
@@ -162,6 +163,16 @@ app.get('/api/welding-positions', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat master welding position' });
+  }
+});
+
+app.get('/api/ref-codes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT name FROM ref_codes ORDER BY id ASC`);
+    res.json({ refCodes: rows.map(r => r.name) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master ref code' });
   }
 });
 

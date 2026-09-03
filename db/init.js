@@ -144,6 +144,12 @@ async function initSchema() {
       name TEXT UNIQUE NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS ref_codes (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).
@@ -159,6 +165,13 @@ async function initSchema() {
      VALUES ($1),($2),($3),($4),($5),($6),($7),($8),($9),($10),($11),($12)
      ON CONFLICT (name) DO NOTHING`,
     ['1F', '2F', '3F', '4F', '5F', '1G', '2G', '3G', '4G', '5G', '6G', '6GR']
+  );
+
+  // Seed default ref codes (idempotent — only inserts what's missing).
+  await pool.query(
+    `INSERT INTO ref_codes (name) VALUES ($1),($2),($3),($4)
+     ON CONFLICT (name) DO NOTHING`,
+    ['ASME BPVC Sec. IX', 'AWS D1.1/D1.1M', 'AWS D.1.6/D1.6M', 'API 1104']
   );
 }
 

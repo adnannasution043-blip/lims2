@@ -9,6 +9,7 @@
   let WO_STEPS = [];
   let WELDING_PROCESSES = [];
   let WELDING_POSITIONS = [];
+  let REF_CODES = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -240,6 +241,9 @@
       </datalist>
       <datalist id="weldingPositionList">
         ${WELDING_POSITIONS.map(p => `<option value="${esc(p)}">`).join('')}
+      </datalist>
+      <datalist id="refCodeList">
+        ${REF_CODES.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
       <form id="reqForm">
 
@@ -474,7 +478,7 @@
             </div>
             <div class="field">
               <label>Ref. Code</label>
-              <input type="text" data-row="${idx}" data-field="ref_code" value="${esc(row.ref_code)}">
+              <input type="text" list="refCodeList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="ref_code" value="${esc(row.ref_code)}">
             </div>
             <div class="field">
               <label>No WPS</label>
@@ -588,6 +592,7 @@
       if (payload.status === 'final') {
         await loadWeldingProcesses();
         await loadWeldingPositions();
+        await loadRefCodes();
       }
       toast('Permintaan tersimpan', 'success');
       state.view = 'list';
@@ -877,6 +882,15 @@
     }
   }
 
+  async function loadRefCodes() {
+    try {
+      const r = await api('/api/ref-codes');
+      REF_CODES = r.refCodes;
+    } catch (e) {
+      REF_CODES = [];
+    }
+  }
+
   async function init() {
     try {
       const r = await api('/api/test-types');
@@ -892,6 +906,7 @@
     }
     await loadWeldingProcesses();
     await loadWeldingPositions();
+    await loadRefCodes();
     render();
   }
 
