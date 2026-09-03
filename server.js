@@ -205,6 +205,40 @@ app.get('/api/coupon-types', async (req, res) => {
   }
 });
 
+app.get('/api/wo-pics', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT id, name FROM wo_pics ORDER BY name ASC`);
+    res.json({ woPics: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master PIC' });
+  }
+});
+
+app.post('/api/wo-pics', async (req, res) => {
+  const name = ((req.body || {}).name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Nama PIC tidak boleh kosong' });
+  try {
+    await pool.query(`INSERT INTO wo_pics (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
+    const { rows } = await pool.query(`SELECT id, name FROM wo_pics ORDER BY name ASC`);
+    res.status(201).json({ woPics: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menambah PIC' });
+  }
+});
+
+app.delete('/api/wo-pics/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM wo_pics WHERE id = $1`, [req.params.id]);
+    const { rows } = await pool.query(`SELECT id, name FROM wo_pics ORDER BY name ASC`);
+    res.json({ woPics: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus PIC' });
+  }
+});
+
 app.get('/api/next-job-number', async (req, res) => {
   try {
     res.json({ jobNumber: await generateJobNumber() });

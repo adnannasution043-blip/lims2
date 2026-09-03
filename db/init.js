@@ -163,6 +163,15 @@ async function initSchema() {
       name TEXT UNIQUE NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- Master list of PIC names, managed via the Master Data menu — used to fill the
+    -- Description of Process dropdowns (Receiving/Machining/Inspection/Testing/
+    -- Reporting/Doc. Checked) on the Work Order form.
+    CREATE TABLE IF NOT EXISTS wo_pics (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).

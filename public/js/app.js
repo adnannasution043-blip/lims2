@@ -11,6 +11,7 @@
   let WELDING_POSITIONS = [];
   let REF_CODES = [];
   let COUPON_TYPES = [];
+  let WO_PICS = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -63,7 +64,7 @@
   document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
       const key = el.dataset.nav;
-      if (key === 'permintaan-uji' || key === 'work-order') {
+      if (key === 'permintaan-uji' || key === 'work-order' || key === 'manajemen-data') {
         document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
       }
@@ -74,6 +75,9 @@
       } else if (key === 'work-order') {
         state.view = 'wo-list';
         state.woEditingId = null;
+        render();
+      } else if (key === 'manajemen-data') {
+        state.view = 'master-data';
         render();
       } else if (key === 'keluar') {
         toast('Logout belum tersedia di tahap ini', 'error');
@@ -823,7 +827,10 @@
     const stepFields = WO_STEPS.map(step => `
       <div class="field">
         <label>${esc(step.label)}</label>
-        <input type="text" name="${step.key}" value="${esc(wo[step.key])}" placeholder="PIC">
+        <select name="${step.key}">
+          <option value="">-</option>
+          ${WO_PICS.map(p => `<option value="${esc(p.name)}" ${wo[step.key] === p.name ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select>
       </div>`).join('');
 
     contentEl.innerHTML = `
@@ -947,7 +954,91 @@
     if (state.view === 'list') renderList();
     else if (state.view === 'wo-list') renderWorkOrderList();
     else if (state.view === 'wo-form') renderWorkOrderForm();
+    else if (state.view === 'master-data') renderMasterData();
     else renderForm();
+  }
+
+  // ---------- master data: PIC Work Order ----------
+
+  async function loadWoPics() {
+    try {
+      const r = await api('/api/wo-pics');
+      WO_PICS = r.woPics;
+    } catch (e) {
+      WO_PICS = [];
+    }
+  }
+
+  async function renderMasterData() {
+    pageTitle.textContent = 'Master Data';
+    pageSubtitle.textContent = 'Kelola daftar nama PIC untuk form Work Order';
+    topbarActions.innerHTML = '';
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+    await loadWoPics();
+
+    const rows = WO_PICS.map(p => `
+      <tr>
+        <td>${esc(p.name)}</td>
+        <td><button class="btn btn-sm btn-danger" data-pic-del="${p.id}">Hapus</button></td>
+      </tr>`).join('');
+
+    contentEl.innerHTML = `
+      <div class="card">
+        <p class="section-title">Tambah PIC</p>
+        <form id="picForm" class="form-grid" style="grid-template-columns: 1fr auto;">
+          <div class="field">
+            <label>Nama PIC</label>
+            <input type="text" id="picNameInput" placeholder="Nama PIC" autocomplete="off">
+          </div>
+          <div class="field" style="justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary">+ Tambah</button>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar PIC</p>
+          <p class="card-desc">${WO_PICS.length} PIC tersimpan &mdash; dipakai di dropdown Description of Process pada form Work Order</p>
+        </div>
+        ${WO_PICS.length ? `
+        <table class="data-table">
+          <thead><tr><th>Nama</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada PIC. Tambahkan lewat form di atas.</p>`}
+      </div>
+    `;
+
+    document.getElementById('picForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const input = document.getElementById('picNameInput');
+      const name = input.value.trim();
+      if (!name) return;
+      try {
+        await api('/api/wo-pics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        toast('PIC ditambahkan', 'success');
+        renderMasterData();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+
+    contentEl.querySelectorAll('[data-pic-del]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Hapus PIC ini dari master data?')) return;
+        try {
+          await api(`/api/wo-pics/${btn.dataset.picDel}`, { method: 'DELETE' });
+          toast('PIC dihapus', 'success');
+          renderMasterData();
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    });
   }
 
   async function loadWeldingProcesses() {
@@ -1003,6 +1094,7 @@
     await loadWeldingPositions();
     await loadRefCodes();
     await loadCouponTypes();
+    await loadWoPics();
     render();
   }
 
