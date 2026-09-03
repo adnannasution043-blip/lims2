@@ -138,6 +138,12 @@ async function initSchema() {
       name TEXT UNIQUE NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS welding_positions (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).
@@ -145,6 +151,14 @@ async function initSchema() {
     `INSERT INTO welding_processes (name) VALUES ($1),($2),($3),($4),($5),($6),($7)
      ON CONFLICT (name) DO NOTHING`,
     ['GTAW', 'SMAW', 'GMAW', 'FCAW', 'SAW', 'GTAW + SMAW', 'Brazing']
+  );
+
+  // Seed default welding positions (idempotent — only inserts what's missing).
+  await pool.query(
+    `INSERT INTO welding_positions (name)
+     VALUES ($1),($2),($3),($4),($5),($6),($7),($8),($9),($10),($11),($12)
+     ON CONFLICT (name) DO NOTHING`,
+    ['1F', '2F', '3F', '4F', '5F', '1G', '2G', '3G', '4G', '5G', '6G', '6GR']
   );
 }
 

@@ -8,6 +8,7 @@
   let TEST_TYPES = [];
   let WO_STEPS = [];
   let WELDING_PROCESSES = [];
+  let WELDING_POSITIONS = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -236,6 +237,9 @@
     contentEl.innerHTML = `
       <datalist id="weldingProcessList">
         ${WELDING_PROCESSES.map(p => `<option value="${esc(p)}">`).join('')}
+      </datalist>
+      <datalist id="weldingPositionList">
+        ${WELDING_POSITIONS.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
       <form id="reqForm">
 
@@ -466,7 +470,7 @@
             </div>
             <div class="field">
               <label>Welding Position</label>
-              <input type="text" data-row="${idx}" data-field="welding_position" value="${esc(row.welding_position)}">
+              <input type="text" list="weldingPositionList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="welding_position" value="${esc(row.welding_position)}">
             </div>
             <div class="field">
               <label>Ref. Code</label>
@@ -581,7 +585,10 @@
           body: JSON.stringify(payload)
         });
       }
-      if (payload.status === 'final') await loadWeldingProcesses();
+      if (payload.status === 'final') {
+        await loadWeldingProcesses();
+        await loadWeldingPositions();
+      }
       toast('Permintaan tersimpan', 'success');
       state.view = 'list';
       render();
@@ -861,6 +868,15 @@
     }
   }
 
+  async function loadWeldingPositions() {
+    try {
+      const r = await api('/api/welding-positions');
+      WELDING_POSITIONS = r.weldingPositions;
+    } catch (e) {
+      WELDING_POSITIONS = [];
+    }
+  }
+
   async function init() {
     try {
       const r = await api('/api/test-types');
@@ -875,6 +891,7 @@
       WO_STEPS = [];
     }
     await loadWeldingProcesses();
+    await loadWeldingPositions();
     render();
   }
 

@@ -120,18 +120,23 @@ async function insertCouponRows(client, testRequestId, couponRows) {
   }
 }
 
-async function upsertWeldingProcesses(client, couponRows) {
+async function upsertMasterValues(client, table, couponRows, field) {
   const names = [...new Set(
     (couponRows || [])
-      .map(row => (row.welding_process || '').trim())
+      .map(row => (row[field] || '').trim())
       .filter(Boolean)
   )];
   for (const name of names) {
     await client.query(
-      `INSERT INTO welding_processes (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
+      `INSERT INTO ${table} (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`,
       [name]
     );
   }
+}
+
+async function upsertCouponMasters(client, couponRows) {
+  await upsertMasterValues(client, 'welding_processes', couponRows, 'welding_process');
+  await upsertMasterValues(client, 'welding_positions', couponRows, 'welding_position');
 }
 
 // ---------- API routes ----------
@@ -147,6 +152,16 @@ app.get('/api/welding-processes', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat master welding process' });
+  }
+});
+
+app.get('/api/welding-positions', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT name FROM welding_positions ORDER BY id ASC`);
+    res.json({ weldingPositions: rows.map(r => r.name) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master welding position' });
   }
 });
 
@@ -216,7 +231,7 @@ app.post('/api/requests', async (req, res) => {
 
     await insertCouponRows(client, inserted.id, b.coupon_tests);
     if ((b.status || 'draft') === 'final') {
-      await upsertWeldingProcesses(client, b.coupon_tests);
+      await upsertCouponMasters(client, b.coupon_tests);
     }
     await client.query('COMMIT');
 
@@ -269,7 +284,7 @@ app.put('/api/requests/:id', async (req, res) => {
     await client.query(`DELETE FROM coupon_tests WHERE test_request_id = $1`, [id]);
     await insertCouponRows(client, Number(id), b.coupon_tests);
     if ((b.status || 'draft') === 'final') {
-      await upsertWeldingProcesses(client, b.coupon_tests);
+      await upsertCouponMasters(client, b.coupon_tests);
     }
 
     await client.query('COMMIT');
