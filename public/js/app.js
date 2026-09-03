@@ -365,6 +365,9 @@
               <label>Tanggal <span class="en">Customer Date</span></label>
               <input type="date" name="customer_date" value="${esc(f.customer_date)}">
             </div>
+            <div class="field full">
+              ${signaturePadHtml('customer_signature', 'Tanda Tangan Pelanggan', 'Customer Signature', f.customer_signature)}
+            </div>
             <div class="field">
               <label>Diterima Oleh <span class="en">Received By</span></label>
               <input type="text" name="received_by_name" value="${esc(f.received_by_name)}">
@@ -372,6 +375,9 @@
             <div class="field">
               <label>Tanggal <span class="en">Received Date</span></label>
               <input type="date" name="received_by_date" value="${esc(f.received_by_date)}">
+            </div>
+            <div class="field full">
+              ${signaturePadHtml('received_by_signature', 'Tanda Tangan Penerima', 'Received By Signature', f.received_by_signature)}
             </div>
           </div>
         </div>
@@ -390,6 +396,77 @@
 
     renderCouponRows();
     bindFormEvents();
+    initSignaturePads();
+  }
+
+  function signaturePadHtml(fieldKey, labelId, labelEn, dataUrl) {
+    return `
+      <label>${labelId} <span class="en">${labelEn}</span></label>
+      <div class="signature-pad-wrap">
+        <canvas class="signature-pad" data-sig="${fieldKey}" data-existing="${esc(dataUrl || '')}" width="600" height="180"></canvas>
+        <button type="button" class="btn btn-sm" data-sig-clear="${fieldKey}">Hapus Tanda Tangan</button>
+      </div>
+    `;
+  }
+
+  function initSignaturePads() {
+    contentEl.querySelectorAll('canvas.signature-pad').forEach(canvas => {
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#1a1a2e';
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      canvas.dataset.hasSignature = 'false';
+
+      const existing = canvas.dataset.existing;
+      if (existing) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          canvas.dataset.hasSignature = 'true';
+        };
+        img.src = existing;
+      }
+
+      function posFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+          x: (e.clientX - rect.left) * (canvas.width / rect.width),
+          y: (e.clientY - rect.top) * (canvas.height / rect.height)
+        };
+      }
+
+      let drawing = false;
+      canvas.addEventListener('pointerdown', e => {
+        drawing = true;
+        canvas.setPointerCapture(e.pointerId);
+        const p = posFromEvent(e);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+      });
+      canvas.addEventListener('pointermove', e => {
+        if (!drawing) return;
+        const p = posFromEvent(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+        canvas.dataset.hasSignature = 'true';
+      });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt =>
+        canvas.addEventListener(evt, () => { drawing = false; }));
+    });
+
+    contentEl.querySelectorAll('[data-sig-clear]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const canvas = contentEl.querySelector(`canvas[data-sig="${btn.dataset.sigClear}"]`);
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        canvas.dataset.hasSignature = 'false';
+        canvas.dataset.existing = '';
+      });
+    });
   }
 
   function renderCouponRows() {
@@ -573,6 +650,10 @@
     payload.equipment_availability = collectYN(form, 'equipment_availability');
     payload.status = state.pendingStatus || 'draft';
     payload.coupon_tests = state.couponRows;
+
+    contentEl.querySelectorAll('canvas.signature-pad').forEach(canvas => {
+      payload[canvas.dataset.sig] = canvas.dataset.hasSignature === 'true' ? canvas.toDataURL('image/png') : '';
+    });
 
     try {
       let saved;

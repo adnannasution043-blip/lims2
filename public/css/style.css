@@ -363,6 +363,18 @@ table.data-table tr:hover td { background: var(--gold-light); }
 }
 .checkbox-group input { width: 15px; height: 15px; accent-color: var(--gold-dark); }
 
+.signature-pad-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.signature-pad {
+  width: 100%;
+  max-width: 500px;
+  height: 150px;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  background: #fff;
+  touch-action: none;
+  cursor: crosshair;
+}
+
 table.test-items-table {
   width: 100%;
   border-collapse: collapse;

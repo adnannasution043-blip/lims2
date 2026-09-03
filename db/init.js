@@ -45,13 +45,20 @@ async function initSchema() {
 
       customer_name TEXT,
       customer_date TEXT,
+      customer_signature BYTEA,           -- PNG bytes captured from the signature pad
       received_by_name TEXT,
       received_by_date TEXT,
+      received_by_signature BYTEA,        -- PNG bytes captured from the signature pad
 
       status TEXT DEFAULT 'draft',        -- 'draft' | 'final'
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- test_requests already exists in deployed DBs from before signatures were added,
+    -- so CREATE TABLE IF NOT EXISTS above is a no-op there — add the columns explicitly.
+    ALTER TABLE test_requests ADD COLUMN IF NOT EXISTS customer_signature BYTEA;
+    ALTER TABLE test_requests ADD COLUMN IF NOT EXISTS received_by_signature BYTEA;
 
     CREATE TABLE IF NOT EXISTS coupon_tests (
       id SERIAL PRIMARY KEY,

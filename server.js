@@ -29,6 +29,23 @@ async function generateJobNumber() {
   return `${prefix}.${seq}`;
 }
 
+function signatureToBuffer(dataUrl) {
+  if (!dataUrl) return null;
+  const match = /^data:image\/png;base64,(.+)$/.exec(dataUrl);
+  return match ? Buffer.from(match[1], 'base64') : null;
+}
+
+function signatureToDataUrl(buf) {
+  return buf ? `data:image/png;base64,${buf.toString('base64')}` : null;
+}
+
+function attachSignatureUrls(testRequest) {
+  if (!testRequest) return testRequest;
+  testRequest.customer_signature = signatureToDataUrl(testRequest.customer_signature);
+  testRequest.received_by_signature = signatureToDataUrl(testRequest.received_by_signature);
+  return testRequest;
+}
+
 async function serializeCouponRows(testRequestId) {
   const { rows: coupons } = await pool.query(
     `SELECT * FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC`,
@@ -60,6 +77,7 @@ async function getFullRequest(id) {
   );
   const req = rows[0];
   if (!req) return null;
+  attachSignatureUrls(req);
   req.coupon_tests = await serializeCouponRows(id);
   return req;
 }
@@ -70,7 +88,7 @@ async function getFullWorkOrder(id) {
   if (!wo) return null;
 
   const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [wo.test_request_id]);
-  wo.test_request = reqRows[0] || null;
+  wo.test_request = attachSignatureUrls(reqRows[0] || null);
 
   const couponRows = await serializeCouponRows(wo.test_request_id);
   const { rows: marks } = await pool.query(
@@ -236,8 +254,9 @@ app.post('/api/requests', async (req, res) => {
          project_name, address, phone,
          uncertainty_clarification, capability_test_methods, contract_differences, equipment_availability,
          witness_status, witness_date, specimen_status, lhu_target_date, lhu_handling,
-         customer_name, customer_date, received_by_name, received_by_date, status
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+         customer_name, customer_date, customer_signature, received_by_name, received_by_date, received_by_signature,
+         status
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        RETURNING id`,
       [
         jobNumber, b.received_date || '', b.company || '', b.po_number || '', b.customer_id || '',
@@ -246,7 +265,8 @@ app.post('/api/requests', async (req, res) => {
         b.contract_differences || '', b.equipment_availability || '',
         b.witness_status || '', b.witness_date || '', b.specimen_status || '',
         b.lhu_target_date || '', b.lhu_handling || '',
-        b.customer_name || '', b.customer_date || '', b.received_by_name || '', b.received_by_date || '',
+        b.customer_name || '', b.customer_date || '', signatureToBuffer(b.customer_signature),
+        b.received_by_name || '', b.received_by_date || '', signatureToBuffer(b.received_by_signature),
         b.status || 'draft'
       ]
     );
@@ -288,9 +308,10 @@ app.put('/api/requests/:id', async (req, res) => {
          contract_differences=$12, equipment_availability=$13,
          witness_status=$14, witness_date=$15, specimen_status=$16,
          lhu_target_date=$17, lhu_handling=$18,
-         customer_name=$19, customer_date=$20, received_by_name=$21, received_by_date=$22,
-         status=$23, updated_at=NOW()
-       WHERE id=$24`,
+         customer_name=$19, customer_date=$20, customer_signature=$21,
+         received_by_name=$22, received_by_date=$23, received_by_signature=$24,
+         status=$25, updated_at=NOW()
+       WHERE id=$26`,
       [
         b.job_number || '', b.received_date || '', b.company || '', b.po_number || '', b.customer_id || '',
         b.on_behalf_owner || '', b.project_name || '', b.address || '', b.phone || '',
@@ -298,7 +319,8 @@ app.put('/api/requests/:id', async (req, res) => {
         b.contract_differences || '', b.equipment_availability || '',
         b.witness_status || '', b.witness_date || '', b.specimen_status || '',
         b.lhu_target_date || '', b.lhu_handling || '',
-        b.customer_name || '', b.customer_date || '', b.received_by_name || '', b.received_by_date || '',
+        b.customer_name || '', b.customer_date || '', signatureToBuffer(b.customer_signature),
+        b.received_by_name || '', b.received_by_date || '', signatureToBuffer(b.received_by_signature),
         b.status || 'draft', id
       ]
     );
