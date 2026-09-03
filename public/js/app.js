@@ -896,23 +896,38 @@
 
         <div class="card">
           <p class="section-title">Approval</p>
-          <div class="form-grid">
-            <div class="field">
-              <label>Prepared by <span class="en">QA/QC Admin</span></label>
-              <input type="text" name="prepared_by_name" value="${esc(wo.prepared_by_name)}">
+          <div class="signature-columns cols-3">
+            <div class="signature-column">
+              <div class="field">
+                <label>Prepared by <span class="en">QA/QC Admin</span></label>
+                <input type="text" name="prepared_by_name" value="${esc(wo.prepared_by_name)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('prepared_by_signature', 'Tanda Tangan', 'Signature', wo.prepared_by_signature)}
+              </div>
             </div>
-            <div class="field">
-              <label>Checked by <span class="en">QA/QC Manager</span></label>
-              <input type="text" name="checked_by_name" value="${esc(wo.checked_by_name)}">
+            <div class="signature-column">
+              <div class="field">
+                <label>Checked by <span class="en">QA/QC Manager</span></label>
+                <input type="text" name="checked_by_name" value="${esc(wo.checked_by_name)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('checked_by_signature', 'Tanda Tangan', 'Signature', wo.checked_by_signature)}
+              </div>
             </div>
-            <div class="field">
-              <label>Approved by <span class="en">Technical Manager</span></label>
-              <input type="text" name="approved_by_name" value="${esc(wo.approved_by_name)}">
+            <div class="signature-column">
+              <div class="field">
+                <label>Approved by <span class="en">Technical Manager</span></label>
+                <input type="text" name="approved_by_name" value="${esc(wo.approved_by_name)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('approved_by_signature', 'Tanda Tangan', 'Signature', wo.approved_by_signature)}
+              </div>
             </div>
-            <div class="field">
-              <label>Tanggal Approval <span class="en">Date</span></label>
-              <input type="date" name="approval_date" value="${esc(wo.approval_date)}">
-            </div>
+          </div>
+          <div class="field" style="max-width: 260px; margin-top: 14px;">
+            <label>Tanggal Approval <span class="en">Date</span></label>
+            <input type="date" name="approval_date" value="${esc(wo.approval_date)}">
           </div>
         </div>
 
@@ -929,6 +944,7 @@
     `;
 
     bindWorkOrderFormEvents();
+    initSignaturePads();
   }
 
   function bindWorkOrderFormEvents() {
@@ -950,6 +966,10 @@
       row_no: Number(input.dataset.rowNo),
       sample_marking: input.value
     }));
+
+    contentEl.querySelectorAll('canvas.signature-pad').forEach(canvas => {
+      payload[canvas.dataset.sig] = canvas.dataset.hasSignature === 'true' ? canvas.toDataURL('image/png') : '';
+    });
 
     try {
       state.woData = await api(`/api/work-orders/${state.woEditingId}`, {

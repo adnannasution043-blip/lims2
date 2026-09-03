@@ -39,12 +39,14 @@ function signatureToDataUrl(buf) {
   return buf ? `data:image/png;base64,${buf.toString('base64')}` : null;
 }
 
-function attachSignatureUrls(testRequest) {
-  if (!testRequest) return testRequest;
-  testRequest.customer_signature = signatureToDataUrl(testRequest.customer_signature);
-  testRequest.received_by_signature = signatureToDataUrl(testRequest.received_by_signature);
-  return testRequest;
+function attachSignatureUrls(row, fields) {
+  if (!row) return row;
+  for (const field of fields) row[field] = signatureToDataUrl(row[field]);
+  return row;
 }
+
+const REQUEST_SIGNATURE_FIELDS = ['customer_signature', 'received_by_signature'];
+const WORK_ORDER_SIGNATURE_FIELDS = ['prepared_by_signature', 'checked_by_signature', 'approved_by_signature'];
 
 async function serializeCouponRows(testRequestId) {
   const { rows: coupons } = await pool.query(
@@ -77,7 +79,7 @@ async function getFullRequest(id) {
   );
   const req = rows[0];
   if (!req) return null;
-  attachSignatureUrls(req);
+  attachSignatureUrls(req, REQUEST_SIGNATURE_FIELDS);
   req.coupon_tests = await serializeCouponRows(id);
   return req;
 }
@@ -86,9 +88,10 @@ async function getFullWorkOrder(id) {
   const { rows } = await pool.query(`SELECT * FROM work_orders WHERE id = $1`, [id]);
   const wo = rows[0];
   if (!wo) return null;
+  attachSignatureUrls(wo, WORK_ORDER_SIGNATURE_FIELDS);
 
   const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [wo.test_request_id]);
-  wo.test_request = attachSignatureUrls(reqRows[0] || null);
+  wo.test_request = attachSignatureUrls(reqRows[0] || null, REQUEST_SIGNATURE_FIELDS);
 
   const couponRows = await serializeCouponRows(wo.test_request_id);
   const { rows: marks } = await pool.query(
@@ -490,14 +493,18 @@ app.put('/api/work-orders/:id', async (req, res) => {
       `UPDATE work_orders SET
          testing_date=$1, our_reference=$2, contact_person=$3,
          receiving_pic=$4, machining_pic=$5, inspection_pic=$6, testing_pic=$7, reporting_pic=$8, doc_checked_pic=$9,
-         prepared_by_name=$10, checked_by_name=$11, approved_by_name=$12, approval_date=$13,
-         status=$14, updated_at=NOW()
-       WHERE id=$15`,
+         prepared_by_name=$10, prepared_by_signature=$11,
+         checked_by_name=$12, checked_by_signature=$13,
+         approved_by_name=$14, approved_by_signature=$15, approval_date=$16,
+         status=$17, updated_at=NOW()
+       WHERE id=$18`,
       [
         b.testing_date || '', b.our_reference || '', b.contact_person || '',
         b.receiving_pic || '', b.machining_pic || '', b.inspection_pic || '',
         b.testing_pic || '', b.reporting_pic || '', b.doc_checked_pic || '',
-        b.prepared_by_name || '', b.checked_by_name || '', b.approved_by_name || '', b.approval_date || '',
+        b.prepared_by_name || '', signatureToBuffer(b.prepared_by_signature),
+        b.checked_by_name || '', signatureToBuffer(b.checked_by_signature),
+        b.approved_by_name || '', signatureToBuffer(b.approved_by_signature), b.approval_date || '',
         b.status || 'draft', id
       ]
     );

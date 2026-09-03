@@ -119,14 +119,22 @@ async function initSchema() {
       doc_checked_pic TEXT,
 
       prepared_by_name TEXT,
+      prepared_by_signature BYTEA,         -- PNG bytes captured from the signature pad
       checked_by_name TEXT,
+      checked_by_signature BYTEA,          -- PNG bytes captured from the signature pad
       approved_by_name TEXT,
+      approved_by_signature BYTEA,         -- PNG bytes captured from the signature pad
       approval_date TEXT,
 
       status TEXT DEFAULT 'draft',        -- 'draft' | 'final'
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- work_orders already existed before Approval signatures were added.
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS prepared_by_signature BYTEA;
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS checked_by_signature BYTEA;
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS approved_by_signature BYTEA;
 
     -- Sample Marking per baris coupon test, dikaitkan lewat row_no (bukan coupon_tests.id)
     -- karena PUT /api/requests/:id men-delete+insert ulang seluruh coupon_tests setiap
