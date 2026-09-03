@@ -1,7 +1,9 @@
 // Order matches the original DPI-LP-FR-24 Rev.4 form exactly.
 const TEST_TYPES = [
   'Tensile Test',
-  'Bend Test (Root/ Face/ Side)',
+  'Bend Root',
+  'Bend Face',
+  'Bend Side',
   'Hardness Test',
   'Nick Break Test',
   'Charpy Impact Test',

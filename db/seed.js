@@ -56,7 +56,9 @@ const REQUESTS = [
         charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
         test_items: buildItems({
           'Tensile Test': { qty: '2', method: 'ASTM E8/E8M-22' },
-          'Bend Test (Root/ Face/ Side)': { qty: '4', method: 'ASTM E190-21' }
+          'Bend Root': { qty: '4', method: 'ASTM E190-21' },
+          'Bend Face': { qty: '4', method: 'ASTM E190-21' },
+          'Bend Side': { qty: '4', method: 'ASTM E190-21' }
         })
       }
     ]
@@ -151,7 +153,9 @@ const REQUESTS = [
         charpy_temp: '-20', charpy_wm: '55', charpy_bm: '68', charpy_haz: '61',
         test_items: buildItems({
           'Tensile Test': { qty: '2', method: 'ASTM E8/E8M-22' },
-          'Bend Test (Root/ Face/ Side)': { qty: '4', method: 'ASTM E190-21' },
+          'Bend Root': { qty: '4', method: 'ASTM E190-21' },
+          'Bend Face': { qty: '4', method: 'ASTM E190-21' },
+          'Bend Side': { qty: '4', method: 'ASTM E190-21' },
           'Charpy Impact Test': { qty: '9', method: 'ASTM E23-18' },
           'Macro-etching & Examination': { qty: '1', method: 'ASTM E340-15' }
         })
