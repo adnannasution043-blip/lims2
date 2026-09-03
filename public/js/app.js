@@ -10,6 +10,7 @@
   let WELDING_PROCESSES = [];
   let WELDING_POSITIONS = [];
   let REF_CODES = [];
+  let COUPON_TYPES = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -404,8 +405,7 @@
   }
 
   function couponRowHtml(row, idx) {
-    const types = ['Plate', 'Pipe', 'Bolt/Nut'];
-    const typeBoxes = types.map(t => `
+    const typeBoxes = COUPON_TYPES.map(t => `
       <label><input type="checkbox" data-row="${idx}" data-coupon-type="${t}" ${row.coupon_type.includes(t) ? 'checked' : ''}> ${t}</label>
     `).join('');
 
@@ -593,6 +593,7 @@
         await loadWeldingProcesses();
         await loadWeldingPositions();
         await loadRefCodes();
+        await loadCouponTypes();
       }
       toast('Permintaan tersimpan', 'success');
       state.view = 'list';
@@ -891,6 +892,15 @@
     }
   }
 
+  async function loadCouponTypes() {
+    try {
+      const r = await api('/api/coupon-types');
+      COUPON_TYPES = r.couponTypes;
+    } catch (e) {
+      COUPON_TYPES = [];
+    }
+  }
+
   async function init() {
     try {
       const r = await api('/api/test-types');
@@ -907,6 +917,7 @@
     await loadWeldingProcesses();
     await loadWeldingPositions();
     await loadRefCodes();
+    await loadCouponTypes();
     render();
   }
 

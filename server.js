@@ -138,6 +138,7 @@ async function upsertCouponMasters(client, couponRows) {
   await upsertMasterValues(client, 'welding_processes', couponRows, 'welding_process');
   await upsertMasterValues(client, 'welding_positions', couponRows, 'welding_position');
   await upsertMasterValues(client, 'ref_codes', couponRows, 'ref_code');
+  await upsertMasterValues(client, 'coupon_types', couponRows, 'coupon_type_other');
 }
 
 // ---------- API routes ----------
@@ -173,6 +174,16 @@ app.get('/api/ref-codes', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat master ref code' });
+  }
+});
+
+app.get('/api/coupon-types', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT name FROM coupon_types ORDER BY id ASC`);
+    res.json({ couponTypes: rows.map(r => r.name) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master coupon type' });
   }
 });
 

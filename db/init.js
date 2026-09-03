@@ -150,6 +150,12 @@ async function initSchema() {
       name TEXT UNIQUE NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    CREATE TABLE IF NOT EXISTS coupon_types (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).
@@ -172,6 +178,17 @@ async function initSchema() {
     `INSERT INTO ref_codes (name) VALUES ($1),($2),($3),($4)
      ON CONFLICT (name) DO NOTHING`,
     ['ASME BPVC Sec. IX', 'AWS D1.1/D1.1M', 'AWS D.1.6/D1.6M', 'API 1104']
+  );
+
+  // Seed default coupon types (idempotent — only inserts what's missing).
+  await pool.query(
+    `INSERT INTO coupon_types (name)
+     VALUES ($1),($2),($3),($4),($5),($6),($7),($8),($9),($10),($11),($12)
+     ON CONFLICT (name) DO NOTHING`,
+    [
+      'Plate', 'Pipe', 'Bolt/Nut', 'Round Bar', 'H Beam', 'WF',
+      'Joint Plate', 'Joint Pipe', 'Fillet Weld', 'Overlay', 'Angle', 'C Beam'
+    ]
   );
 }
 
