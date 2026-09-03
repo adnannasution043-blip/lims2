@@ -415,9 +415,15 @@ app.post('/api/requests/:id/work-order', async (req, res) => {
       return res.status(409).json({ error: 'Work Order untuk permintaan ini sudah ada', workOrderId: existing[0].id });
     }
 
-    const { rows: [wo] } = await pool.query(
-      `INSERT INTO work_orders (test_request_id) VALUES ($1) RETURNING id`,
+    const { rows: couponRows } = await pool.query(
+      `SELECT ref_code FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC`,
       [req.params.id]
+    );
+    const ourReference = [...new Set(couponRows.map(r => (r.ref_code || '').trim()).filter(Boolean))].join(', ');
+
+    const { rows: [wo] } = await pool.query(
+      `INSERT INTO work_orders (test_request_id, our_reference) VALUES ($1, $2) RETURNING id`,
+      [req.params.id, ourReference]
     );
     res.status(201).json(await getFullWorkOrder(wo.id));
   } catch (err) {
