@@ -1,4 +1,6 @@
 const { Pool } = require('pg');
+const { COMPANY_IDS } = require('./companyIds');
+const { TEST_METHOD_SEED } = require('./testMethodSeed');
 
 // Railway (and most managed Postgres) inject DATABASE_URL automatically once
 // the Postgres plugin is attached to this service. For local dev, put your
@@ -242,6 +244,25 @@ async function initSchema() {
       'Joint Plate', 'Joint Pipe', 'Fillet Weld', 'Overlay', 'Angle', 'C Beam'
     ]
   );
+
+  // Seed test methods imported from "List Test Method.xlsx" (idempotent).
+  if (TEST_METHOD_SEED.length) {
+    const placeholders = TEST_METHOD_SEED.map((_, i) => `($${i + 1})`).join(',');
+    await pool.query(
+      `INSERT INTO test_methods (name) VALUES ${placeholders} ON CONFLICT (name) DO NOTHING`,
+      TEST_METHOD_SEED
+    );
+  }
+
+  // Seed customers imported from "List COMPANY ID.xlsx" (idempotent).
+  if (COMPANY_IDS.length) {
+    const placeholders = COMPANY_IDS.map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2})`).join(',');
+    await pool.query(
+      `INSERT INTO customers (customer_id, on_behalf_owner) VALUES ${placeholders}
+       ON CONFLICT (customer_id, on_behalf_owner) DO NOTHING`,
+      COMPANY_IDS.flat()
+    );
+  }
 }
 
 module.exports = { pool, initSchema };
