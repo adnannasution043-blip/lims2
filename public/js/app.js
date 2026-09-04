@@ -13,6 +13,7 @@
   let COUPON_TYPES = [];
   let WO_PICS = [];
   let TEST_METHODS = [];
+  let CUSTOMERS = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -255,6 +256,12 @@
       <datalist id="testMethodList">
         ${TEST_METHODS.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
+      <datalist id="customerIdList">
+        ${[...new Set(CUSTOMERS.map(c => c.customer_id))].map(v => `<option value="${esc(v)}">`).join('')}
+      </datalist>
+      <datalist id="onBehalfOwnerList">
+        ${[...new Set(CUSTOMERS.map(c => c.on_behalf_owner))].map(v => `<option value="${esc(v)}">`).join('')}
+      </datalist>
       <form id="reqForm">
 
         <div class="card">
@@ -278,11 +285,11 @@
             </div>
             <div class="field">
               <label>ID Perusahaan <span class="en">Cust. ID</span></label>
-              <input type="text" name="customer_id" value="${esc(f.customer_id)}">
+              <input type="text" list="customerIdList" autocomplete="off" id="customerIdInput" name="customer_id" value="${esc(f.customer_id)}">
             </div>
             <div class="field">
               <label>Atas Nama Perusahaan <span class="en">On Behalf Owner</span></label>
-              <input type="text" name="on_behalf_owner" value="${esc(f.on_behalf_owner)}">
+              <input type="text" list="onBehalfOwnerList" autocomplete="off" id="onBehalfOwnerInput" name="on_behalf_owner" value="${esc(f.on_behalf_owner)}">
             </div>
             <div class="field">
               <label>Nama Projek <span class="en">Project Name</span></label>
@@ -627,6 +634,19 @@
     document.getElementById('couponRows').addEventListener('input', handleCouponInput);
     document.getElementById('couponRows').addEventListener('change', handleCouponInput);
 
+    // ID Perusahaan & Atas Nama Perusahaan are a paired customer record —
+    // picking/typing one that matches an existing pair fills in the other.
+    const custIdInput = document.getElementById('customerIdInput');
+    const ownerInput = document.getElementById('onBehalfOwnerInput');
+    custIdInput.addEventListener('input', () => {
+      const owner = findOwnerByCustomerId(custIdInput.value.trim());
+      if (owner) ownerInput.value = owner;
+    });
+    ownerInput.addEventListener('input', () => {
+      const custId = findCustomerIdByOwner(ownerInput.value.trim());
+      if (custId) custIdInput.value = custId;
+    });
+
     const delBtn = document.getElementById('btnDelete');
     if (delBtn) delBtn.addEventListener('click', () => deleteRequest(state.editingId));
 
@@ -709,6 +729,7 @@
         await loadRefCodes();
         await loadCouponTypes();
         await loadTestMethods();
+        await loadCustomers();
       }
       toast('Permintaan tersimpan', 'success');
       state.view = 'list';
@@ -1132,6 +1153,27 @@
     }
   }
 
+  async function loadCustomers() {
+    try {
+      const r = await api('/api/customers');
+      CUSTOMERS = r.customers;
+    } catch (e) {
+      CUSTOMERS = [];
+    }
+  }
+
+  function findOwnerByCustomerId(custId) {
+    if (!custId) return null;
+    const owners = [...new Set(CUSTOMERS.filter(c => c.customer_id === custId).map(c => c.on_behalf_owner))];
+    return owners.length === 1 ? owners[0] : null;
+  }
+
+  function findCustomerIdByOwner(owner) {
+    if (!owner) return null;
+    const ids = [...new Set(CUSTOMERS.filter(c => c.on_behalf_owner === owner).map(c => c.customer_id))];
+    return ids.length === 1 ? ids[0] : null;
+  }
+
   async function init() {
     try {
       const r = await api('/api/test-types');
@@ -1151,6 +1193,7 @@
     await loadCouponTypes();
     await loadWoPics();
     await loadTestMethods();
+    await loadCustomers();
     render();
   }
 

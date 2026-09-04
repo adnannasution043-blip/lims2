@@ -198,6 +198,16 @@ async function initSchema() {
       name TEXT UNIQUE NOT NULL,
       created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    -- ID Perusahaan + Atas Nama Perusahaan are one paired record here, not two
+    -- separate lists — picking one side should be able to fill in the other.
+    CREATE TABLE IF NOT EXISTS customers (
+      id SERIAL PRIMARY KEY,
+      customer_id TEXT NOT NULL,
+      on_behalf_owner TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(customer_id, on_behalf_owner)
+    );
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).

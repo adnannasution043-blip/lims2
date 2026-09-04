@@ -165,6 +165,17 @@ async function upsertCouponMasters(client, couponRows) {
   await upsertMasterValues(client, 'test_methods', couponRows, row => (row.test_items || []).map(ti => ti.method));
 }
 
+async function upsertCustomer(client, customerId, onBehalfOwner) {
+  const custId = (customerId || '').trim();
+  const owner = (onBehalfOwner || '').trim();
+  if (!custId || !owner) return;
+  await client.query(
+    `INSERT INTO customers (customer_id, on_behalf_owner) VALUES ($1, $2)
+     ON CONFLICT (customer_id, on_behalf_owner) DO NOTHING`,
+    [custId, owner]
+  );
+}
+
 // ---------- API routes ----------
 
 app.get('/api/test-types', (req, res) => {
@@ -218,6 +229,18 @@ app.get('/api/test-methods', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat master metode tes' });
+  }
+});
+
+app.get('/api/customers', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT customer_id, on_behalf_owner FROM customers ORDER BY id ASC`
+    );
+    res.json({ customers: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master customer' });
   }
 });
 
@@ -327,6 +350,7 @@ app.post('/api/requests', async (req, res) => {
     await insertCouponRows(client, inserted.id, b.coupon_tests);
     if ((b.status || 'draft') === 'final') {
       await upsertCouponMasters(client, b.coupon_tests);
+      await upsertCustomer(client, b.customer_id, b.on_behalf_owner);
     }
     await client.query('COMMIT');
 
@@ -386,6 +410,7 @@ app.put('/api/requests/:id', async (req, res) => {
     await insertCouponRows(client, Number(id), b.coupon_tests);
     if ((b.status || 'draft') === 'final') {
       await upsertCouponMasters(client, b.coupon_tests);
+      await upsertCustomer(client, b.customer_id, b.on_behalf_owner);
     }
 
     await client.query('COMMIT');
