@@ -56,6 +56,7 @@
       testing_purpose: '',
       note: '',
       charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
+      charpy_fl: '', charpy_fl2: '', charpy_optional: '',
       test_items: TEST_TYPES.map(name => ({ test_name: name, checked: false, qty: '', method: '' }))
     };
   }
@@ -527,6 +528,9 @@
               <span>WM</span><input type="text" data-row="${idx}" data-charpy="charpy_wm" value="${esc(row.charpy_wm)}">
               <span>BM</span><input type="text" data-row="${idx}" data-charpy="charpy_bm" value="${esc(row.charpy_bm)}">
               <span>HAZ</span><input type="text" data-row="${idx}" data-charpy="charpy_haz" value="${esc(row.charpy_haz)}">
+              <span>FL</span><input type="text" data-row="${idx}" data-charpy="charpy_fl" value="${esc(row.charpy_fl)}">
+              <span>FL+2</span><input type="text" data-row="${idx}" data-charpy="charpy_fl2" value="${esc(row.charpy_fl2)}">
+              <span>Opsional/Lainnya</span><input type="text" data-row="${idx}" data-charpy="charpy_optional" value="${esc(row.charpy_optional)}">
             </div>
           </td>
         </tr>` : ''}
