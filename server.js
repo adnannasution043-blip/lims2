@@ -141,10 +141,11 @@ async function insertCouponRows(client, testRequestId, couponRows) {
   }
 }
 
-async function upsertMasterValues(client, table, couponRows, field) {
+async function upsertMasterValues(client, table, couponRows, extract) {
   const names = [...new Set(
     (couponRows || [])
-      .map(row => (row[field] || '').trim())
+      .flatMap(row => extract(row))
+      .map(name => (name || '').trim())
       .filter(Boolean)
   )];
   for (const name of names) {
@@ -156,10 +157,11 @@ async function upsertMasterValues(client, table, couponRows, field) {
 }
 
 async function upsertCouponMasters(client, couponRows) {
-  await upsertMasterValues(client, 'welding_processes', couponRows, 'welding_process');
-  await upsertMasterValues(client, 'welding_positions', couponRows, 'welding_position');
-  await upsertMasterValues(client, 'ref_codes', couponRows, 'ref_code');
-  await upsertMasterValues(client, 'coupon_types', couponRows, 'coupon_type_other');
+  await upsertMasterValues(client, 'welding_processes', couponRows, row => [row.welding_process]);
+  await upsertMasterValues(client, 'welding_positions', couponRows, row => [row.welding_position]);
+  await upsertMasterValues(client, 'ref_codes', couponRows, row => [row.ref_code]);
+  await upsertMasterValues(client, 'coupon_types', couponRows, row => [row.coupon_type_other]);
+  await upsertMasterValues(client, 'test_methods', couponRows, row => (row.test_items || []).map(ti => ti.method));
 }
 
 // ---------- API routes ----------
@@ -205,6 +207,16 @@ app.get('/api/coupon-types', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat master coupon type' });
+  }
+});
+
+app.get('/api/test-methods', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT name FROM test_methods ORDER BY id ASC`);
+    res.json({ testMethods: rows.map(r => r.name) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master metode tes' });
   }
 });
 

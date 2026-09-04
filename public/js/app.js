@@ -12,6 +12,7 @@
   let REF_CODES = [];
   let COUPON_TYPES = [];
   let WO_PICS = [];
+  let TEST_METHODS = [];
   let state = { view: 'list', editingId: null, couponRows: [] };
 
   // ---------- utils ----------
@@ -249,6 +250,9 @@
       </datalist>
       <datalist id="refCodeList">
         ${REF_CODES.map(p => `<option value="${esc(p)}">`).join('')}
+      </datalist>
+      <datalist id="testMethodList">
+        ${TEST_METHODS.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
       <form id="reqForm">
 
@@ -512,7 +516,7 @@
           <td><input type="checkbox" data-row="${idx}" data-item="${tIdx}" data-item-field="checked" ${ti.checked ? 'checked' : ''}></td>
           <td class="test-item-name">${esc(ti.test_name)}</td>
           <td style="width:70px;"><input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="qty" value="${esc(ti.qty)}" placeholder="Qty"></td>
-          <td><input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="method" value="${esc(ti.method)}" placeholder="Metode tes"></td>
+          <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-item="${tIdx}" data-item-field="method" value="${esc(ti.method)}" placeholder="Metode tes"></td>
         </tr>
         ${isCharpy ? `
         <tr>
@@ -700,6 +704,7 @@
         await loadWeldingPositions();
         await loadRefCodes();
         await loadCouponTypes();
+        await loadTestMethods();
       }
       toast('Permintaan tersimpan', 'success');
       state.view = 'list';
@@ -1114,6 +1119,15 @@
     }
   }
 
+  async function loadTestMethods() {
+    try {
+      const r = await api('/api/test-methods');
+      TEST_METHODS = r.testMethods;
+    } catch (e) {
+      TEST_METHODS = [];
+    }
+  }
+
   async function init() {
     try {
       const r = await api('/api/test-types');
@@ -1132,6 +1146,7 @@
     await loadRefCodes();
     await loadCouponTypes();
     await loadWoPics();
+    await loadTestMethods();
     render();
   }
 
