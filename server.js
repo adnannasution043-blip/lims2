@@ -100,6 +100,13 @@ async function getFullWorkOrder(id) {
   );
   const markByRow = {};
   marks.forEach(m => { markByRow[m.coupon_row_no] = m.sample_marking; });
+
+  const missingRowNos = couponRows.map(c => c.row_no).filter(rowNo => !markByRow[rowNo]);
+  if (missingRowNos.length) {
+    const assigned = await autoAssignSampleMarks(id, wo.test_request, missingRowNos);
+    Object.assign(markByRow, assigned);
+  }
+
   wo.coupon_tests = couponRows.map(c => ({ ...c, sample_marking: markByRow[c.row_no] || '' }));
 
   return wo;
@@ -174,6 +181,46 @@ async function upsertCustomer(client, customerId, onBehalfOwner) {
      ON CONFLICT (customer_id, on_behalf_owner) DO NOTHING`,
     [custId, owner]
   );
+}
+
+// Sample Marking = "{customer_id}-{seq}", seq counting existing marks for that
+// customer within the same "YYYY-MM" as the request's received_date, resetting
+// to 1 each new month. Assigned lazily (on first view) for any coupon row that
+// doesn't have one yet, in row_no order, and persisted so it stays stable.
+async function autoAssignSampleMarks(workOrderId, testRequest, rowNos) {
+  const customerId = ((testRequest || {}).customer_id || '').trim();
+  const monthBucket = ((testRequest || {}).received_date || '').slice(0, 7);
+  if (!customerId || !monthBucket) return {};
+
+  const { rows: existing } = await pool.query(
+    `SELECT wsm.sample_marking
+     FROM work_order_sample_marks wsm
+     JOIN work_orders wo ON wo.id = wsm.work_order_id
+     JOIN test_requests tr ON tr.id = wo.test_request_id
+     WHERE tr.customer_id = $1 AND LEFT(tr.received_date, 7) = $2`,
+    [customerId, monthBucket]
+  );
+
+  const escaped = customerId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${escaped}-(\\d+)$`);
+  let next = existing.reduce((max, row) => {
+    const m = pattern.exec(row.sample_marking || '');
+    return m ? Math.max(max, parseInt(m[1], 10)) : max;
+  }, 0) + 1;
+
+  const assigned = {};
+  for (const rowNo of [...rowNos].sort((a, b) => a - b)) {
+    const marking = `${customerId}-${next}`;
+    await pool.query(
+      `INSERT INTO work_order_sample_marks (work_order_id, coupon_row_no, sample_marking)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (work_order_id, coupon_row_no) DO NOTHING`,
+      [workOrderId, rowNo, marking]
+    );
+    assigned[rowNo] = marking;
+    next += 1;
+  }
+  return assigned;
 }
 
 // ---------- API routes ----------
