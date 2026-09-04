@@ -15,18 +15,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ---------- helpers ----------
 
 async function generateJobNumber() {
-  // e.g. DE.260831.01  (DE.yymmdd.seq) — mirrors the "DE.xxxxxx" style seen on the sample form
+  // e.g. DE.1.26.0001  (DE.1.yy.seq) — seq resets to 0001 each new year
   const now = new Date();
   const y = String(now.getFullYear()).slice(2);
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  const prefix = `DE.${y}${m}${d}`;
+  const prefix = `DE.1.${y}.`;
   const { rows } = await pool.query(
     `SELECT COUNT(*) AS c FROM test_requests WHERE job_number LIKE $1`,
     [`${prefix}%`]
   );
-  const seq = String(parseInt(rows[0].c, 10) + 1).padStart(2, '0');
-  return `${prefix}.${seq}`;
+  const seq = String(parseInt(rows[0].c, 10) + 1).padStart(4, '0');
+  return `${prefix}${seq}`;
 }
 
 function signatureToBuffer(dataUrl) {
