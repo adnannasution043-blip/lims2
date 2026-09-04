@@ -1025,12 +1025,22 @@
     else renderForm();
   }
 
-  // ---------- master data: PIC Work Order ----------
+  // ---------- master data ----------
+
+  const MASTER_TABS = [
+    { key: 'welding-processes', label: 'Welding Process' },
+    { key: 'welding-positions', label: 'Welding Position' },
+    { key: 'ref-codes', label: 'Ref. Code' },
+    { key: 'coupon-types', label: 'Coupon Type' },
+    { key: 'test-methods', label: 'Metode Tes' },
+    { key: 'wo-pics', label: 'PIC Work Order' },
+    { key: 'customers', label: 'Customer' }
+  ];
 
   async function loadWoPics() {
     try {
-      const r = await api('/api/wo-pics');
-      WO_PICS = r.woPics;
+      const r = await api('/api/master/wo-pics');
+      WO_PICS = r.items;
     } catch (e) {
       WO_PICS = [];
     }
@@ -1038,25 +1048,59 @@
 
   async function renderMasterData() {
     pageTitle.textContent = 'Master Data';
-    pageSubtitle.textContent = 'Kelola daftar nama PIC untuk form Work Order';
+    pageSubtitle.textContent = 'Kelola daftar master yang dipakai sebagai pilihan di form';
     topbarActions.innerHTML = '';
 
-    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
-    await loadWoPics();
+    const activeTab = state.masterTab || MASTER_TABS[0].key;
+    state.masterTab = activeTab;
 
-    const rows = WO_PICS.map(p => `
-      <tr>
-        <td>${esc(p.name)}</td>
-        <td><button class="btn btn-sm btn-danger" data-pic-del="${p.id}">Hapus</button></td>
-      </tr>`).join('');
+    const tabsHtml = MASTER_TABS.map(t => `
+      <button type="button" class="btn btn-sm ${t.key === activeTab ? 'btn-primary' : ''}" data-master-tab="${t.key}">${esc(t.label)}</button>
+    `).join('');
 
     contentEl.innerHTML = `
+      <div class="card" style="padding:16px 24px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">${tabsHtml}</div>
+      </div>
+      <div id="masterTabContent"><div class="card"><p class="muted">Memuat data...</p></div></div>
+    `;
+
+    contentEl.querySelectorAll('[data-master-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.masterTab = btn.dataset.masterTab;
+        renderMasterData();
+      });
+    });
+
+    if (activeTab === 'customers') {
+      await renderCustomerMaster();
+    } else {
+      await renderSimpleMaster(activeTab, MASTER_TABS.find(t => t.key === activeTab).label);
+    }
+  }
+
+  async function renderSimpleMaster(key, label) {
+    let items = [];
+    try {
+      items = (await api(`/api/master/${key}`)).items;
+    } catch (e) {
+      items = [];
+    }
+
+    const wrap = document.getElementById('masterTabContent');
+    const rows = items.map(it => `
+      <tr>
+        <td>${esc(it.name)}</td>
+        <td><button class="btn btn-sm btn-danger" data-master-del="${it.id}">Hapus</button></td>
+      </tr>`).join('');
+
+    wrap.innerHTML = `
       <div class="card">
-        <p class="section-title">Tambah PIC</p>
-        <form id="picForm" class="form-grid" style="grid-template-columns: 1fr auto;">
+        <p class="section-title">Tambah ${esc(label)}</p>
+        <form id="masterAddForm" class="form-grid" style="grid-template-columns: 1fr auto;">
           <div class="field">
-            <label>Nama PIC</label>
-            <input type="text" id="picNameInput" placeholder="Nama PIC" autocomplete="off">
+            <label>Nama</label>
+            <input type="text" id="masterNameInput" placeholder="${esc(label)}" autocomplete="off">
           </div>
           <div class="field" style="justify-content: flex-end;">
             <button type="submit" class="btn btn-primary">+ Tambah</button>
@@ -1065,46 +1109,133 @@
       </div>
       <div class="card" style="padding:0;">
         <div style="padding:22px 24px 8px;">
-          <p class="card-title">Daftar PIC</p>
-          <p class="card-desc">${WO_PICS.length} PIC tersimpan &mdash; dipakai di dropdown Description of Process pada form Work Order</p>
+          <p class="card-title">Daftar ${esc(label)}</p>
+          <p class="card-desc">${items.length} data tersimpan</p>
         </div>
-        ${WO_PICS.length ? `
+        ${items.length ? `
         <table class="data-table">
           <thead><tr><th>Nama</th><th></th></tr></thead>
           <tbody>${rows}</tbody>
-        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada PIC. Tambahkan lewat form di atas.</p>`}
+        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada data. Tambahkan lewat form di atas.</p>`}
       </div>
     `;
 
-    document.getElementById('picForm').addEventListener('submit', async (e) => {
+    document.getElementById('masterAddForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const input = document.getElementById('picNameInput');
+      const input = document.getElementById('masterNameInput');
       const name = input.value.trim();
       if (!name) return;
       try {
-        await api('/api/wo-pics', {
+        await api(`/api/master/${key}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ name })
         });
-        toast('PIC ditambahkan', 'success');
+        toast('Data ditambahkan', 'success');
         renderMasterData();
       } catch (err) {
         toast(err.message, 'error');
       }
     });
 
-    contentEl.querySelectorAll('[data-pic-del]').forEach(btn => {
+    wrap.querySelectorAll('[data-master-del]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Hapus PIC ini dari master data?')) return;
+        if (!confirm('Hapus data ini dari master?')) return;
         try {
-          await api(`/api/wo-pics/${btn.dataset.picDel}`, { method: 'DELETE' });
-          toast('PIC dihapus', 'success');
+          await api(`/api/master/${key}/${btn.dataset.masterDel}`, { method: 'DELETE' });
+          toast('Data dihapus', 'success');
           renderMasterData();
         } catch (err) {
           toast(err.message, 'error');
         }
       });
+    });
+  }
+
+  async function renderCustomerMaster() {
+    await loadCustomers();
+    const wrap = document.getElementById('masterTabContent');
+
+    const rowsHtml = (filter) => {
+      const f = (filter || '').toLowerCase();
+      const filtered = f
+        ? CUSTOMERS.filter(c => c.customer_id.toLowerCase().includes(f) || c.on_behalf_owner.toLowerCase().includes(f))
+        : CUSTOMERS;
+      return filtered.map(c => `
+        <tr>
+          <td>${esc(c.customer_id)}</td>
+          <td>${esc(c.on_behalf_owner)}</td>
+          <td><button class="btn btn-sm btn-danger" data-cust-del="${c.id}">Hapus</button></td>
+        </tr>`).join('');
+    };
+
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">Tambah Customer</p>
+        <form id="custAddForm" class="form-grid">
+          <div class="field">
+            <label>ID Perusahaan</label>
+            <input type="text" id="custIdInput" placeholder="ID Perusahaan" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Atas Nama Perusahaan</label>
+            <input type="text" id="custOwnerInput" placeholder="Atas Nama Perusahaan" autocomplete="off">
+          </div>
+          <div class="field" style="justify-content: flex-end;">
+            <button type="submit" class="btn btn-primary">+ Tambah</button>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Customer</p>
+          <p class="card-desc">${CUSTOMERS.length} data tersimpan</p>
+          <input type="text" id="custFilterInput" placeholder="Cari ID atau nama perusahaan..." style="margin-top:8px; max-width:320px;">
+        </div>
+        <table class="data-table">
+          <thead><tr><th>ID Perusahaan</th><th>Atas Nama Perusahaan</th><th></th></tr></thead>
+          <tbody id="custTableBody">${rowsHtml('')}</tbody>
+        </table>
+      </div>
+    `;
+
+    function bindCustDeleteButtons() {
+      wrap.querySelectorAll('[data-cust-del]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm('Hapus customer ini dari master?')) return;
+          try {
+            await api(`/api/customers/${btn.dataset.custDel}`, { method: 'DELETE' });
+            toast('Customer dihapus', 'success');
+            renderMasterData();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        });
+      });
+    }
+    bindCustDeleteButtons();
+
+    document.getElementById('custFilterInput').addEventListener('input', (e) => {
+      document.getElementById('custTableBody').innerHTML = rowsHtml(e.target.value);
+      bindCustDeleteButtons();
+    });
+
+    document.getElementById('custAddForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const customerId = document.getElementById('custIdInput').value.trim();
+      const owner = document.getElementById('custOwnerInput').value.trim();
+      if (!customerId || !owner) return;
+      try {
+        await api('/api/customers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer_id: customerId, on_behalf_owner: owner })
+        });
+        toast('Customer ditambahkan', 'success');
+        renderMasterData();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
     });
   }
 

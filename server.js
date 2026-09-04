@@ -280,7 +280,7 @@ app.get('/api/test-methods', async (req, res) => {
 app.get('/api/customers', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT customer_id, on_behalf_owner FROM customers ORDER BY id ASC`
+      `SELECT id, customer_id, on_behalf_owner FROM customers ORDER BY id ASC`
     );
     res.json({ customers: rows });
   } catch (err) {
@@ -289,37 +289,86 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-app.get('/api/wo-pics', async (req, res) => {
+app.post('/api/customers', async (req, res) => {
+  const b = req.body || {};
+  const customerId = (b.customer_id || '').trim();
+  const owner = (b.on_behalf_owner || '').trim();
+  if (!customerId || !owner) {
+    return res.status(400).json({ error: 'ID Perusahaan dan Atas Nama Perusahaan tidak boleh kosong' });
+  }
   try {
-    const { rows } = await pool.query(`SELECT id, name FROM wo_pics ORDER BY name ASC`);
-    res.json({ woPics: rows });
+    await pool.query(
+      `INSERT INTO customers (customer_id, on_behalf_owner) VALUES ($1, $2)
+       ON CONFLICT (customer_id, on_behalf_owner) DO NOTHING`,
+      [customerId, owner]
+    );
+    const { rows } = await pool.query(`SELECT id, customer_id, on_behalf_owner FROM customers ORDER BY id ASC`);
+    res.status(201).json({ customers: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Gagal memuat master PIC' });
+    res.status(500).json({ error: 'Gagal menambah customer' });
   }
 });
 
-app.post('/api/wo-pics', async (req, res) => {
+app.delete('/api/customers/:id', async (req, res) => {
+  try {
+    await pool.query(`DELETE FROM customers WHERE id = $1`, [req.params.id]);
+    const { rows } = await pool.query(`SELECT id, customer_id, on_behalf_owner FROM customers ORDER BY id ASC`);
+    res.json({ customers: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus customer' });
+  }
+});
+
+// Generic CRUD for the simple "name only" master tables, used by the Master Data
+// menu. :key maps to a table through this allow-list — never interpolated raw.
+const SIMPLE_MASTERS = {
+  'welding-processes': 'welding_processes',
+  'welding-positions': 'welding_positions',
+  'ref-codes': 'ref_codes',
+  'coupon-types': 'coupon_types',
+  'test-methods': 'test_methods',
+  'wo-pics': 'wo_pics'
+};
+
+app.get('/api/master/:key', async (req, res) => {
+  const table = SIMPLE_MASTERS[req.params.key];
+  if (!table) return res.status(404).json({ error: 'Master data tidak dikenal' });
+  try {
+    const { rows } = await pool.query(`SELECT id, name FROM ${table} ORDER BY name ASC`);
+    res.json({ items: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master data' });
+  }
+});
+
+app.post('/api/master/:key', async (req, res) => {
+  const table = SIMPLE_MASTERS[req.params.key];
+  if (!table) return res.status(404).json({ error: 'Master data tidak dikenal' });
   const name = ((req.body || {}).name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Nama PIC tidak boleh kosong' });
+  if (!name) return res.status(400).json({ error: 'Nama tidak boleh kosong' });
   try {
-    await pool.query(`INSERT INTO wo_pics (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
-    const { rows } = await pool.query(`SELECT id, name FROM wo_pics ORDER BY name ASC`);
-    res.status(201).json({ woPics: rows });
+    await pool.query(`INSERT INTO ${table} (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
+    const { rows } = await pool.query(`SELECT id, name FROM ${table} ORDER BY name ASC`);
+    res.status(201).json({ items: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Gagal menambah PIC' });
+    res.status(500).json({ error: 'Gagal menambah data' });
   }
 });
 
-app.delete('/api/wo-pics/:id', async (req, res) => {
+app.delete('/api/master/:key/:id', async (req, res) => {
+  const table = SIMPLE_MASTERS[req.params.key];
+  if (!table) return res.status(404).json({ error: 'Master data tidak dikenal' });
   try {
-    await pool.query(`DELETE FROM wo_pics WHERE id = $1`, [req.params.id]);
-    const { rows } = await pool.query(`SELECT id, name FROM wo_pics ORDER BY name ASC`);
-    res.json({ woPics: rows });
+    await pool.query(`DELETE FROM ${table} WHERE id = $1`, [req.params.id]);
+    const { rows } = await pool.query(`SELECT id, name FROM ${table} ORDER BY name ASC`);
+    res.json({ items: rows });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: 'Gagal menghapus PIC' });
+    res.status(500).json({ error: 'Gagal menghapus data' });
   }
 });
 
