@@ -139,9 +139,9 @@ async function insertCouponRows(client, testRequestId, couponRows) {
     for (const name of TEST_TYPES) {
       const ti = itemsByName[name] || {};
       await client.query(
-        `INSERT INTO test_items (coupon_test_id, test_name, checked, qty, method)
-         VALUES ($1,$2,$3,$4,$5)`,
-        [coupon.id, name, !!ti.checked, ti.qty || '', ti.method || '']
+        `INSERT INTO test_items (coupon_test_id, test_name, test_name_other, checked, qty, method)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [coupon.id, name, ti.test_name_other || '', !!ti.checked, ti.qty || '', ti.method || '']
       );
     }
   }

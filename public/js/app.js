@@ -58,7 +58,7 @@
       note: '',
       charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
       charpy_fl: '', charpy_fl2: '', charpy_optional: '',
-      test_items: TEST_TYPES.map(name => ({ test_name: name, checked: false, qty: '', method: '' }))
+      test_items: TEST_TYPES.map(name => ({ test_name: name, test_name_other: '', checked: false, qty: '', method: '' }))
     };
   }
 
@@ -519,10 +519,13 @@
 
     const itemRows = row.test_items.map((ti, tIdx) => {
       const isCharpy = ti.test_name === 'Charpy Impact Test';
+      const isOther = ti.test_name === 'Lainnya';
       return `
         <tr>
           <td><input type="checkbox" data-row="${idx}" data-item="${tIdx}" data-item-field="checked" ${ti.checked ? 'checked' : ''}></td>
-          <td class="test-item-name">${esc(ti.test_name)}</td>
+          <td class="test-item-name">${isOther
+            ? `<input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="test_name_other" value="${esc(ti.test_name_other)}" placeholder="Jenis pengujian lainnya">`
+            : esc(ti.test_name)}</td>
           <td style="width:70px;"><input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="qty" value="${esc(ti.qty)}" placeholder="Qty"></td>
           <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-item="${tIdx}" data-item-field="method" value="${esc(ti.method)}" placeholder="Metode tes"></td>
         </tr>
@@ -855,7 +858,7 @@
       if (row.coupon_type_other) types.push(row.coupon_type_other);
       const checkedItems = (row.test_items || []).filter(ti => ti.checked);
       const itemsText = checkedItems.length
-        ? checkedItems.map(ti => `${esc(ti.test_name)} (Qty ${esc(ti.qty) || '-'}, ${esc(ti.method) || '-'})`).join('; ')
+        ? checkedItems.map(ti => `${esc(ti.test_name === 'Lainnya' ? (ti.test_name_other || 'Lainnya') : ti.test_name)} (Qty ${esc(ti.qty) || '-'}, ${esc(ti.method) || '-'})`).join('; ')
         : '-';
       return `
         <div class="wo-coupon-row">

@@ -101,10 +101,13 @@ async function initSchema() {
       id SERIAL PRIMARY KEY,
       coupon_test_id INTEGER NOT NULL REFERENCES coupon_tests(id) ON DELETE CASCADE,
       test_name TEXT NOT NULL,
+      test_name_other TEXT,        -- free-text label typed in when test_name is 'Lainnya'
       checked BOOLEAN DEFAULT FALSE,
       qty TEXT,
       method TEXT
     );
+
+    ALTER TABLE test_items ADD COLUMN IF NOT EXISTS test_name_other TEXT;
 
     CREATE INDEX IF NOT EXISTS idx_coupon_tests_request ON coupon_tests(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_test_items_coupon ON test_items(coupon_test_id);
