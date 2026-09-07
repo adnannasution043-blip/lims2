@@ -539,7 +539,7 @@
         <tr>
           <td><input type="checkbox" data-row="${idx}" data-item="${tIdx}" data-item-field="checked" ${ti.checked ? 'checked' : ''}></td>
           <td class="test-item-name">${esc(ti.test_name)}</td>
-          <td style="width:70px;"><input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="qty" value="${esc(ti.qty)}" placeholder="Qty"></td>
+          <td style="width:48px;"><input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="qty" value="${esc(ti.qty)}" placeholder="Qty"></td>
           <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-item="${tIdx}" data-item-field="method" value="${esc(ti.method)}" placeholder="Metode tes"></td>
         </tr>
         ${isCharpy ? `
@@ -573,7 +573,7 @@
       <tr>
         <td>${oIdx + 1}</td>
         <td><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="test_name" value="${esc(ot.test_name)}" placeholder="Nama pengujian"></td>
-        <td style="width:70px;"><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="qty" value="${esc(ot.qty)}" placeholder="Qty"></td>
+        <td style="width:48px;"><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="qty" value="${esc(ot.qty)}" placeholder="Qty"></td>
         <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-other="${oIdx}" data-other-field="method" value="${esc(ot.method)}" placeholder="Metode tes"></td>
         <td><button type="button" class="btn btn-sm btn-danger" data-remove-other="${idx}:${oIdx}">&#128465;</button></td>
       </tr>`).join('');

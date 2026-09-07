@@ -338,7 +338,7 @@ table.data-table tr:hover td { background: var(--gold-light); }
 
 .coupon-row-body {
   display: grid;
-  grid-template-columns: 1.15fr 1fr;
+  grid-template-columns: 1fr 1.3fr;
   gap: 0;
 }
 
