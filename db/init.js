@@ -90,13 +90,15 @@ async function initSchema() {
       charpy_fl TEXT,
       charpy_fl2 TEXT,
       charpy_optional_label TEXT,   -- editable label, defaults to "Opsional/Lainnya"
-      charpy_optional TEXT
+      charpy_optional TEXT,
+      hardness_spot TEXT            -- Jumlah Spot, shown under Hardness Test
     );
 
     -- coupon_tests already existed before the FL/FL+2/Opsional Charpy columns were added.
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_fl TEXT;
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_fl2 TEXT;
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_optional TEXT;
+    ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS hardness_spot TEXT;
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_optional_label TEXT;
 
     CREATE TABLE IF NOT EXISTS test_items (

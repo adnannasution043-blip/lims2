@@ -58,6 +58,7 @@
       note: '',
       charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
       charpy_fl: '', charpy_fl2: '', charpy_optional_label: '', charpy_optional: '',
+      hardness_spot: '',
       test_items: TEST_TYPES.map(name => ({ test_name: name, test_name_other: '', checked: false, qty: '', method: '' }))
     };
   }
@@ -519,6 +520,7 @@
 
     const itemRows = row.test_items.map((ti, tIdx) => {
       const isCharpy = ti.test_name === 'Charpy Impact Test';
+      const isHardness = ti.test_name === 'Hardness Test';
       const isOther = ti.test_name === 'Lainnya';
       return `
         <tr>
@@ -541,6 +543,15 @@
               <span>FL</span><input type="text" data-row="${idx}" data-charpy="charpy_fl" value="${esc(row.charpy_fl)}">
               <span>FL+2</span><input type="text" data-row="${idx}" data-charpy="charpy_fl2" value="${esc(row.charpy_fl2)}">
               <input type="text" class="charpy-optional-label" data-row="${idx}" data-charpy="charpy_optional_label" value="${esc(row.charpy_optional_label)}" placeholder="Opsional/Lainnya"><input type="text" data-row="${idx}" data-charpy="charpy_optional" value="${esc(row.charpy_optional)}">
+            </div>
+          </td>
+        </tr>` : ''}
+        ${isHardness ? `
+        <tr>
+          <td></td>
+          <td colspan="3">
+            <div class="charpy-extra">
+              <span>Jumlah Spot</span><input type="text" data-row="${idx}" data-charpy="hardness_spot" value="${esc(row.hardness_spot)}">
             </div>
           </td>
         </tr>` : ''}
