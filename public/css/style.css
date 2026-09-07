@@ -338,13 +338,13 @@ table.data-table tr:hover td { background: var(--gold-light); }
 
 .coupon-row-body {
   display: grid;
-  grid-template-columns: 1fr 1.3fr;
+  grid-template-columns: 1fr;
   gap: 0;
 }
 
 .coupon-left {
   padding: 16px;
-  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px 16px;
@@ -492,6 +492,4 @@ table.test-items-table input[type="text"] {
 @media (max-width: 900px) {
   .sidebar { display: none; }
   .form-grid, .coupon-left, .signature-columns, .signature-columns.cols-3 { grid-template-columns: 1fr; }
-  .coupon-row-body { grid-template-columns: 1fr; }
-  .coupon-left { border-right: none; border-bottom: 1px solid var(--border); }
 }
