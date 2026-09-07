@@ -89,6 +89,7 @@ async function initSchema() {
       charpy_haz TEXT,
       charpy_fl TEXT,
       charpy_fl2 TEXT,
+      charpy_optional_label TEXT,   -- editable label, defaults to "Opsional/Lainnya"
       charpy_optional TEXT
     );
 
@@ -96,6 +97,7 @@ async function initSchema() {
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_fl TEXT;
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_fl2 TEXT;
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_optional TEXT;
+    ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS charpy_optional_label TEXT;
 
     CREATE TABLE IF NOT EXISTS test_items (
       id SERIAL PRIMARY KEY,

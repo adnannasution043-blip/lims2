@@ -57,7 +57,7 @@
       testing_purpose: '',
       note: '',
       charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
-      charpy_fl: '', charpy_fl2: '', charpy_optional: '',
+      charpy_fl: '', charpy_fl2: '', charpy_optional_label: '', charpy_optional: '',
       test_items: TEST_TYPES.map(name => ({ test_name: name, test_name_other: '', checked: false, qty: '', method: '' }))
     };
   }
@@ -540,7 +540,7 @@
               <span>HAZ</span><input type="text" data-row="${idx}" data-charpy="charpy_haz" value="${esc(row.charpy_haz)}">
               <span>FL</span><input type="text" data-row="${idx}" data-charpy="charpy_fl" value="${esc(row.charpy_fl)}">
               <span>FL+2</span><input type="text" data-row="${idx}" data-charpy="charpy_fl2" value="${esc(row.charpy_fl2)}">
-              <span>Opsional/Lainnya</span><input type="text" data-row="${idx}" data-charpy="charpy_optional" value="${esc(row.charpy_optional)}">
+              <input type="text" class="charpy-optional-label" data-row="${idx}" data-charpy="charpy_optional_label" value="${esc(row.charpy_optional_label)}" placeholder="Opsional/Lainnya"><input type="text" data-row="${idx}" data-charpy="charpy_optional" value="${esc(row.charpy_optional)}">
             </div>
           </td>
         </tr>` : ''}

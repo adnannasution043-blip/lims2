@@ -119,8 +119,9 @@ async function insertCouponRows(client, testRequestId, couponRows) {
          test_request_id, row_no, coupon_type, coupon_type_other, material_type_grade,
          material_size, outside_diameter, thickness, heat_number, welding_process,
          welding_position, ref_code, no_wps, testing_purpose, note,
-         charpy_temp, charpy_wm, charpy_bm, charpy_haz, charpy_fl, charpy_fl2, charpy_optional
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+         charpy_temp, charpy_wm, charpy_bm, charpy_haz, charpy_fl, charpy_fl2,
+         charpy_optional_label, charpy_optional
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        RETURNING id`,
       [
         testRequestId, rowNo, JSON.stringify(row.coupon_type || []), row.coupon_type_other || '',
@@ -129,7 +130,7 @@ async function insertCouponRows(client, testRequestId, couponRows) {
         row.welding_position || '', row.ref_code || '', row.no_wps || '',
         row.testing_purpose || '', row.note || '',
         row.charpy_temp || '', row.charpy_wm || '', row.charpy_bm || '', row.charpy_haz || '',
-        row.charpy_fl || '', row.charpy_fl2 || '', row.charpy_optional || ''
+        row.charpy_fl || '', row.charpy_fl2 || '', row.charpy_optional_label || '', row.charpy_optional || ''
       ]
     );
 
