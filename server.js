@@ -183,14 +183,17 @@ async function upsertCustomer(client, customerId, onBehalfOwner) {
   );
 }
 
-// Sample Marking = "{customer_id}-{seq}", seq counting existing marks for that
-// customer within the same "YYYY-MM" as the request's received_date, resetting
-// to 1 each new month. Assigned lazily (on first view) for any coupon row that
-// doesn't have one yet, in row_no order, and persisted so it stays stable.
+// Sample Marking = "{customer_id}.{month}.{seq}" (e.g. "WGJ.7.1"), seq counting
+// existing marks for that customer within the same "YYYY-MM" as the request's
+// received_date, resetting to 1 each new month. Assigned lazily (on first view)
+// for any coupon row that doesn't have one yet, in row_no order, and persisted
+// so it stays stable.
 async function autoAssignSampleMarks(workOrderId, testRequest, rowNos) {
   const customerId = ((testRequest || {}).customer_id || '').trim();
-  const monthBucket = ((testRequest || {}).received_date || '').slice(0, 7);
+  const receivedDate = (testRequest || {}).received_date || '';
+  const monthBucket = receivedDate.slice(0, 7);
   if (!customerId || !monthBucket) return {};
+  const monthNumber = parseInt(receivedDate.slice(5, 7), 10);
 
   const { rows: existing } = await pool.query(
     `SELECT wsm.sample_marking
@@ -202,7 +205,7 @@ async function autoAssignSampleMarks(workOrderId, testRequest, rowNos) {
   );
 
   const escaped = customerId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`^${escaped}-(\\d+)$`);
+  const pattern = new RegExp(`^${escaped}\\.${monthNumber}\\.(\\d+)$`);
   let next = existing.reduce((max, row) => {
     const m = pattern.exec(row.sample_marking || '');
     return m ? Math.max(max, parseInt(m[1], 10)) : max;
@@ -210,7 +213,7 @@ async function autoAssignSampleMarks(workOrderId, testRequest, rowNos) {
 
   const assigned = {};
   for (const rowNo of [...rowNos].sort((a, b) => a - b)) {
-    const marking = `${customerId}-${next}`;
+    const marking = `${customerId}.${monthNumber}.${next}`;
     await pool.query(
       `INSERT INTO work_order_sample_marks (work_order_id, coupon_row_no, sample_marking)
        VALUES ($1, $2, $3)
