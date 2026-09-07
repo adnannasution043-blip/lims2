@@ -432,7 +432,15 @@ table.test-items-table input[type="text"] {
   font-size: 11.5px;
 }
 .charpy-extra span { font-size: 11px; color: var(--text-muted); align-self: center; }
-.charpy-extra input.charpy-optional-label { width: 110px; font-weight: 600; color: var(--navy); }
+.charpy-extra input.charpy-optional-label {
+  width: 84px;
+  border: none;
+  border-bottom: 1px solid var(--border-strong);
+  border-radius: 0;
+  padding: 4px 2px;
+  font-weight: 600;
+  color: var(--navy);
+}
 
 .form-actions {
   display: flex;
