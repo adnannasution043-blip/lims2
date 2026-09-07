@@ -14,8 +14,7 @@ const TEST_TYPES = [
   'Microstructure / Metallography',
   'Ferrite Point Count/ Ferrite Content',
   'Intergranular / Pitting Corrosion',
-  'Through Thickness',
-  'Lainnya'
+  'Through Thickness'
 ];
 
 module.exports = { TEST_TYPES };

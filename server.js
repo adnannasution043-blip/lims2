@@ -58,10 +58,13 @@ async function serializeCouponRows(testRequestId) {
       `SELECT * FROM test_items WHERE coupon_test_id = $1 ORDER BY id ASC`,
       [c.id]
     );
+    const testTypeSet = new Set(TEST_TYPES);
     result.push({
       ...c,
       coupon_type: c.coupon_type || [], // jsonb column, pg parses it already
-      test_items: items.map(i => ({ ...i, checked: !!i.checked }))
+      test_items: items.filter(i => testTypeSet.has(i.test_name)).map(i => ({ ...i, checked: !!i.checked })),
+      // "Other Test" rows are free-typed names that don't match the fixed TEST_TYPES list.
+      other_tests: items.filter(i => !testTypeSet.has(i.test_name)).map(i => ({ ...i, checked: !!i.checked }))
     });
   }
   return result;
@@ -141,9 +144,19 @@ async function insertCouponRows(client, testRequestId, couponRows) {
     for (const name of TEST_TYPES) {
       const ti = itemsByName[name] || {};
       await client.query(
-        `INSERT INTO test_items (coupon_test_id, test_name, test_name_other, checked, qty, method)
-         VALUES ($1,$2,$3,$4,$5,$6)`,
-        [coupon.id, name, ti.test_name_other || '', !!ti.checked, ti.qty || '', ti.method || '']
+        `INSERT INTO test_items (coupon_test_id, test_name, checked, qty, method)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [coupon.id, name, !!ti.checked, ti.qty || '', ti.method || '']
+      );
+    }
+
+    for (const ot of (row.other_tests || [])) {
+      const name = (ot.test_name || '').trim();
+      if (!name) continue;
+      await client.query(
+        `INSERT INTO test_items (coupon_test_id, test_name, checked, qty, method)
+         VALUES ($1,$2,$3,$4,$5)`,
+        [coupon.id, name, true, ot.qty || '', ot.method || '']
       );
     }
   }
@@ -169,7 +182,10 @@ async function upsertCouponMasters(client, couponRows) {
   await upsertMasterValues(client, 'welding_positions', couponRows, row => [row.welding_position]);
   await upsertMasterValues(client, 'ref_codes', couponRows, row => [row.ref_code]);
   await upsertMasterValues(client, 'coupon_types', couponRows, row => [row.coupon_type_other]);
-  await upsertMasterValues(client, 'test_methods', couponRows, row => (row.test_items || []).map(ti => ti.method));
+  await upsertMasterValues(client, 'test_methods', couponRows, row => [
+    ...(row.test_items || []).map(ti => ti.method),
+    ...(row.other_tests || []).map(ot => ot.method)
+  ]);
 }
 
 async function upsertCustomer(client, customerId, onBehalfOwner) {

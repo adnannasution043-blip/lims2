@@ -59,7 +59,8 @@
       charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
       charpy_fl: '', charpy_fl2: '', charpy_optional_label: '', charpy_optional: '',
       hardness_spot: '',
-      test_items: TEST_TYPES.map(name => ({ test_name: name, test_name_other: '', checked: false, qty: '', method: '' }))
+      test_items: TEST_TYPES.map(name => ({ test_name: name, checked: false, qty: '', method: '' })),
+      other_tests: []
     };
   }
 
@@ -511,6 +512,19 @@
         state.couponRows.splice(Number(btn.dataset.removeRow), 1);
         renderCouponRows();
       }));
+
+    wrap.querySelectorAll('[data-add-other]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        state.couponRows[Number(btn.dataset.addOther)].other_tests.push({ test_name: '', qty: '', method: '' });
+        renderCouponRows();
+      }));
+
+    wrap.querySelectorAll('[data-remove-other]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const [rowIdx, otherIdx] = btn.dataset.removeOther.split(':').map(Number);
+        state.couponRows[rowIdx].other_tests.splice(otherIdx, 1);
+        renderCouponRows();
+      }));
   }
 
   function couponRowHtml(row, idx) {
@@ -521,13 +535,10 @@
     const itemRows = row.test_items.map((ti, tIdx) => {
       const isCharpy = ti.test_name === 'Charpy Impact Test';
       const isHardness = ti.test_name === 'Hardness Test';
-      const isOther = ti.test_name === 'Lainnya';
       return `
         <tr>
           <td><input type="checkbox" data-row="${idx}" data-item="${tIdx}" data-item-field="checked" ${ti.checked ? 'checked' : ''}></td>
-          <td class="test-item-name">${isOther
-            ? `<input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="test_name_other" value="${esc(ti.test_name_other)}" placeholder="Jenis pengujian lainnya">`
-            : esc(ti.test_name)}</td>
+          <td class="test-item-name">${esc(ti.test_name)}</td>
           <td style="width:70px;"><input type="text" data-row="${idx}" data-item="${tIdx}" data-item-field="qty" value="${esc(ti.qty)}" placeholder="Qty"></td>
           <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-item="${tIdx}" data-item-field="method" value="${esc(ti.method)}" placeholder="Metode tes"></td>
         </tr>
@@ -557,6 +568,15 @@
         </tr>` : ''}
       `;
     }).join('');
+
+    const otherTestRows = row.other_tests.map((ot, oIdx) => `
+      <tr>
+        <td>${oIdx + 1}</td>
+        <td><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="test_name" value="${esc(ot.test_name)}" placeholder="Nama pengujian"></td>
+        <td style="width:70px;"><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="qty" value="${esc(ot.qty)}" placeholder="Qty"></td>
+        <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-other="${oIdx}" data-other-field="method" value="${esc(ot.method)}" placeholder="Metode tes"></td>
+        <td><button type="button" class="btn btn-sm btn-danger" data-remove-other="${idx}:${oIdx}">&#128465;</button></td>
+      </tr>`).join('');
 
     return `
       <div class="coupon-row">
@@ -623,6 +643,13 @@
               <thead><tr><th></th><th>Jenis Pengujian</th><th>Jumlah</th><th>Metode Tes</th></tr></thead>
               <tbody>${itemRows}</tbody>
             </table>
+
+            <p class="other-tests-title">Other Test <span class="en">(Tulis Manual)</span></p>
+            <table class="test-items-table other-tests-table">
+              <thead><tr><th>No.</th><th>Nama Pengujian</th><th>Qty</th><th>Metode Test</th><th>Aksi</th></tr></thead>
+              <tbody>${otherTestRows}</tbody>
+            </table>
+            <button type="button" class="btn btn-sm" data-add-other="${idx}">+ Tambah Other Test</button>
           </div>
         </div>
       </div>
@@ -691,6 +718,8 @@
       const item = row.test_items[Number(t.dataset.item)];
       if (t.dataset.itemField === 'checked') item.checked = t.checked;
       else item[t.dataset.itemField] = t.value;
+    } else if (t.dataset.other !== undefined) {
+      row.other_tests[Number(t.dataset.other)][t.dataset.otherField] = t.value;
     }
   }
 
@@ -867,9 +896,12 @@
     const couponSummary = couponRows.map((row, idx) => {
       const types = [...(row.coupon_type || [])];
       if (row.coupon_type_other) types.push(row.coupon_type_other);
-      const checkedItems = (row.test_items || []).filter(ti => ti.checked);
+      const checkedItems = [
+        ...(row.test_items || []).filter(ti => ti.checked),
+        ...(row.other_tests || []).filter(ot => ot.test_name)
+      ];
       const itemsText = checkedItems.length
-        ? checkedItems.map(ti => `${esc(ti.test_name === 'Lainnya' ? (ti.test_name_other || 'Lainnya') : ti.test_name)} (Qty ${esc(ti.qty) || '-'}, ${esc(ti.method) || '-'})`).join('; ')
+        ? checkedItems.map(ti => `${esc(ti.test_name)} (Qty ${esc(ti.qty) || '-'}, ${esc(ti.method) || '-'})`).join('; ')
         : '-';
       return `
         <div class="wo-coupon-row">
