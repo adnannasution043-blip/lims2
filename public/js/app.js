@@ -585,72 +585,96 @@
           <button type="button" class="btn btn-sm btn-danger" data-remove-row="${idx}">Hapus baris</button>
         </div>
         <div class="coupon-row-body">
-          <div class="coupon-left">
-            <div class="field full">
-              <label>Coupon Test</label>
-              <div class="checkbox-group">
-                ${typeBoxes}
-                <input type="text" style="width:140px;" placeholder="Lainnya (mis. Joint Pipe)" data-row="${idx}" data-coupon-type-other value="${esc(row.coupon_type_other)}">
-              </div>
-            </div>
-            <div class="field">
-              <label>Material Type / Grade</label>
-              <input type="text" data-row="${idx}" data-field="material_type_grade" value="${esc(row.material_type_grade)}">
-            </div>
-            <div class="field">
-              <label>Material Size</label>
-              <input type="text" data-row="${idx}" data-field="material_size" value="${esc(row.material_size)}">
-            </div>
-            <div class="field">
-              <label>Outside Diameter (mm)</label>
-              <input type="text" data-row="${idx}" data-field="outside_diameter" value="${esc(row.outside_diameter)}">
-            </div>
-            <div class="field">
-              <label>Thickness (mm)</label>
-              <input type="text" data-row="${idx}" data-field="thickness" value="${esc(row.thickness)}">
-            </div>
-            <div class="field">
-              <label>Heat Number</label>
-              <input type="text" data-row="${idx}" data-field="heat_number" value="${esc(row.heat_number)}">
-            </div>
-            <div class="field">
-              <label>Welding Process</label>
-              <input type="text" list="weldingProcessList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="welding_process" value="${esc(row.welding_process)}">
-            </div>
-            <div class="field">
-              <label>Welding Position</label>
-              <input type="text" list="weldingPositionList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="welding_position" value="${esc(row.welding_position)}">
-            </div>
-            <div class="field">
-              <label>Ref. Code</label>
-              <input type="text" list="refCodeList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="ref_code" value="${esc(row.ref_code)}">
-            </div>
-            <div class="field">
-              <label>No WPS</label>
-              <input type="text" data-row="${idx}" data-field="no_wps" value="${esc(row.no_wps)}">
-            </div>
-            <div class="field full">
-              <label>Testing Purpose</label>
-              <input type="text" data-row="${idx}" data-field="testing_purpose" value="${esc(row.testing_purpose)}">
-            </div>
-            <div class="field full">
-              <label>Note</label>
-              <textarea data-row="${idx}" data-field="note">${esc(row.note)}</textarea>
+
+          <div class="subcard">
+            <p class="subcard-title">Jenis Coupon</p>
+            <div class="checkbox-group">
+              ${typeBoxes}
+              <input type="text" style="width:140px;" placeholder="Lainnya (mis. Joint Pipe)" data-row="${idx}" data-coupon-type-other value="${esc(row.coupon_type_other)}">
             </div>
           </div>
-          <div class="coupon-right">
+
+          <div class="subcard-pair">
+            <div class="subcard">
+              <p class="subcard-title">Spesifikasi Material</p>
+              <div class="field-grid">
+                <div class="field">
+                  <label>Material Type / Grade</label>
+                  <input type="text" data-row="${idx}" data-field="material_type_grade" value="${esc(row.material_type_grade)}">
+                </div>
+                <div class="field">
+                  <label>Material Size</label>
+                  <input type="text" data-row="${idx}" data-field="material_size" value="${esc(row.material_size)}">
+                </div>
+                <div class="field">
+                  <label>Outside Diameter (mm)</label>
+                  <input type="text" data-row="${idx}" data-field="outside_diameter" value="${esc(row.outside_diameter)}">
+                </div>
+                <div class="field">
+                  <label>Thickness (mm)</label>
+                  <input type="text" data-row="${idx}" data-field="thickness" value="${esc(row.thickness)}">
+                </div>
+                <div class="field">
+                  <label>Heat Number</label>
+                  <input type="text" data-row="${idx}" data-field="heat_number" value="${esc(row.heat_number)}">
+                </div>
+              </div>
+            </div>
+
+            <div class="subcard">
+              <p class="subcard-title">Data Pengelasan</p>
+              <div class="field-grid">
+                <div class="field">
+                  <label>Welding Process</label>
+                  <input type="text" list="weldingProcessList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="welding_process" value="${esc(row.welding_process)}">
+                </div>
+                <div class="field">
+                  <label>Welding Position</label>
+                  <input type="text" list="weldingPositionList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="welding_position" value="${esc(row.welding_position)}">
+                </div>
+                <div class="field">
+                  <label>Ref. Code</label>
+                  <input type="text" list="refCodeList" autocomplete="off" placeholder="Pilih atau ketik baru..." data-row="${idx}" data-field="ref_code" value="${esc(row.ref_code)}">
+                </div>
+                <div class="field">
+                  <label>No WPS</label>
+                  <input type="text" data-row="${idx}" data-field="no_wps" value="${esc(row.no_wps)}">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="subcard">
+            <p class="subcard-title">Catatan</p>
+            <div class="field-grid" style="grid-template-columns: 1fr; gap: 12px;">
+              <div class="field">
+                <label>Testing Purpose</label>
+                <input type="text" data-row="${idx}" data-field="testing_purpose" value="${esc(row.testing_purpose)}">
+              </div>
+              <div class="field">
+                <label>Note</label>
+                <textarea data-row="${idx}" data-field="note">${esc(row.note)}</textarea>
+              </div>
+            </div>
+          </div>
+
+          <div class="subcard">
+            <p class="subcard-title">Jenis Pengujian</p>
             <table class="test-items-table">
               <thead><tr><th></th><th>Jenis Pengujian</th><th>Jumlah</th><th>Metode Tes</th></tr></thead>
               <tbody>${itemRows}</tbody>
             </table>
+          </div>
 
-            <p class="other-tests-title">Other Test <span class="en">(Tulis Manual)</span></p>
+          <div class="subcard">
+            <p class="subcard-title">Other Test <span class="en">(Tulis Manual)</span></p>
             <table class="test-items-table other-tests-table">
               <thead><tr><th>No.</th><th>Nama Pengujian</th><th>Qty</th><th>Metode Test</th><th>Aksi</th></tr></thead>
               <tbody>${otherTestRows}</tbody>
             </table>
             <button type="button" class="btn btn-sm" data-add-other="${idx}">+ Tambah Other Test</button>
           </div>
+
         </div>
       </div>
     `;
