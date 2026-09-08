@@ -4,6 +4,7 @@ const { pool, initSchema } = require('./db/init');
 const { TEST_TYPES } = require('./db/testTypes');
 const { renderPrintHtml } = require('./lib/printView');
 const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
+const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
 const { PROCESS_STEPS } = require('./db/workOrderSteps');
 
 const app = express();
@@ -111,6 +112,26 @@ async function getFullWorkOrder(id) {
   wo.coupon_tests = couponRows.map(c => ({ ...c, sample_marking: markByRow[c.row_no] || '' }));
 
   return wo;
+}
+
+const SPECIMEN_SIGNATURE_FIELDS = ['inspected_by_signature', 'approved_by_signature'];
+
+async function getFullSpecimenInspection(id) {
+  const { rows } = await pool.query(`SELECT * FROM specimen_inspections WHERE id = $1`, [id]);
+  const insp = rows[0];
+  if (!insp) return null;
+  attachSignatureUrls(insp, SPECIMEN_SIGNATURE_FIELDS);
+
+  const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [insp.test_request_id]);
+  insp.test_request = reqRows[0] || null;
+
+  const { rows: specimenRows } = await pool.query(
+    `SELECT * FROM specimen_rows WHERE specimen_inspection_id = $1 ORDER BY row_no ASC`,
+    [id]
+  );
+  insp.rows = specimenRows.map(r => ({ ...r, measurements: r.measurements || {} }));
+
+  return insp;
 }
 
 async function insertCouponRows(client, testRequestId, couponRows) {
@@ -700,6 +721,146 @@ app.get('/work-orders/:id/print', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(renderWorkOrderPrintHtml(data));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Gagal membuat halaman cetak');
+  }
+});
+
+// ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
+
+const SPECIMEN_CATEGORIES = ['tensile', 'bending', 'charpy'];
+
+app.get('/api/specimen-inspections', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT si.id, si.test_request_id, si.category, si.shape, si.inspection_date, si.status, si.created_at,
+              tr.job_number, tr.company
+       FROM specimen_inspections si
+       JOIN test_requests tr ON tr.id = si.test_request_id
+       ORDER BY si.id DESC`
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat data' });
+  }
+});
+
+app.get('/api/specimen-inspections/:id', async (req, res) => {
+  try {
+    const data = await getFullSpecimenInspection(req.params.id);
+    if (!data) return res.status(404).json({ error: 'Not found' });
+    res.json(data);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat data' });
+  }
+});
+
+app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
+  const b = req.body || {};
+  if (!SPECIMEN_CATEGORIES.includes(b.category)) {
+    return res.status(400).json({ error: 'Kategori tidak valid' });
+  }
+  const shape = b.category === 'charpy' ? null : (b.shape === 'round' ? 'round' : 'flat');
+  try {
+    const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [req.params.id]);
+    const testRequest = reqRows[0];
+    if (!testRequest) return res.status(404).json({ error: 'Permintaan tidak ditemukan' });
+    if (testRequest.status !== 'final') {
+      return res.status(400).json({ error: 'Permintaan harus difinalisasi dulu sebelum membuat Pengecekan Spesimen' });
+    }
+
+    const { rows: couponRows } = await pool.query(
+      `SELECT ref_code FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC`,
+      [req.params.id]
+    );
+    const refCode = (couponRows.find(r => (r.ref_code || '').trim()) || {}).ref_code || '';
+
+    const { rows: [insp] } = await pool.query(
+      `INSERT INTO specimen_inspections (test_request_id, category, shape, ref_code)
+       VALUES ($1,$2,$3,$4) RETURNING id`,
+      [req.params.id, b.category, shape, refCode]
+    );
+    res.status(201).json(await getFullSpecimenInspection(insp.id));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal membuat Pengecekan Spesimen' });
+  }
+});
+
+app.put('/api/specimen-inspections/:id', async (req, res) => {
+  const id = req.params.id;
+  const b = req.body || {};
+  const client = await pool.connect();
+  try {
+    const { rows: existing } = await client.query(`SELECT id FROM specimen_inspections WHERE id = $1`, [id]);
+    if (!existing.length) {
+      client.release();
+      return res.status(404).json({ error: 'Not found' });
+    }
+
+    await client.query('BEGIN');
+
+    await client.query(
+      `UPDATE specimen_inspections SET
+         inspection_date=$1, type_of_specimen=$2, ref_code=$3, marking=$4,
+         inspected_by_name=$5, inspected_by_signature=$6,
+         approved_by_name=$7, approved_by_signature=$8,
+         status=$9, updated_at=NOW()
+       WHERE id=$10`,
+      [
+        b.inspection_date || '', b.type_of_specimen || '', b.ref_code || '', b.marking || '',
+        b.inspected_by_name || '', signatureToBuffer(b.inspected_by_signature),
+        b.approved_by_name || '', signatureToBuffer(b.approved_by_signature),
+        b.status || 'draft', id
+      ]
+    );
+
+    await client.query(`DELETE FROM specimen_rows WHERE specimen_inspection_id = $1`, [id]);
+    let rowNo = 0;
+    for (const row of (b.rows || [])) {
+      rowNo += 1;
+      await client.query(
+        `INSERT INTO specimen_rows (specimen_inspection_id, row_no, marking_specimen, type_lt, location, accepted, measurements)
+         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+        [
+          id, rowNo, row.marking_specimen || '', row.type_lt || '', row.location || '', row.accepted || '',
+          JSON.stringify(row.measurements || {})
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json(await getFullSpecimenInspection(id));
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memperbarui data', detail: String(err.message || err) });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete('/api/specimen-inspections/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM specimen_inspections WHERE id = $1`, [req.params.id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus data' });
+  }
+});
+
+app.get('/specimen-inspections/:id/print', async (req, res) => {
+  try {
+    const data = await getFullSpecimenInspection(req.params.id);
+    if (!data) return res.status(404).send('Pengecekan Spesimen tidak ditemukan');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderSpecimenPrintHtml(data));
   } catch (err) {
     console.error(err);
     res.status(500).send('Gagal membuat halaman cetak');

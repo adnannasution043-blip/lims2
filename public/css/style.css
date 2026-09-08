@@ -442,6 +442,14 @@ table.test-items-table input[type="text"] {
 
 .other-tests-table td:last-child { width: 40px; text-align: center; }
 
+.specimen-table { white-space: nowrap; }
+.specimen-table th { font-size: 10.5px; text-align: center; }
+.specimen-table td { text-align: center; }
+.specimen-table .pt-col { font-weight: 600; color: var(--text-muted); width: 20px; }
+.specimen-table input[type="text"] { padding: 4px 5px; font-size: 11.5px; text-align: center; }
+.specimen-table select { padding: 4px; font-size: 11.5px; }
+.specimen-table input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--gold-dark); }
+
 .charpy-extra {
   display: flex;
   gap: 6px;

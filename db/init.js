@@ -217,6 +217,51 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(customer_id, on_behalf_owner)
     );
+
+    -- Pengecekan Spesimen (DPI-LP-FR-26-1..4). One sheet per test category
+    -- (Tensile Flat/Round, Bending Flat/Round, Charpy Impact) — a single
+    -- Permintaan Pengujian can have several sheets (different categories, or
+    -- repeats). "category"+"shape" decide which fixed template renders/prints;
+    -- Kode Acuan/standard is just data on the sheet, never changes the template.
+    CREATE TABLE IF NOT EXISTS specimen_inspections (
+      id SERIAL PRIMARY KEY,
+      test_request_id INTEGER NOT NULL REFERENCES test_requests(id) ON DELETE CASCADE,
+
+      category TEXT NOT NULL,           -- 'tensile' | 'bending' | 'charpy'
+      shape TEXT,                       -- 'flat' | 'round' (tensile & bending only)
+
+      inspection_date TEXT,
+      type_of_specimen TEXT,
+      ref_code TEXT,
+      marking TEXT,
+
+      inspected_by_name TEXT,
+      inspected_by_signature BYTEA,
+      approved_by_name TEXT,
+      approved_by_signature BYTEA,
+
+      status TEXT DEFAULT 'draft',        -- 'draft' | 'final'
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Per-specimen rows. "measurements" is a JSONB bag because the field set
+    -- differs a lot per category/shape (3-point width+thickness vs diameter vs
+    -- V-notch + profile projector check, etc.) — the frontend owns that shape.
+    CREATE TABLE IF NOT EXISTS specimen_rows (
+      id SERIAL PRIMARY KEY,
+      specimen_inspection_id INTEGER NOT NULL REFERENCES specimen_inspections(id) ON DELETE CASCADE,
+      row_no INTEGER NOT NULL,
+
+      marking_specimen TEXT,
+      type_lt TEXT,                     -- 'L' | 'T'
+      location TEXT,                    -- Charpy only: Base Metal / Weld Metal / HAZ / Fusion Line ...
+      accepted TEXT,                    -- 'Y' | 'N' (Bending & Charpy)
+      measurements JSONB DEFAULT '{}'
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_specimen_inspections_request ON specimen_inspections(test_request_id);
+    CREATE INDEX IF NOT EXISTS idx_specimen_rows_inspection ON specimen_rows(specimen_inspection_id);
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).

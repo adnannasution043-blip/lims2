@@ -69,7 +69,7 @@
   document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
       const key = el.dataset.nav;
-      if (key === 'permintaan-uji' || key === 'work-order' || key === 'manajemen-data') {
+      if (key === 'permintaan-uji' || key === 'work-order' || key === 'manajemen-data' || key === 'pengecekan-spesimen') {
         document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.remove('active'));
         el.classList.add('active');
       }
@@ -83,6 +83,9 @@
         render();
       } else if (key === 'manajemen-data') {
         state.view = 'master-data';
+        render();
+      } else if (key === 'pengecekan-spesimen') {
+        state.view = 'specimen-list';
         render();
       } else if (key === 'keluar') {
         toast('Logout belum tersedia di tahap ini', 'error');
@@ -1092,7 +1095,563 @@
     else if (state.view === 'wo-list') renderWorkOrderList();
     else if (state.view === 'wo-form') renderWorkOrderForm();
     else if (state.view === 'master-data') renderMasterData();
+    else if (state.view === 'specimen-list') renderSpecimenList();
+    else if (state.view === 'specimen-form') renderSpecimenForm();
     else renderForm();
+  }
+
+  // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
+
+  const SPECIMEN_CATEGORY_LABELS = { tensile: 'Tensile', bending: 'Bending', charpy: 'Charpy Impact' };
+  const SPECIMEN_SHAPE_LABELS = { flat: 'Flat', round: 'Round' };
+  const SPECIMEN_LOCATIONS = ['Base Metal', 'Weld Metal', 'HAZ', 'Fusion Line', 'Fusion Line +2', 'Fusion Line +5'];
+
+  function blankSpecimenRow(category, shape) {
+    if (category === 'tensile') {
+      const pointField = shape === 'round' ? { diameter: '', area: '' } : { width: '', thickness: '', area: '' };
+      const measurements = {
+        points: [{ ...pointField }, { ...pointField }, { ...pointField }],
+        gauge_length_code: '', gauge_length_actual: '',
+        radius_code: '', radius_actual: '',
+        reduce_section_code: '', reduce_section_actual: '',
+        total_length_code: '', total_length_actual: ''
+      };
+      if (shape === 'round') { measurements.diameter_code = ''; measurements.diameter_actual = ''; }
+      else {
+        measurements.width_code = ''; measurements.width_actual = '';
+        measurements.thickness_code = ''; measurements.thickness_actual = '';
+      }
+      return { marking_specimen: '', type_lt: 'L', measurements };
+    }
+    if (category === 'bending') {
+      const measurements = shape === 'round'
+        ? { diameter_code: '', diameter_actual: '', length_code: '', length_actual: '' }
+        : {
+            width_code: '', width_actual: '', thickness_code: '', thickness_actual: '',
+            radius_code: '', radius_actual: '', length_code: '', length_actual: ''
+          };
+      return { marking_specimen: '', type_lt: 'T', accepted: 'Y', measurements };
+    }
+    return {
+      marking_specimen: '', type_lt: 'L', location: 'Weld Metal', accepted: 'Y',
+      measurements: {
+        length_code: '', length_actual: '', width_code: '', width_actual: '', thickness_code: '', thickness_actual: '',
+        v_notch_l: '', v_notch_r: '', profile_radius: true, profile_depth: true, profile_width: true
+      }
+    };
+  }
+
+  function ltSelectHtml(idx, value) {
+    return `<select data-srow="${idx}" data-sfield="type_lt">
+      <option value="L" ${value === 'L' ? 'selected' : ''}>L</option>
+      <option value="T" ${value === 'T' ? 'selected' : ''}>T</option>
+    </select>`;
+  }
+
+  function ynSelectHtml(idx, value) {
+    return `<select data-srow="${idx}" data-sfield="accepted">
+      <option value="Y" ${value === 'Y' ? 'selected' : ''}>Y</option>
+      <option value="N" ${value === 'N' ? 'selected' : ''}>N</option>
+    </select>`;
+  }
+
+  function tensileRowHtml(row, idx, shape) {
+    const m = row.measurements;
+    const span = m.points.length;
+    return m.points.map((p, pIdx) => {
+      const first = pIdx === 0;
+      return `<tr>
+        ${first ? `
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-sfield="marking_specimen" value="${esc(row.marking_specimen)}" style="width:100px;" placeholder="Marking Specimen"></td>
+          <td rowspan="${span}">${ltSelectHtml(idx, row.type_lt)}</td>` : ''}
+        <td class="pt-col">${String.fromCharCode(65 + pIdx)}</td>
+        ${shape === 'round'
+          ? `<td><input type="text" data-srow="${idx}" data-spoint="${pIdx}" data-pfield="diameter" value="${esc(p.diameter)}" style="width:52px;"></td>`
+          : `<td><input type="text" data-srow="${idx}" data-spoint="${pIdx}" data-pfield="width" value="${esc(p.width)}" style="width:52px;"></td>
+             <td><input type="text" data-srow="${idx}" data-spoint="${pIdx}" data-pfield="thickness" value="${esc(p.thickness)}" style="width:52px;"></td>`}
+        <td><input type="text" data-srow="${idx}" data-spoint="${pIdx}" data-pfield="area" value="${esc(p.area)}" style="width:62px;"></td>
+        ${first ? `
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="gauge_length_code" value="${esc(m.gauge_length_code)}" style="width:48px;"></td>
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="gauge_length_actual" value="${esc(m.gauge_length_actual)}" style="width:48px;"></td>
+          ${shape === 'round' ? `
+            <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="diameter_code" value="${esc(m.diameter_code)}" style="width:48px;"></td>
+            <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="diameter_actual" value="${esc(m.diameter_actual)}" style="width:48px;"></td>
+          ` : `
+            <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="width_code" value="${esc(m.width_code)}" style="width:48px;"></td>
+            <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="width_actual" value="${esc(m.width_actual)}" style="width:48px;"></td>
+            <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="thickness_code" value="${esc(m.thickness_code)}" style="width:48px;"></td>
+            <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="thickness_actual" value="${esc(m.thickness_actual)}" style="width:48px;"></td>
+          `}
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="radius_code" value="${esc(m.radius_code)}" style="width:48px;"></td>
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="radius_actual" value="${esc(m.radius_actual)}" style="width:48px;"></td>
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="reduce_section_code" value="${esc(m.reduce_section_code)}" style="width:48px;"></td>
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="reduce_section_actual" value="${esc(m.reduce_section_actual)}" style="width:48px;"></td>
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="total_length_code" value="${esc(m.total_length_code)}" style="width:48px;"></td>
+          <td rowspan="${span}"><input type="text" data-srow="${idx}" data-mfield="total_length_actual" value="${esc(m.total_length_actual)}" style="width:48px;"></td>
+          <td rowspan="${span}"><button type="button" class="btn btn-sm btn-danger" data-sremove="${idx}">&#128465;</button></td>
+        ` : ''}
+      </tr>`;
+    }).join('');
+  }
+
+  function bendingRowHtml(row, idx, shape) {
+    const m = row.measurements;
+    const dims = shape === 'round' ? `
+      <td><input type="text" data-srow="${idx}" data-mfield="diameter_code" value="${esc(m.diameter_code)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="diameter_actual" value="${esc(m.diameter_actual)}" style="width:52px;"></td>
+    ` : `
+      <td><input type="text" data-srow="${idx}" data-mfield="width_code" value="${esc(m.width_code)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="width_actual" value="${esc(m.width_actual)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="thickness_code" value="${esc(m.thickness_code)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="thickness_actual" value="${esc(m.thickness_actual)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="radius_code" value="${esc(m.radius_code)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="radius_actual" value="${esc(m.radius_actual)}" style="width:52px;"></td>
+    `;
+    return `<tr>
+      <td><input type="text" data-srow="${idx}" data-sfield="marking_specimen" value="${esc(row.marking_specimen)}" style="width:100px;" placeholder="Marking Specimen"></td>
+      <td>${ltSelectHtml(idx, row.type_lt)}</td>
+      ${dims}
+      <td><input type="text" data-srow="${idx}" data-mfield="length_code" value="${esc(m.length_code)}" style="width:52px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="length_actual" value="${esc(m.length_actual)}" style="width:52px;"></td>
+      <td>${ynSelectHtml(idx, row.accepted)}</td>
+      <td><button type="button" class="btn btn-sm btn-danger" data-sremove="${idx}">&#128465;</button></td>
+    </tr>`;
+  }
+
+  function charpyRowHtml(row, idx) {
+    const m = row.measurements;
+    return `<tr>
+      <td><input type="text" data-srow="${idx}" data-sfield="marking_specimen" value="${esc(row.marking_specimen)}" style="width:100px;" placeholder="Marking Specimen"></td>
+      <td>${ltSelectHtml(idx, row.type_lt)}</td>
+      <td>
+        <select data-srow="${idx}" data-sfield="location">
+          ${SPECIMEN_LOCATIONS.map(l => `<option value="${esc(l)}" ${row.location === l ? 'selected' : ''}>${esc(l)}</option>`).join('')}
+        </select>
+      </td>
+      <td><input type="text" data-srow="${idx}" data-mfield="length_code" value="${esc(m.length_code)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="length_actual" value="${esc(m.length_actual)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="width_code" value="${esc(m.width_code)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="width_actual" value="${esc(m.width_actual)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="thickness_code" value="${esc(m.thickness_code)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="thickness_actual" value="${esc(m.thickness_actual)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="v_notch_l" value="${esc(m.v_notch_l)}" style="width:46px;"></td>
+      <td><input type="text" data-srow="${idx}" data-mfield="v_notch_r" value="${esc(m.v_notch_r)}" style="width:46px;"></td>
+      <td><input type="checkbox" data-srow="${idx}" data-mfield="profile_radius" ${m.profile_radius ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-srow="${idx}" data-mfield="profile_depth" ${m.profile_depth ? 'checked' : ''}></td>
+      <td><input type="checkbox" data-srow="${idx}" data-mfield="profile_width" ${m.profile_width ? 'checked' : ''}></td>
+      <td>${ynSelectHtml(idx, row.accepted)}</td>
+      <td><button type="button" class="btn btn-sm btn-danger" data-sremove="${idx}">&#128465;</button></td>
+    </tr>`;
+  }
+
+  function specimenTableHtml(category, shape, rows) {
+    if (category === 'tensile') {
+      const isRound = shape === 'round';
+      return `
+        <table class="test-items-table specimen-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Marking Specimen</th><th rowspan="2">Type<br>L/T</th>
+              <th colspan="${isRound ? 3 : 4}">3 Point Measurement</th>
+              <th colspan="2">Gauge Length</th>
+              <th colspan="2">${isRound ? 'Diameter' : 'Width'}</th>
+              ${isRound ? '' : '<th colspan="2">Thickness</th>'}
+              <th colspan="2">Radius</th>
+              <th colspan="2">Reduce Section Length</th>
+              <th colspan="2">Total Length</th>
+              <th rowspan="2"></th>
+            </tr>
+            <tr>
+              ${isRound ? '<th>Point</th><th>Diameter</th><th>Area</th>' : '<th>Point</th><th>Width</th><th>Thickness</th><th>Area</th>'}
+              <th>Code</th><th>Actual</th><th>Code</th><th>Actual</th>
+              ${isRound ? '' : '<th>Code</th><th>Actual</th>'}
+              <th>Code</th><th>Actual</th><th>Code</th><th>Actual</th><th>Code</th><th>Actual</th>
+            </tr>
+          </thead>
+          <tbody>${rows.map((r, i) => tensileRowHtml(r, i, shape)).join('')}</tbody>
+        </table>`;
+    }
+    if (category === 'bending') {
+      const isRound = shape === 'round';
+      return `
+        <table class="test-items-table specimen-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Marking Specimen</th><th rowspan="2">Type<br>L/T</th>
+              <th colspan="2">${isRound ? 'Diameter' : 'Width'}</th>
+              ${isRound ? '' : '<th colspan="2">Thickness</th><th colspan="2">Radius</th>'}
+              <th colspan="2">Length</th>
+              <th rowspan="2">Accepted<br>Y/N</th><th rowspan="2"></th>
+            </tr>
+            <tr>
+              <th>Code</th><th>Actual</th>
+              ${isRound ? '' : '<th>Code</th><th>Actual</th><th>Code</th><th>Actual</th>'}
+              <th>Code</th><th>Actual</th>
+            </tr>
+          </thead>
+          <tbody>${rows.map((r, i) => bendingRowHtml(r, i, shape)).join('')}</tbody>
+        </table>`;
+    }
+    return `
+      <table class="test-items-table specimen-table">
+        <thead>
+          <tr>
+            <th rowspan="2">Marking Specimen</th><th rowspan="2">Type<br>L/T</th><th rowspan="2">Location</th>
+            <th colspan="2">Length</th><th colspan="2">Width</th><th colspan="2">Thickness</th>
+            <th colspan="2">Center V-Notch</th><th colspan="3">Profile Projector Check</th>
+            <th rowspan="2">Accepted<br>Y/N</th><th rowspan="2"></th>
+          </tr>
+          <tr>
+            <th>Code</th><th>Actual</th><th>Code</th><th>Actual</th><th>Code</th><th>Actual</th>
+            <th>L</th><th>R</th><th>Radius</th><th>Depth</th><th>Width</th>
+          </tr>
+        </thead>
+        <tbody>${rows.map((r, i) => charpyRowHtml(r, i)).join('')}</tbody>
+      </table>`;
+  }
+
+  function rerenderSpecimenRows() {
+    document.getElementById('specimenRowsWrap').innerHTML =
+      specimenTableHtml(state.specimenData.category, state.specimenData.shape, state.specimenRows);
+    bindSpecRemoveButtons();
+  }
+
+  function bindSpecRemoveButtons() {
+    document.querySelectorAll('[data-sremove]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (state.specimenRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
+        state.specimenRows.splice(Number(btn.dataset.sremove), 1);
+        rerenderSpecimenRows();
+      });
+    });
+  }
+
+  function handleSpecimenInput(e) {
+    const t = e.target;
+    const rowIdx = t.dataset.srow;
+    if (rowIdx === undefined) return;
+    const row = state.specimenRows[Number(rowIdx)];
+    if (!row) return;
+
+    if (t.dataset.sfield) {
+      row[t.dataset.sfield] = t.value;
+    } else if (t.dataset.spoint !== undefined) {
+      const point = row.measurements.points[Number(t.dataset.spoint)];
+      point[t.dataset.pfield] = t.value;
+      if (t.dataset.pfield === 'width' || t.dataset.pfield === 'thickness') {
+        const w = parseFloat(point.width), th = parseFloat(point.thickness);
+        if (!isNaN(w) && !isNaN(th)) point.area = (w * th).toFixed(2);
+      } else if (t.dataset.pfield === 'diameter') {
+        const d = parseFloat(point.diameter);
+        if (!isNaN(d)) point.area = (Math.PI * (d / 2) * (d / 2)).toFixed(2);
+      }
+      if (t.dataset.pfield !== 'area') {
+        const areaInput = document.querySelector(`[data-srow="${rowIdx}"][data-spoint="${t.dataset.spoint}"][data-pfield="area"]`);
+        if (areaInput) areaInput.value = point.area || '';
+      }
+    } else if (t.dataset.mfield) {
+      row.measurements[t.dataset.mfield] = t.type === 'checkbox' ? t.checked : t.value;
+    }
+  }
+
+  async function openSpecimenForm(id) {
+    state.view = 'specimen-form';
+    state.specimenEditingId = id;
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+    try {
+      state.specimenData = await api(`/api/specimen-inspections/${id}`);
+      state.specimenRows = (state.specimenData.rows && state.specimenData.rows.length)
+        ? state.specimenData.rows
+        : [blankSpecimenRow(state.specimenData.category, state.specimenData.shape)];
+    } catch (e) {
+      toast(e.message, 'error');
+      state.view = 'specimen-list';
+      render();
+      return;
+    }
+    render();
+  }
+
+  function renderSpecimenForm() {
+    const insp = state.specimenData || {};
+    const tr = insp.test_request || {};
+    const category = insp.category;
+    const shape = insp.shape;
+
+    pageTitle.textContent = 'Pengecekan Spesimen';
+    pageSubtitle.textContent = `${SPECIMEN_CATEGORY_LABELS[category] || ''}${shape ? ' - ' + SPECIMEN_SHAPE_LABELS[shape] : ''} — ${esc(tr.job_number || '')}`;
+    topbarActions.innerHTML = `
+      <button class="btn" id="btnSpecBack">&larr; Kembali ke Daftar</button>
+      <button type="button" class="btn" id="btnSpecExportPdf">Export PDF</button>
+    `;
+    document.getElementById('btnSpecBack').addEventListener('click', () => { state.view = 'specimen-list'; render(); });
+    document.getElementById('btnSpecExportPdf').addEventListener('click', () =>
+      window.open(`/specimen-inspections/${state.specimenEditingId}/print`, '_blank'));
+
+    contentEl.innerHTML = `
+      <datalist id="specRefCodeList">
+        ${REF_CODES.map(p => `<option value="${esc(p)}">`).join('')}
+      </datalist>
+      <form id="specForm">
+        <div class="card">
+          <p class="section-title">Info Permintaan <span class="en">(hanya baca)</span></p>
+          <div class="form-grid">
+            <div class="field"><label>No. Pekerjaan</label><input type="text" value="${esc(tr.job_number)}" disabled></div>
+            <div class="field"><label>Pelanggan</label><input type="text" value="${esc(tr.company)}" disabled></div>
+            <div class="field"><label>Kategori</label><input type="text" value="${esc(SPECIMEN_CATEGORY_LABELS[category] || '')}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}" disabled></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="section-title">Info Pengecekan</p>
+          <div class="form-grid">
+            <div class="field">
+              <label>Tanggal <span class="en">Date</span></label>
+              <input type="date" name="inspection_date" value="${esc(insp.inspection_date)}">
+            </div>
+            <div class="field">
+              <label>Tipe Spesimen <span class="en">Type of Specimen</span></label>
+              <input type="text" name="type_of_specimen" value="${esc(insp.type_of_specimen)}">
+            </div>
+            <div class="field">
+              <label>Kode Acuan <span class="en">Ref. Code</span></label>
+              <input type="text" list="specRefCodeList" autocomplete="off" name="ref_code" value="${esc(insp.ref_code)}">
+            </div>
+            <div class="field">
+              <label>Marking</label>
+              <input type="text" name="marking" value="${esc(insp.marking)}">
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="section-title">Data Spesimen</p>
+          <div id="specimenRowsWrap" style="overflow-x:auto;">
+            ${specimenTableHtml(category, shape, state.specimenRows)}
+          </div>
+          <button type="button" class="btn btn-sm" id="btnAddSpecRow" style="margin-top:10px;">+ Tambah Baris</button>
+        </div>
+
+        <div class="card">
+          <p class="section-title">Approval</p>
+          <div class="signature-columns">
+            <div class="signature-column">
+              <div class="field">
+                <label>Inspected by</label>
+                <input type="text" name="inspected_by_name" value="${esc(insp.inspected_by_name)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('inspected_by_signature', 'Tanda Tangan', 'Signature', insp.inspected_by_signature)}
+              </div>
+            </div>
+            <div class="signature-column">
+              <div class="field">
+                <label>Approved by</label>
+                <input type="text" name="approved_by_name" value="${esc(insp.approved_by_name)}">
+              </div>
+              <div class="field">
+                ${signaturePadHtml('approved_by_signature', 'Tanda Tangan', 'Signature', insp.approved_by_signature)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <div>
+            <button type="button" class="btn btn-danger" id="btnSpecDelete">Hapus</button>
+          </div>
+          <div class="right">
+            <button type="submit" class="btn" data-status="draft">Simpan sebagai Draft</button>
+            <button type="submit" class="btn btn-primary" data-status="final">Simpan &amp; Finalisasi</button>
+          </div>
+        </div>
+      </form>
+    `;
+
+    bindSpecimenFormEvents();
+    initSignaturePads();
+  }
+
+  function bindSpecimenFormEvents() {
+    document.getElementById('btnAddSpecRow').addEventListener('click', () => {
+      state.specimenRows.push(blankSpecimenRow(state.specimenData.category, state.specimenData.shape));
+      rerenderSpecimenRows();
+    });
+
+    document.getElementById('specimenRowsWrap').addEventListener('input', handleSpecimenInput);
+    document.getElementById('specimenRowsWrap').addEventListener('change', handleSpecimenInput);
+
+    document.getElementById('btnSpecDelete').addEventListener('click', () => deleteSpecimenInspection(state.specimenEditingId));
+
+    document.getElementById('specForm').addEventListener('submit', onSpecimenSubmit);
+    contentEl.querySelectorAll('button[type="submit"]').forEach(b => {
+      b.addEventListener('click', () => { state.specimenPendingStatus = b.dataset.status; });
+    });
+
+    bindSpecRemoveButtons();
+  }
+
+  async function onSpecimenSubmit(e) {
+    e.preventDefault();
+    const form = e.target;
+    const fd = new FormData(form);
+    const payload = Object.fromEntries(fd.entries());
+    payload.status = state.specimenPendingStatus || 'draft';
+    payload.rows = state.specimenRows;
+
+    contentEl.querySelectorAll('canvas.signature-pad').forEach(canvas => {
+      payload[canvas.dataset.sig] = canvas.dataset.hasSignature === 'true' ? canvas.toDataURL('image/png') : '';
+    });
+
+    try {
+      state.specimenData = await api(`/api/specimen-inspections/${state.specimenEditingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      toast('Pengecekan Spesimen tersimpan', 'success');
+      state.view = 'specimen-list';
+      render();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  async function deleteSpecimenInspection(id) {
+    if (!confirm('Hapus Pengecekan Spesimen ini? Tindakan tidak dapat dibatalkan.')) return;
+    try {
+      await api(`/api/specimen-inspections/${id}`, { method: 'DELETE' });
+      toast('Pengecekan Spesimen dihapus', 'success');
+      state.view = 'specimen-list';
+      render();
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  async function renderSpecimenList() {
+    pageTitle.textContent = 'Pengecekan Spesimen';
+    pageSubtitle.textContent = 'Pengecekan Spesimen — DPI-LP-FR-26';
+    topbarActions.innerHTML = `<button class="btn btn-primary" id="btnNewSpec">+ Buat Pengecekan Baru</button>`;
+    document.getElementById('btnNewSpec').addEventListener('click', () => {
+      state.specimenCreatorOpen = !state.specimenCreatorOpen;
+      renderSpecimenList();
+    });
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+
+    let rows = [];
+    let requests = [];
+    try {
+      rows = await api('/api/specimen-inspections');
+      requests = (await api('/api/requests')).filter(r => r.status === 'final');
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      return;
+    }
+
+    const creatorHtml = state.specimenCreatorOpen ? `
+      <div class="card">
+        <p class="section-title">Buat Pengecekan Spesimen Baru</p>
+        <form id="specCreateForm" class="form-grid">
+          <div class="field">
+            <label>Permintaan Uji</label>
+            <select id="specCreateRequest">
+              <option value="">- Pilih -</option>
+              ${requests.map(r => `<option value="${r.id}">${esc(r.job_number)} — ${esc(r.company)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Kategori</label>
+            <select id="specCreateCategory">
+              <option value="tensile">Tensile</option>
+              <option value="bending">Bending</option>
+              <option value="charpy">Charpy Impact</option>
+            </select>
+          </div>
+          <div class="field" id="specCreateShapeWrap">
+            <label>Bentuk</label>
+            <select id="specCreateShape">
+              <option value="flat">Flat</option>
+              <option value="round">Round</option>
+            </select>
+          </div>
+          <div class="field" style="justify-content:flex-end;">
+            <button type="submit" class="btn btn-primary">Buat</button>
+          </div>
+        </form>
+        ${requests.length === 0 ? '<p class="muted" style="margin-top:8px;">Belum ada Permintaan Uji berstatus Final.</p>' : ''}
+      </div>
+    ` : '';
+
+    if (!rows.length) {
+      contentEl.innerHTML = creatorHtml + `
+        <div class="card empty-state">
+          <p class="card-title">Belum ada Pengecekan Spesimen</p>
+          <p class="card-desc">Klik &ldquo;+ Buat Pengecekan Baru&rdquo; untuk mulai membuat sheet Tensile/Bending/Charpy Impact.</p>
+        </div>`;
+    } else {
+      const trs = rows.map(r => `
+        <tr>
+          <td><strong>${esc(r.job_number)}</strong></td>
+          <td>${esc(r.company)}</td>
+          <td>${esc(SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
+          <td>${esc(r.inspection_date) || '-'}</td>
+          <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
+          <td>
+            <button class="btn btn-sm" data-spec-edit="${r.id}">Buka</button>
+            <button class="btn btn-sm" data-spec-pdf="${r.id}">Export PDF</button>
+            <button class="btn btn-sm btn-danger" data-spec-del="${r.id}">Hapus</button>
+          </td>
+        </tr>`).join('');
+
+      contentEl.innerHTML = creatorHtml + `
+        <div class="card" style="padding:0;">
+          <div style="padding:22px 24px 8px;">
+            <p class="card-title">Daftar Pengecekan Spesimen</p>
+            <p class="card-desc">${rows.length} sheet tersimpan</p>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Kategori</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
+            <tbody>${trs}</tbody>
+          </table>
+        </div>`;
+    }
+
+    if (state.specimenCreatorOpen) {
+      const categorySelect = document.getElementById('specCreateCategory');
+      const shapeWrap = document.getElementById('specCreateShapeWrap');
+      const syncShapeVisibility = () => { shapeWrap.style.display = categorySelect.value === 'charpy' ? 'none' : ''; };
+      categorySelect.addEventListener('change', syncShapeVisibility);
+      syncShapeVisibility();
+
+      document.getElementById('specCreateForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const testRequestId = document.getElementById('specCreateRequest').value;
+        if (!testRequestId) { toast('Pilih Permintaan Uji dulu', 'error'); return; }
+        const category = categorySelect.value;
+        const shape = document.getElementById('specCreateShape').value;
+        try {
+          const created = await api(`/api/requests/${testRequestId}/specimen-inspections`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category, shape })
+          });
+          toast('Pengecekan Spesimen dibuat', 'success');
+          state.specimenCreatorOpen = false;
+          openSpecimenForm(created.id);
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    }
+
+    contentEl.querySelectorAll('[data-spec-edit]').forEach(btn =>
+      btn.addEventListener('click', () => openSpecimenForm(btn.dataset.specEdit)));
+    contentEl.querySelectorAll('[data-spec-pdf]').forEach(btn =>
+      btn.addEventListener('click', () => window.open(`/specimen-inspections/${btn.dataset.specPdf}/print`, '_blank')));
+    contentEl.querySelectorAll('[data-spec-del]').forEach(btn =>
+      btn.addEventListener('click', () => deleteSpecimenInspection(btn.dataset.specDel)));
   }
 
   // ---------- master data ----------
