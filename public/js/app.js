@@ -1369,6 +1369,12 @@
       render();
       return;
     }
+    try {
+      const shapeParam = state.specimenData.shape || '';
+      state.specimenTypes = (await api(`/api/specimen-types?category=${state.specimenData.category}&shape=${shapeParam}`)).types;
+    } catch (e) {
+      state.specimenTypes = [];
+    }
     render();
   }
 
@@ -1392,6 +1398,9 @@
       <datalist id="specRefCodeList">
         ${REF_CODES.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
+      <datalist id="specTypeList">
+        ${(state.specimenTypes || []).map(t => `<option value="${esc(t.name)}">`).join('')}
+      </datalist>
       <form id="specForm">
         <div class="card">
           <p class="section-title">Info Permintaan <span class="en">(hanya baca)</span></p>
@@ -1411,7 +1420,7 @@
             </div>
             <div class="field">
               <label>Tipe Spesimen <span class="en">Type of Specimen</span></label>
-              <input type="text" name="type_of_specimen" value="${esc(insp.type_of_specimen)}">
+              <input type="text" list="specTypeList" autocomplete="off" id="specTypeOfSpecimenInput" name="type_of_specimen" value="${esc(insp.type_of_specimen)}" placeholder="Pilih atau ketik baru...">
             </div>
             <div class="field">
               <label>Kode Acuan <span class="en">Ref. Code</span></label>
@@ -1480,6 +1489,17 @@
 
     document.getElementById('specimenRowsWrap').addEventListener('input', handleSpecimenInput);
     document.getElementById('specimenRowsWrap').addEventListener('change', handleSpecimenInput);
+
+    document.getElementById('specTypeOfSpecimenInput').addEventListener('input', (e) => {
+      const match = (state.specimenTypes || []).find(t => t.name === e.target.value);
+      if (!match) return;
+      const codeValues = match.code_values || {};
+      state.specimenRows.forEach(row => {
+        Object.keys(codeValues).forEach(k => { row.measurements[k] = codeValues[k]; });
+      });
+      rerenderSpecimenRows();
+      toast(`Kolom Code diisi dari tipe "${match.name}"`, 'success');
+    });
 
     document.getElementById('btnSpecDelete').addEventListener('click', () => deleteSpecimenInspection(state.specimenEditingId));
 
@@ -1663,7 +1683,8 @@
     { key: 'coupon-types', label: 'Coupon Type' },
     { key: 'test-methods', label: 'Metode Tes' },
     { key: 'wo-pics', label: 'PIC Work Order' },
-    { key: 'customers', label: 'Customer' }
+    { key: 'customers', label: 'Customer' },
+    { key: 'specimen-types', label: 'Tipe Spesimen' }
   ];
 
   async function loadWoPics() {
@@ -1703,6 +1724,8 @@
 
     if (activeTab === 'customers') {
       await renderCustomerMaster();
+    } else if (activeTab === 'specimen-types') {
+      await renderSpecimenTypeMaster();
     } else {
       await renderSimpleMaster(activeTab, MASTER_TABS.find(t => t.key === activeTab).label);
     }
@@ -1865,6 +1888,152 @@
       } catch (err) {
         toast(err.message, 'error');
       }
+    });
+  }
+
+  function specimenCodeFields(category, shape) {
+    if (category === 'tensile') {
+      const base = [{ key: 'gauge_length_code', label: 'Gauge Length' }];
+      base.push(shape === 'round' ? { key: 'diameter_code', label: 'Diameter' } : { key: 'width_code', label: 'Width' });
+      if (shape !== 'round') base.push({ key: 'thickness_code', label: 'Thickness' });
+      base.push(
+        { key: 'radius_code', label: 'Radius' },
+        { key: 'reduce_section_code', label: 'Reduce Section Length' },
+        { key: 'total_length_code', label: 'Total Length' }
+      );
+      return base;
+    }
+    if (category === 'bending') {
+      if (shape === 'round') return [{ key: 'diameter_code', label: 'Diameter' }, { key: 'length_code', label: 'Length' }];
+      return [
+        { key: 'width_code', label: 'Width' }, { key: 'thickness_code', label: 'Thickness' },
+        { key: 'radius_code', label: 'Radius' }, { key: 'length_code', label: 'Length' }
+      ];
+    }
+    return [
+      { key: 'length_code', label: 'Length' }, { key: 'width_code', label: 'Width' }, { key: 'thickness_code', label: 'Thickness' }
+    ];
+  }
+
+  async function renderSpecimenTypeMaster() {
+    const wrap = document.getElementById('masterTabContent');
+    state.specimenTypeCategory = state.specimenTypeCategory || 'tensile';
+    state.specimenTypeShape = state.specimenTypeShape || 'flat';
+    const category = state.specimenTypeCategory;
+    const shape = category === 'charpy' ? '' : state.specimenTypeShape;
+    const fields = specimenCodeFields(category, shape);
+
+    let types = [];
+    try {
+      types = (await api(`/api/specimen-types?category=${category}&shape=${shape}`)).types;
+    } catch (e) {
+      types = [];
+    }
+
+    const rowsHtml = types.map(t => `
+      <tr>
+        <td>${esc(t.name)}</td>
+        ${fields.map(f => `<td>${esc((t.code_values || {})[f.key] || '-')}</td>`).join('')}
+        <td><button class="btn btn-sm btn-danger" data-stype-del="${t.id}">Hapus</button></td>
+      </tr>`).join('');
+
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">Pilih Kategori</p>
+        <div class="form-grid">
+          <div class="field">
+            <label>Kategori</label>
+            <select id="stypeCategory">
+              <option value="tensile" ${category === 'tensile' ? 'selected' : ''}>Tensile</option>
+              <option value="bending" ${category === 'bending' ? 'selected' : ''}>Bending</option>
+              <option value="charpy" ${category === 'charpy' ? 'selected' : ''}>Charpy Impact</option>
+            </select>
+          </div>
+          <div class="field" id="stypeShapeWrap" style="${category === 'charpy' ? 'display:none;' : ''}">
+            <label>Bentuk</label>
+            <select id="stypeShape">
+              <option value="flat" ${shape === 'flat' ? 'selected' : ''}>Flat</option>
+              <option value="round" ${shape === 'round' ? 'selected' : ''}>Round</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <p class="section-title">Tambah Tipe Spesimen</p>
+        <form id="stypeAddForm" class="form-grid">
+          <div class="field">
+            <label>Nama Tipe</label>
+            <input type="text" id="stypeNameInput" placeholder="Nama Tipe Spesimen">
+          </div>
+          ${fields.map(f => `
+            <div class="field">
+              <label>${esc(f.label)} <span class="en">Code</span></label>
+              <input type="text" data-stype-field="${f.key}" placeholder="${esc(f.label)} Code">
+            </div>`).join('')}
+          <div class="field" style="justify-content:flex-end;">
+            <button type="submit" class="btn btn-primary">+ Tambah</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Tipe Spesimen &mdash; ${esc(SPECIMEN_CATEGORY_LABELS[category])}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}</p>
+          <p class="card-desc">${types.length} tipe tersimpan &mdash; dipakai untuk auto-isi kolom Code di form Pengecekan Spesimen</p>
+        </div>
+        ${types.length ? `
+        <table class="data-table">
+          <thead><tr><th>Nama Tipe</th>${fields.map(f => `<th>${esc(f.label)}</th>`).join('')}<th></th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada tipe untuk kombinasi ini. Tambahkan lewat form di atas.</p>`}
+      </div>
+    `;
+
+    document.getElementById('stypeCategory').addEventListener('change', (e) => {
+      state.specimenTypeCategory = e.target.value;
+      renderSpecimenTypeMaster();
+    });
+    const shapeSelectEl = document.getElementById('stypeShape');
+    if (shapeSelectEl) {
+      shapeSelectEl.addEventListener('change', (e) => {
+        state.specimenTypeShape = e.target.value;
+        renderSpecimenTypeMaster();
+      });
+    }
+
+    document.getElementById('stypeAddForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('stypeNameInput').value.trim();
+      if (!name) { toast('Nama tipe tidak boleh kosong', 'error'); return; }
+      const codeValues = {};
+      document.querySelectorAll('[data-stype-field]').forEach(input => {
+        codeValues[input.dataset.stypeField] = input.value;
+      });
+      try {
+        await api('/api/specimen-types', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category, shape, name, code_values: codeValues })
+        });
+        toast('Tipe spesimen ditambahkan', 'success');
+        renderSpecimenTypeMaster();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+
+    wrap.querySelectorAll('[data-stype-del]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Hapus tipe spesimen ini?')) return;
+        try {
+          await api(`/api/specimen-types/${btn.dataset.stypeDel}`, { method: 'DELETE' });
+          toast('Tipe spesimen dihapus', 'success');
+          renderSpecimenTypeMaster();
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
     });
   }
 

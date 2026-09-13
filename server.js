@@ -731,6 +731,57 @@ app.get('/work-orders/:id/print', async (req, res) => {
 
 const SPECIMEN_CATEGORIES = ['tensile', 'bending', 'charpy'];
 
+app.get('/api/specimen-types', async (req, res) => {
+  const category = req.query.category || '';
+  const shape = req.query.shape || '';
+  try {
+    const { rows } = category
+      ? (await pool.query(
+          `SELECT id, category, shape, name, code_values FROM specimen_types WHERE category = $1 AND shape = $2 ORDER BY name ASC`,
+          [category, shape]
+        ))
+      : (await pool.query(`SELECT id, category, shape, name, code_values FROM specimen_types ORDER BY category ASC, shape ASC, name ASC`));
+    res.json({ types: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master tipe spesimen' });
+  }
+});
+
+app.post('/api/specimen-types', async (req, res) => {
+  const b = req.body || {};
+  const name = (b.name || '').trim();
+  if (!SPECIMEN_CATEGORIES.includes(b.category)) return res.status(400).json({ error: 'Kategori tidak valid' });
+  if (!name) return res.status(400).json({ error: 'Nama tipe spesimen tidak boleh kosong' });
+  const shape = b.category === 'charpy' ? '' : (b.shape === 'round' ? 'round' : 'flat');
+  try {
+    await pool.query(
+      `INSERT INTO specimen_types (category, shape, name, code_values) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (category, shape, name) DO UPDATE SET code_values = EXCLUDED.code_values`,
+      [b.category, shape, name, JSON.stringify(b.code_values || {})]
+    );
+    const { rows } = await pool.query(
+      `SELECT id, category, shape, name, code_values FROM specimen_types WHERE category = $1 AND shape = $2 ORDER BY name ASC`,
+      [b.category, shape]
+    );
+    res.status(201).json({ types: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menambah tipe spesimen' });
+  }
+});
+
+app.delete('/api/specimen-types/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM specimen_types WHERE id = $1`, [req.params.id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus tipe spesimen' });
+  }
+});
+
 app.get('/api/specimen-inspections', async (req, res) => {
   try {
     const { rows } = await pool.query(

@@ -262,6 +262,21 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_specimen_inspections_request ON specimen_inspections(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_specimen_rows_inspection ON specimen_rows(specimen_inspection_id);
+
+    -- Master "Tipe Spesimen" per category+shape — picking one in the Pengecekan
+    -- Spesimen form auto-fills every "Code" (standard/nominal) column; "Actual"
+    -- stays for the technician to measure. Managed via Master Data menu.
+    CREATE TABLE IF NOT EXISTS specimen_types (
+      id SERIAL PRIMARY KEY,
+      category TEXT NOT NULL,           -- 'tensile' | 'bending' | 'charpy'
+      shape TEXT NOT NULL DEFAULT '',   -- 'flat' | 'round' (tensile & bending), '' for charpy
+      name TEXT NOT NULL,
+      code_values JSONB DEFAULT '{}',   -- e.g. {"width_code":"19","radius_code":"25",...}
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(category, shape, name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_specimen_types_cat_shape ON specimen_types(category, shape);
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).
@@ -313,6 +328,29 @@ async function initSchema() {
       `INSERT INTO customers (customer_id, on_behalf_owner) VALUES ${placeholders}
        ON CONFLICT (customer_id, on_behalf_owner) DO NOTHING`,
       COMPANY_IDS.flat()
+    );
+  }
+
+  // Dummy starter "Tipe Spesimen" data (placeholder Code values loosely based on
+  // the sample forms) — meant to be reviewed/corrected via Master Data, not used
+  // as authoritative standard dimensions.
+  const SPECIMEN_TYPE_SEED = [
+    ['tensile', 'flat', 'Joint Pipe/Joint Plate', { gauge_length_code: '19', width_code: '19', thickness_code: '-', radius_code: '25', reduce_section_code: '250', total_length_code: '300' }],
+    ['tensile', 'flat', 'Reduced Section Tension', { gauge_length_code: '20', width_code: '20', thickness_code: '-', radius_code: '12', reduce_section_code: '60', total_length_code: '300' }],
+    ['tensile', 'flat', 'Full Section Tensile', { gauge_length_code: '-', width_code: '25', thickness_code: '-', radius_code: '-', reduce_section_code: '230', total_length_code: '300' }],
+    ['tensile', 'round', 'BjTP/BjTS', { gauge_length_code: '200', diameter_code: '10', radius_code: '-', reduce_section_code: '225', total_length_code: '500' }],
+    ['tensile', 'round', 'Plate/Anchor/Round Bar', { gauge_length_code: '36', diameter_code: '9', radius_code: '8', reduce_section_code: '45', total_length_code: '300' }],
+    ['tensile', 'round', 'Specimen 1 Round', { gauge_length_code: '50', diameter_code: '12.5', radius_code: '10', reduce_section_code: '56', total_length_code: '300' }],
+    ['bending', 'flat', 'Face & Root Bend', { width_code: '38', thickness_code: '-', radius_code: '3', length_code: '150' }],
+    ['bending', 'flat', 'Side Bend', { width_code: '10', thickness_code: '-', radius_code: '3', length_code: '150' }],
+    ['bending', 'round', 'BjTP/BjTS', { diameter_code: '10', length_code: '350' }],
+    ['charpy', '', 'Standard Specimen', { length_code: '55', width_code: '10', thickness_code: '10' }]
+  ];
+  for (const [category, shape, name, codeValues] of SPECIMEN_TYPE_SEED) {
+    await pool.query(
+      `INSERT INTO specimen_types (category, shape, name, code_values) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (category, shape, name) DO NOTHING`,
+      [category, shape, name, JSON.stringify(codeValues)]
     );
   }
 }
