@@ -1412,7 +1412,7 @@
           <p class="section-title">Info Permintaan <span class="en">(hanya baca)</span></p>
           <div class="form-grid">
             <div class="field"><label>No. Pekerjaan</label><input type="text" value="${esc(tr.job_number)}" disabled></div>
-            <div class="field"><label>Pelanggan</label><input type="text" value="${esc(tr.company)}" disabled></div>
+            <div class="field"><label>Pelanggan</label><input type="text" value="${esc(tr.on_behalf_owner)}" disabled></div>
             <div class="field"><label>Kategori</label><input type="text" value="${esc(SPECIMEN_CATEGORY_LABELS[category] || '')}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}" disabled></div>
           </div>
         </div>
