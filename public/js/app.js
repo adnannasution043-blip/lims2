@@ -1491,7 +1491,7 @@
             </div>
             <div class="field">
               <label>Marking</label>
-              <input type="text" name="marking" value="${esc(insp.marking)}">
+              <input type="text" name="marking" value="${esc(insp.marking || tr.customer_id || '')}">
             </div>
           </div>
         </div>
