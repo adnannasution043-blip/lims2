@@ -125,37 +125,45 @@ const CATEGORY_TEST_NAMES = {
   charpy: ['Charpy Impact Test']
 };
 
-async function computeSuggestedMarking(testRequestId, category) {
-  const candidateNames = CATEGORY_TEST_NAMES[category] || [];
-  if (!candidateNames.length) return '';
+// Returns the bare Sample Marking (e.g. "ADK.9.1", same value shown on the
+// Work Order) for the request's first coupon row, plus the full Marking
+// Specimen suggestion ("{Sample Marking}-{code}{qty}") for the given
+// specimen inspection category — both computed off the same coupon/WO lookup.
+async function computeMarkingInfo(testRequestId, category) {
+  const empty = { sample_marking: '', suggested_marking: '' };
 
   const { rows: couponRows } = await pool.query(
     `SELECT id, row_no FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC LIMIT 1`,
     [testRequestId]
   );
   const coupon = couponRows[0];
-  if (!coupon) return '';
-
-  const { rows: items } = await pool.query(
-    `SELECT test_name, qty FROM test_items
-     WHERE coupon_test_id = $1 AND checked = TRUE AND test_name = ANY($2) AND qty IS NOT NULL AND qty <> ''
-     ORDER BY array_position($2, test_name) ASC LIMIT 1`,
-    [coupon.id, candidateNames]
-  );
-  const item = items[0];
-  if (!item) return '';
-
-  const { rows: codeRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [item.test_name]);
-  const code = (codeRows[0] || {}).code || '';
+  if (!coupon) return empty;
 
   const { rows: woRows } = await pool.query(`SELECT id FROM work_orders WHERE test_request_id = $1`, [testRequestId]);
-  if (!woRows.length) return '';
+  if (!woRows.length) return empty;
   const wo = await getFullWorkOrder(woRows[0].id);
   const couponInWo = (wo.coupon_tests || []).find(c => c.row_no === coupon.row_no);
   const sampleMarking = (couponInWo || {}).sample_marking || '';
-  if (!sampleMarking) return '';
+  if (!sampleMarking) return empty;
 
-  return `${sampleMarking}-${code}${item.qty}`;
+  const candidateNames = CATEGORY_TEST_NAMES[category] || [];
+  let suggestedMarking = '';
+  if (candidateNames.length) {
+    const { rows: items } = await pool.query(
+      `SELECT test_name, qty FROM test_items
+       WHERE coupon_test_id = $1 AND checked = TRUE AND test_name = ANY($2) AND qty IS NOT NULL AND qty <> ''
+       ORDER BY array_position($2, test_name) ASC LIMIT 1`,
+      [coupon.id, candidateNames]
+    );
+    const item = items[0];
+    if (item) {
+      const { rows: codeRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [item.test_name]);
+      const code = (codeRows[0] || {}).code || '';
+      suggestedMarking = `${sampleMarking}-${code}${item.qty}`;
+    }
+  }
+
+  return { sample_marking: sampleMarking, suggested_marking: suggestedMarking };
 }
 
 async function getFullSpecimenInspection(id) {
@@ -172,7 +180,9 @@ async function getFullSpecimenInspection(id) {
     [id]
   );
   insp.rows = specimenRows.map(r => ({ ...r, measurements: r.measurements || {} }));
-  insp.suggested_marking = await computeSuggestedMarking(insp.test_request_id, insp.category);
+  const markingInfo = await computeMarkingInfo(insp.test_request_id, insp.category);
+  insp.sample_marking = markingInfo.sample_marking;
+  insp.suggested_marking = markingInfo.suggested_marking;
 
   return insp;
 }
