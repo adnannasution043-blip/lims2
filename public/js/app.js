@@ -64,6 +64,24 @@
     };
   }
 
+  // ---------- sidebar toggle ----------
+
+  (function initSidebarToggle() {
+    const appShell = document.querySelector('.app-shell');
+    const toggleBtn = document.getElementById('sidebarToggle');
+    if (!appShell || !toggleBtn) return;
+
+    let collapsed = false;
+    try { collapsed = localStorage.getItem('sidebarCollapsed') === 'true'; } catch (e) {}
+    appShell.classList.toggle('sidebar-collapsed', collapsed);
+
+    toggleBtn.addEventListener('click', () => {
+      collapsed = !collapsed;
+      appShell.classList.toggle('sidebar-collapsed', collapsed);
+      try { localStorage.setItem('sidebarCollapsed', String(collapsed)); } catch (e) {}
+    });
+  })();
+
   // ---------- nav ----------
 
   document.querySelectorAll('.nav-item[data-nav]').forEach(el => {

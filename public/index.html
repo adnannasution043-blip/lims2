@@ -28,17 +28,17 @@
       <a class="nav-item" data-nav="work-order">
         <span class="nav-icon">&#128295;</span> Work Order
       </a>
-      <a class="nav-item" data-nav="penerimaan-sampel">
-        <span class="nav-icon">&#8595;</span> Penerimaan Sampel
-      </a>
       <a class="nav-item" data-nav="pengecekan-spesimen">
         <span class="nav-icon">&#9879;</span> Pengecekan Spesimen
       </a>
-      <a class="nav-item" data-nav="hasil-laporan">
-        <span class="nav-icon">&#128196;</span> Hasil &amp; Laporan
-      </a>
       <a class="nav-item" data-nav="manajemen-data">
         <span class="nav-icon">&#128451;</span> Master Data
+      </a>
+      <a class="nav-item" data-nav="penerimaan-sampel">
+        <span class="nav-icon">&#8595;</span> Penerimaan Sampel
+      </a>
+      <a class="nav-item" data-nav="hasil-laporan">
+        <span class="nav-icon">&#128196;</span> Hasil &amp; Laporan
       </a>
       <a class="nav-item" data-nav="qaqc">
         <span class="nav-icon">&#128737;</span> QA/QC
@@ -67,9 +67,12 @@
 
   <div class="main">
     <header class="topbar">
-      <div>
-        <h1 id="pageTitle">Permintaan Uji</h1>
-        <p id="pageSubtitle" class="muted">Tinjauan Permintaan Pengujian &mdash; Testing Requirements Review</p>
+      <div class="topbar-left">
+        <button type="button" class="sidebar-toggle" id="sidebarToggle" title="Tampilkan/Sembunyikan menu" aria-label="Tampilkan/Sembunyikan menu">&#9776;</button>
+        <div>
+          <h1 id="pageTitle">Permintaan Uji</h1>
+          <p id="pageSubtitle" class="muted">Tinjauan Permintaan Pengujian &mdash; Testing Requirements Review</p>
+        </div>
       </div>
       <div class="topbar-actions" id="topbarActions"></div>
     </header>
