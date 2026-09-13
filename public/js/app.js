@@ -1481,9 +1481,19 @@
     initSignaturePads();
   }
 
+  function applySelectedSpecimenTypeToRow(row) {
+    const input = document.getElementById('specTypeOfSpecimenInput');
+    const match = input && (state.specimenTypes || []).find(t => t.name === input.value);
+    if (!match) return;
+    const codeValues = match.code_values || {};
+    Object.keys(codeValues).forEach(k => { row.measurements[k] = codeValues[k]; });
+  }
+
   function bindSpecimenFormEvents() {
     document.getElementById('btnAddSpecRow').addEventListener('click', () => {
-      state.specimenRows.push(blankSpecimenRow(state.specimenData.category, state.specimenData.shape));
+      const row = blankSpecimenRow(state.specimenData.category, state.specimenData.shape);
+      applySelectedSpecimenTypeToRow(row);
+      state.specimenRows.push(row);
       rerenderSpecimenRows();
     });
 
@@ -1493,10 +1503,7 @@
     document.getElementById('specTypeOfSpecimenInput').addEventListener('input', (e) => {
       const match = (state.specimenTypes || []).find(t => t.name === e.target.value);
       if (!match) return;
-      const codeValues = match.code_values || {};
-      state.specimenRows.forEach(row => {
-        Object.keys(codeValues).forEach(k => { row.measurements[k] = codeValues[k]; });
-      });
+      state.specimenRows.forEach(row => applySelectedSpecimenTypeToRow(row));
       rerenderSpecimenRows();
       toast(`Kolom Code diisi dari tipe "${match.name}"`, 'success');
     });
