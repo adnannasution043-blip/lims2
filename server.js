@@ -116,6 +116,48 @@ async function getFullWorkOrder(id) {
 
 const SPECIMEN_SIGNATURE_FIELDS = ['inspected_by_signature', 'approved_by_signature'];
 
+// Which Jenis Pengujian (from the fixed TEST_TYPES list) a specimen inspection
+// category corresponds to, in priority order — used to look up its Qty and
+// build Marking Specimen = "{Sample Marking WO}-{code}{qty}".
+const CATEGORY_TEST_NAMES = {
+  tensile: ['Tensile Test'],
+  bending: ['Bend Root', 'Bend Face', 'Bend Side'],
+  charpy: ['Charpy Impact Test']
+};
+
+async function computeSuggestedMarking(testRequestId, category) {
+  const candidateNames = CATEGORY_TEST_NAMES[category] || [];
+  if (!candidateNames.length) return '';
+
+  const { rows: couponRows } = await pool.query(
+    `SELECT id, row_no FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC LIMIT 1`,
+    [testRequestId]
+  );
+  const coupon = couponRows[0];
+  if (!coupon) return '';
+
+  const { rows: items } = await pool.query(
+    `SELECT test_name, qty FROM test_items
+     WHERE coupon_test_id = $1 AND checked = TRUE AND test_name = ANY($2) AND qty IS NOT NULL AND qty <> ''
+     ORDER BY array_position($2, test_name) ASC LIMIT 1`,
+    [coupon.id, candidateNames]
+  );
+  const item = items[0];
+  if (!item) return '';
+
+  const { rows: codeRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [item.test_name]);
+  const code = (codeRows[0] || {}).code || '';
+
+  const { rows: woRows } = await pool.query(`SELECT id FROM work_orders WHERE test_request_id = $1`, [testRequestId]);
+  if (!woRows.length) return '';
+  const wo = await getFullWorkOrder(woRows[0].id);
+  const couponInWo = (wo.coupon_tests || []).find(c => c.row_no === coupon.row_no);
+  const sampleMarking = (couponInWo || {}).sample_marking || '';
+  if (!sampleMarking) return '';
+
+  return `${sampleMarking}-${code}${item.qty}`;
+}
+
 async function getFullSpecimenInspection(id) {
   const { rows } = await pool.query(`SELECT * FROM specimen_inspections WHERE id = $1`, [id]);
   const insp = rows[0];
@@ -130,6 +172,7 @@ async function getFullSpecimenInspection(id) {
     [id]
   );
   insp.rows = specimenRows.map(r => ({ ...r, measurements: r.measurements || {} }));
+  insp.suggested_marking = await computeSuggestedMarking(insp.test_request_id, insp.category);
 
   return insp;
 }
@@ -730,6 +773,46 @@ app.get('/work-orders/:id/print', async (req, res) => {
 // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
 
 const SPECIMEN_CATEGORIES = ['tensile', 'bending', 'charpy'];
+
+app.get('/api/test-type-codes', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT id, test_name, code FROM test_type_codes ORDER BY test_name ASC`);
+    res.json({ codes: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat master kode jenis pengujian' });
+  }
+});
+
+app.post('/api/test-type-codes', async (req, res) => {
+  const b = req.body || {};
+  const testName = (b.test_name || '').trim();
+  const code = (b.code || '').trim();
+  if (!testName || !code) return res.status(400).json({ error: 'Jenis Pengujian dan Kode tidak boleh kosong' });
+  try {
+    await pool.query(
+      `INSERT INTO test_type_codes (test_name, code) VALUES ($1,$2)
+       ON CONFLICT (test_name) DO UPDATE SET code = EXCLUDED.code`,
+      [testName, code]
+    );
+    const { rows } = await pool.query(`SELECT id, test_name, code FROM test_type_codes ORDER BY test_name ASC`);
+    res.status(201).json({ codes: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menyimpan kode jenis pengujian' });
+  }
+});
+
+app.delete('/api/test-type-codes/:id', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(`DELETE FROM test_type_codes WHERE id = $1`, [req.params.id]);
+    if (rowCount === 0) return res.status(404).json({ error: 'Not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menghapus kode jenis pengujian' });
+  }
+});
 
 app.get('/api/specimen-types', async (req, res) => {
   const category = req.query.category || '';

@@ -1107,6 +1107,7 @@
   const SPECIMEN_LOCATIONS = ['Base Metal', 'Weld Metal', 'HAZ', 'Fusion Line', 'Fusion Line +2', 'Fusion Line +5'];
 
   function blankSpecimenRow(category, shape) {
+    const defaultMarking = (state.specimenData && state.specimenData.suggested_marking) || '';
     if (category === 'tensile') {
       const pointField = shape === 'round' ? { diameter: '', area: '' } : { width: '', thickness: '', area: '' };
       const measurements = {
@@ -1121,7 +1122,7 @@
         measurements.width_code = ''; measurements.width_actual = '';
         measurements.thickness_code = ''; measurements.thickness_actual = '';
       }
-      return { marking_specimen: '', type_lt: 'L', measurements };
+      return { marking_specimen: defaultMarking, type_lt: 'L', measurements };
     }
     if (category === 'bending') {
       const measurements = shape === 'round'
@@ -1130,10 +1131,10 @@
             width_code: '', width_actual: '', thickness_code: '', thickness_actual: '',
             radius_code: '', radius_actual: '', length_code: '', length_actual: ''
           };
-      return { marking_specimen: '', type_lt: 'T', accepted: 'Y', measurements };
+      return { marking_specimen: defaultMarking, type_lt: 'T', accepted: 'Y', measurements };
     }
     return {
-      marking_specimen: '', type_lt: 'L', location: 'Weld Metal', accepted: 'Y',
+      marking_specimen: defaultMarking, type_lt: 'L', location: 'Weld Metal', accepted: 'Y',
       measurements: {
         length_code: '', length_actual: '', width_code: '', width_actual: '', thickness_code: '', thickness_actual: '',
         v_notch_l: '', v_notch_r: '', profile_radius: true, profile_depth: true, profile_width: true
@@ -1363,6 +1364,11 @@
       state.specimenRows = (state.specimenData.rows && state.specimenData.rows.length)
         ? state.specimenData.rows
         : [blankSpecimenRow(state.specimenData.category, state.specimenData.shape)];
+      if (state.specimenData.suggested_marking) {
+        state.specimenRows.forEach(row => {
+          if (!row.marking_specimen) row.marking_specimen = state.specimenData.suggested_marking;
+        });
+      }
     } catch (e) {
       toast(e.message, 'error');
       state.view = 'specimen-list';
@@ -1691,7 +1697,8 @@
     { key: 'test-methods', label: 'Metode Tes' },
     { key: 'wo-pics', label: 'PIC Work Order' },
     { key: 'customers', label: 'Customer' },
-    { key: 'specimen-types', label: 'Tipe Spesimen' }
+    { key: 'specimen-types', label: 'Tipe Spesimen' },
+    { key: 'test-type-codes', label: 'Kode Jenis Pengujian' }
   ];
 
   async function loadWoPics() {
@@ -1733,6 +1740,8 @@
       await renderCustomerMaster();
     } else if (activeTab === 'specimen-types') {
       await renderSpecimenTypeMaster();
+    } else if (activeTab === 'test-type-codes') {
+      await renderTestTypeCodeMaster();
     } else {
       await renderSimpleMaster(activeTab, MASTER_TABS.find(t => t.key === activeTab).label);
     }
@@ -2037,6 +2046,99 @@
           await api(`/api/specimen-types/${btn.dataset.stypeDel}`, { method: 'DELETE' });
           toast('Tipe spesimen dihapus', 'success');
           renderSpecimenTypeMaster();
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    });
+  }
+
+  async function renderTestTypeCodeMaster() {
+    let codes = [];
+    try {
+      codes = (await api('/api/test-type-codes')).codes;
+    } catch (e) {
+      codes = [];
+    }
+
+    const wrap = document.getElementById('masterTabContent');
+    const rowsHtml = codes.map(c => `
+      <tr>
+        <td>${esc(c.test_name)}</td>
+        <td><input type="text" data-ttc-name="${esc(c.test_name)}" value="${esc(c.code)}" style="width:80px;"></td>
+        <td><button class="btn btn-sm btn-danger" data-ttc-del="${c.id}">Hapus</button></td>
+      </tr>`).join('');
+
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">Tambah Jenis Pengujian</p>
+        <form id="ttcAddForm" class="form-grid" style="grid-template-columns: 2fr 1fr auto;">
+          <div class="field">
+            <label>Jenis Pengujian</label>
+            <input type="text" id="ttcNameInput" placeholder="Nama Jenis Pengujian">
+          </div>
+          <div class="field">
+            <label>Kode</label>
+            <input type="text" id="ttcCodeInput" placeholder="Kode">
+          </div>
+          <div class="field" style="justify-content:flex-end;">
+            <button type="submit" class="btn btn-primary">+ Tambah</button>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Kode Jenis Pengujian</p>
+          <p class="card-desc">${codes.length} data tersimpan &mdash; dipakai untuk auto-isi Marking Specimen di Pengecekan Spesimen</p>
+        </div>
+        ${codes.length ? `
+        <table class="data-table">
+          <thead><tr><th>Jenis Pengujian</th><th>Kode</th><th></th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada data.</p>`}
+      </div>
+    `;
+
+    document.getElementById('ttcAddForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const testName = document.getElementById('ttcNameInput').value.trim();
+      const code = document.getElementById('ttcCodeInput').value.trim();
+      if (!testName || !code) { toast('Jenis Pengujian dan Kode tidak boleh kosong', 'error'); return; }
+      try {
+        await api('/api/test-type-codes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ test_name: testName, code })
+        });
+        toast('Kode ditambahkan', 'success');
+        renderTestTypeCodeMaster();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+
+    wrap.querySelectorAll('[data-ttc-name]').forEach(input => {
+      input.addEventListener('change', async () => {
+        try {
+          await api('/api/test-type-codes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ test_name: input.dataset.ttcName, code: input.value.trim() })
+          });
+          toast('Kode diperbarui', 'success');
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    });
+
+    wrap.querySelectorAll('[data-ttc-del]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Hapus kode ini?')) return;
+        try {
+          await api(`/api/test-type-codes/${btn.dataset.ttcDel}`, { method: 'DELETE' });
+          toast('Kode dihapus', 'success');
+          renderTestTypeCodeMaster();
         } catch (err) {
           toast(err.message, 'error');
         }

@@ -277,6 +277,16 @@ async function initSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_specimen_types_cat_shape ON specimen_types(category, shape);
+
+    -- Short code per Jenis Pengujian (e.g. "Chemical Composition Test" -> "CA"),
+    -- used to build Marking Specimen on the Pengecekan Spesimen form:
+    -- {Sample Marking WO}-{code}{qty}. Managed via Master Data.
+    CREATE TABLE IF NOT EXISTS test_type_codes (
+      id SERIAL PRIMARY KEY,
+      test_name TEXT UNIQUE NOT NULL,
+      code TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
   `);
 
   // Seed default welding processes (idempotent — only inserts what's missing).
@@ -351,6 +361,23 @@ async function initSchema() {
       `INSERT INTO specimen_types (category, shape, name, code_values) VALUES ($1,$2,$3,$4)
        ON CONFLICT (category, shape, name) DO NOTHING`,
       [category, shape, name, JSON.stringify(codeValues)]
+    );
+  }
+
+  // Dummy starter codes per Jenis Pengujian, used to build Marking Specimen —
+  // review/adjust the actual letters via Master Data.
+  const TEST_TYPE_CODE_SEED = [
+    ['Tensile Test', 'TS'], ['Bend Root', 'BR'], ['Bend Face', 'BF'], ['Bend Side', 'BS'],
+    ['Hardness Test', 'HD'], ['Nick Break Test', 'NB'], ['Charpy Impact Test', 'CI'],
+    ['Macro-etching & Examination', 'MC'], ['Fillet Weld Break', 'FW'], ['Flattening Test', 'FT'],
+    ['Chemical Composition Test', 'CA'], ['Microstructure / Metallography', 'MS'],
+    ['Ferrite Point Count/ Ferrite Content', 'FP'], ['Intergranular / Pitting Corrosion', 'IC'],
+    ['Through Thickness', 'TT']
+  ];
+  for (const [testName, code] of TEST_TYPE_CODE_SEED) {
+    await pool.query(
+      `INSERT INTO test_type_codes (test_name, code) VALUES ($1,$2) ON CONFLICT (test_name) DO NOTHING`,
+      [testName, code]
     );
   }
 }
