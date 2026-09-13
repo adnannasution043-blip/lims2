@@ -67,18 +67,10 @@ body {
 }
 .app-shell.sidebar-collapsed .sidebar * { pointer-events: none; }
 
-.brand-mark {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--red);
-  letter-spacing: 0.5px;
-}
-.brand-mark span { color: var(--navy); }
-.brand-sub {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  letter-spacing: 0.3px;
+.brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .nav {
