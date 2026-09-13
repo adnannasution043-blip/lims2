@@ -202,6 +202,7 @@
   async function openForm(id) {
     state.view = 'form';
     state.editingId = id;
+    state.requestHistoryOpen = false;
 
     if (id) {
       contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
@@ -234,21 +235,56 @@
       </div>`;
   }
 
-  function renderForm() {
+  async function renderForm() {
     const f = state.formData || {};
     pageTitle.textContent = state.editingId ? 'Edit Permintaan Uji' : 'Permintaan Uji Baru';
     pageSubtitle.textContent = 'Tinjauan Permintaan Pengujian — Testing Requirements Review';
+    const canHaveHistory = state.editingId && f.status === 'final';
     topbarActions.innerHTML = `
       <button class="btn" id="btnBack">&larr; Kembali ke Daftar</button>
       ${state.editingId ? `<button type="button" class="btn" id="btnExportPdf">Export PDF</button>` : ''}
+      ${canHaveHistory ? `<button type="button" class="btn" id="btnReqHistory">Riwayat Perubahan</button>` : ''}
     `;
     document.getElementById('btnBack').addEventListener('click', () => { state.view = 'list'; render(); });
     if (state.editingId) {
       document.getElementById('btnExportPdf').addEventListener('click', () =>
         window.open(`/requests/${state.editingId}/print`, '_blank'));
     }
+    if (canHaveHistory) {
+      document.getElementById('btnReqHistory').addEventListener('click', () => {
+        state.requestHistoryOpen = !state.requestHistoryOpen;
+        renderForm();
+      });
+    }
+
+    let historyHtml = '';
+    if (canHaveHistory && state.requestHistoryOpen) {
+      let historyRows = [];
+      try {
+        historyRows = await api(`/api/requests/${state.editingId}/history`);
+      } catch (e) {
+        historyRows = [];
+      }
+      historyHtml = `
+        <div class="card">
+          <p class="section-title">Riwayat Perubahan <span class="en">(versi sebelum tiap amandemen setelah Finalisasi)</span></p>
+          ${historyRows.length ? `
+          <table class="data-table">
+            <thead><tr><th>Tanggal Amandemen</th><th></th></tr></thead>
+            <tbody>
+              ${historyRows.map(h => `
+                <tr>
+                  <td>${esc(new Date(h.amended_at).toLocaleString('id-ID'))}</td>
+                  <td><button type="button" class="btn btn-sm" data-view-history="${h.id}">Lihat Versi Ini</button></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : `<p class="muted">Belum ada amandemen sejak difinalisasi.</p>`}
+        </div>
+      `;
+    }
 
     contentEl.innerHTML = `
+      ${historyHtml}
       <datalist id="weldingProcessList">
         ${WELDING_PROCESSES.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
@@ -433,6 +469,9 @@
     renderCouponRows();
     bindFormEvents();
     initSignaturePads();
+
+    contentEl.querySelectorAll('[data-view-history]').forEach(btn =>
+      btn.addEventListener('click', () => window.open(`/requests/history/${btn.dataset.viewHistory}/print`, '_blank')));
   }
 
   function signaturePadHtml(fieldKey, labelId, labelEn, dataUrl) {

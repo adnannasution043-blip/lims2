@@ -116,6 +116,18 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_coupon_tests_request ON coupon_tests(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_test_items_coupon ON test_items(coupon_test_id);
 
+    -- Amendment history: a full snapshot of the request (+ coupon tests) taken
+    -- right before a Final request gets saved again, so earlier versions stay
+    -- viewable even though the request itself remains editable after Final.
+    CREATE TABLE IF NOT EXISTS test_request_history (
+      id SERIAL PRIMARY KEY,
+      test_request_id INTEGER NOT NULL REFERENCES test_requests(id) ON DELETE CASCADE,
+      snapshot JSONB NOT NULL,
+      amended_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_test_request_history_request ON test_request_history(test_request_id);
+
     -- Work Order (DPI-LP-FR-25): satu per Tinjauan Permintaan Pengujian yang sudah final.
     -- Info pelanggan & coupon test tidak diduplikasi di sini, cukup dibaca dari test_requests/
     -- coupon_tests lewat test_request_id — tabel ini hanya menyimpan data yang memang khas

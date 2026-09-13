@@ -551,13 +551,23 @@ app.put('/api/requests/:id', async (req, res) => {
   }
   const client = await pool.connect();
   try {
-    const { rows: existingRows } = await client.query(`SELECT id FROM test_requests WHERE id = $1`, [id]);
+    const { rows: existingRows } = await client.query(`SELECT id, status FROM test_requests WHERE id = $1`, [id]);
     if (!existingRows.length) {
       client.release();
       return res.status(404).json({ error: 'Not found' });
     }
 
     await client.query('BEGIN');
+
+    // If this request was already Final, snapshot its current state as history
+    // before applying the amendment, so previous versions stay viewable.
+    if (existingRows[0].status === 'final') {
+      const snapshot = await getFullRequest(id);
+      await client.query(
+        `INSERT INTO test_request_history (test_request_id, snapshot) VALUES ($1, $2)`,
+        [id, JSON.stringify(snapshot)]
+      );
+    }
 
     await client.query(
       `UPDATE test_requests SET
@@ -610,6 +620,32 @@ app.get('/requests/:id/print', async (req, res) => {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(renderPrintHtml(data));
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Gagal membuat halaman cetak');
+  }
+});
+
+app.get('/api/requests/:id/history', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, amended_at FROM test_request_history WHERE test_request_id = $1 ORDER BY amended_at DESC`,
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat riwayat' });
+  }
+});
+
+app.get('/requests/history/:historyId/print', async (req, res) => {
+  try {
+    const { rows } = await pool.query(`SELECT snapshot FROM test_request_history WHERE id = $1`, [req.params.historyId]);
+    if (!rows.length) return res.status(404).send('Versi riwayat tidak ditemukan');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(renderPrintHtml(rows[0].snapshot));
   } catch (err) {
     console.error(err);
     res.status(500).send('Gagal membuat halaman cetak');
