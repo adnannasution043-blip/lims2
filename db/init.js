@@ -239,6 +239,12 @@ async function initSchema() {
       id SERIAL PRIMARY KEY,
       test_request_id INTEGER NOT NULL REFERENCES test_requests(id) ON DELETE CASCADE,
 
+      -- Which Coupon Test row (by row_no, not coupon_tests.id — PUT /api/requests/:id
+      -- deletes+reinserts all coupon_tests on every save, so an id-based link would
+      -- go stale) this sheet was made for. Only for tracing sheets on jobs with many
+      -- coupons — never printed on the PDF, which must keep matching the paper form.
+      coupon_row_no INTEGER,
+
       category TEXT NOT NULL,           -- 'tensile' | 'bending' | 'charpy'
       shape TEXT,                       -- 'flat' | 'round' (tensile & bending only)
 
@@ -271,6 +277,9 @@ async function initSchema() {
       accepted TEXT,                    -- 'Y' | 'N' (Bending & Charpy)
       measurements JSONB DEFAULT '{}'
     );
+
+    -- specimen_inspections already existed before coupon_row_no was added.
+    ALTER TABLE specimen_inspections ADD COLUMN IF NOT EXISTS coupon_row_no INTEGER;
 
     CREATE INDEX IF NOT EXISTS idx_specimen_inspections_request ON specimen_inspections(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_specimen_rows_inspection ON specimen_rows(specimen_inspection_id);

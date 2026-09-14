@@ -1163,6 +1163,14 @@
   const SPECIMEN_SHAPE_LABELS = { flat: 'Flat', round: 'Round' };
   const SPECIMEN_LOCATIONS = ['Base Metal', 'Weld Metal', 'HAZ', 'Fusion Line', 'Fusion Line +2', 'Fusion Line +5'];
 
+  function couponRowLabel(row) {
+    const types = [...(row.coupon_type || [])];
+    if (row.coupon_type_other) types.push(row.coupon_type_other);
+    const typeText = types.length ? types.join(', ') : (row.material_type_grade || '-');
+    const refText = row.ref_code ? ` (Ref: ${row.ref_code})` : '';
+    return `Coupon #${row.row_no} — ${typeText}${refText}`;
+  }
+
   function blankSpecimenRow(category, shape) {
     const defaultMarking = (state.specimenData && state.specimenData.suggested_marking) || '';
     if (category === 'tensile') {
@@ -1471,6 +1479,7 @@
             <div class="field"><label>No. Pekerjaan</label><input type="text" value="${esc(tr.job_number)}" disabled></div>
             <div class="field"><label>Pelanggan</label><input type="text" value="${esc(tr.on_behalf_owner)}" disabled></div>
             <div class="field"><label>Kategori</label><input type="text" value="${esc(SPECIMEN_CATEGORY_LABELS[category] || '')}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}" disabled></div>
+            <div class="field"><label>Coupon Test <span class="en">(untuk telusur, tidak tercetak di PDF)</span></label><input type="text" value="${insp.coupon ? esc(couponRowLabel(insp.coupon)) : '-'}" disabled></div>
           </div>
         </div>
 
@@ -1652,6 +1661,12 @@
             </select>
           </div>
           <div class="field">
+            <label>Coupon Test</label>
+            <select id="specCreateCoupon" disabled>
+              <option value="">- Pilih Permintaan Uji dulu -</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Kategori</label>
             <select id="specCreateCategory">
               <option value="tensile">Tensile</option>
@@ -1685,6 +1700,7 @@
         <tr>
           <td><strong>${esc(r.job_number)}</strong></td>
           <td>${esc(r.company)}</td>
+          <td>${r.coupon_row_no ? 'Coupon #' + esc(r.coupon_row_no) : '-'}</td>
           <td>${esc(SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
           <td>${esc(r.inspection_date) || '-'}</td>
           <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
@@ -1702,7 +1718,7 @@
             <p class="card-desc">${rows.length} sheet tersimpan</p>
           </div>
           <table class="data-table">
-            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Kategori</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Coupon</th><th>Kategori</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
             <tbody>${trs}</tbody>
           </table>
         </div>`;
@@ -1711,21 +1727,45 @@
     if (state.specimenCreatorOpen) {
       const categorySelect = document.getElementById('specCreateCategory');
       const shapeWrap = document.getElementById('specCreateShapeWrap');
+      const couponSelect = document.getElementById('specCreateCoupon');
       const syncShapeVisibility = () => { shapeWrap.style.display = categorySelect.value === 'charpy' ? 'none' : ''; };
       categorySelect.addEventListener('change', syncShapeVisibility);
       syncShapeVisibility();
+
+      document.getElementById('specCreateRequest').addEventListener('change', async (e) => {
+        const testRequestId = e.target.value;
+        if (!testRequestId) {
+          couponSelect.innerHTML = '<option value="">- Pilih Permintaan Uji dulu -</option>';
+          couponSelect.disabled = true;
+          return;
+        }
+        couponSelect.disabled = true;
+        couponSelect.innerHTML = '<option value="">Memuat...</option>';
+        try {
+          const data = await api(`/api/requests/${testRequestId}`);
+          const couponRows = data.coupon_tests || [];
+          couponSelect.innerHTML = couponRows.map(c => `<option value="${c.row_no}">${esc(couponRowLabel(c))}</option>`).join('')
+            || '<option value="">Belum ada Coupon Test</option>';
+          couponSelect.disabled = false;
+        } catch (err) {
+          couponSelect.innerHTML = '<option value="">Gagal memuat Coupon Test</option>';
+          toast(err.message, 'error');
+        }
+      });
 
       document.getElementById('specCreateForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const testRequestId = document.getElementById('specCreateRequest').value;
         if (!testRequestId) { toast('Pilih Permintaan Uji dulu', 'error'); return; }
+        const couponRowNo = couponSelect.value;
+        if (!couponRowNo) { toast('Pilih Coupon Test dulu', 'error'); return; }
         const category = categorySelect.value;
         const shape = document.getElementById('specCreateShape').value;
         try {
           const created = await api(`/api/requests/${testRequestId}/specimen-inspections`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category, shape })
+            body: JSON.stringify({ category, shape, coupon_row_no: Number(couponRowNo) })
           });
           toast('Pengecekan Spesimen dibuat', 'success');
           state.specimenCreatorOpen = false;

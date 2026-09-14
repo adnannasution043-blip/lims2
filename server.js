@@ -126,15 +126,19 @@ const CATEGORY_TEST_NAMES = {
 };
 
 // Returns the bare Sample Marking (e.g. "ADK.9.1", same value shown on the
-// Work Order) for the request's first coupon row, plus the full Marking
+// Work Order) for the sheet's linked coupon row, plus the full Marking
 // Specimen suggestion ("{Sample Marking}-{code}{qty}") for the given
 // specimen inspection category — both computed off the same coupon/WO lookup.
-async function computeMarkingInfo(testRequestId, category) {
+// Falls back to the first coupon row when no coupon_row_no is set (older
+// sheets created before this field existed).
+async function computeMarkingInfo(testRequestId, category, couponRowNo) {
   const empty = { sample_marking: '', suggested_marking: '' };
 
   const { rows: couponRows } = await pool.query(
-    `SELECT id, row_no FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC LIMIT 1`,
-    [testRequestId]
+    couponRowNo
+      ? `SELECT id, row_no FROM coupon_tests WHERE test_request_id = $1 AND row_no = $2`
+      : `SELECT id, row_no FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC LIMIT 1`,
+    couponRowNo ? [testRequestId, couponRowNo] : [testRequestId]
   );
   const coupon = couponRows[0];
   if (!coupon) return empty;
@@ -180,9 +184,22 @@ async function getFullSpecimenInspection(id) {
     [id]
   );
   insp.rows = specimenRows.map(r => ({ ...r, measurements: r.measurements || {} }));
-  const markingInfo = await computeMarkingInfo(insp.test_request_id, insp.category);
+  const markingInfo = await computeMarkingInfo(insp.test_request_id, insp.category, insp.coupon_row_no);
   insp.sample_marking = markingInfo.sample_marking;
   insp.suggested_marking = markingInfo.suggested_marking;
+
+  // Coupon summary for on-screen traceability only — never printed on the PDF,
+  // which must keep matching the official paper form.
+  if (insp.coupon_row_no) {
+    const { rows: couponRows } = await pool.query(
+      `SELECT row_no, coupon_type, coupon_type_other, material_type_grade, ref_code
+       FROM coupon_tests WHERE test_request_id = $1 AND row_no = $2`,
+      [insp.test_request_id, insp.coupon_row_no]
+    );
+    insp.coupon = couponRows[0] || null;
+  } else {
+    insp.coupon = null;
+  }
 
   return insp;
 }
@@ -914,7 +931,7 @@ app.delete('/api/specimen-types/:id', async (req, res) => {
 app.get('/api/specimen-inspections', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT si.id, si.test_request_id, si.category, si.shape, si.inspection_date, si.status, si.created_at,
+      `SELECT si.id, si.test_request_id, si.coupon_row_no, si.category, si.shape, si.inspection_date, si.status, si.created_at,
               tr.job_number, tr.company
        FROM specimen_inspections si
        JOIN test_requests tr ON tr.id = si.test_request_id
@@ -953,15 +970,25 @@ app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
     }
 
     const { rows: couponRows } = await pool.query(
-      `SELECT ref_code FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC`,
+      `SELECT row_no, ref_code FROM coupon_tests WHERE test_request_id = $1 ORDER BY row_no ASC`,
       [req.params.id]
     );
-    const refCode = (couponRows.find(r => (r.ref_code || '').trim()) || {}).ref_code || '';
+    if (!couponRows.length) {
+      return res.status(400).json({ error: 'Permintaan ini belum punya Coupon Test' });
+    }
+    const couponRowNo = Number(b.coupon_row_no) || null;
+    const selectedCoupon = couponRowNo
+      ? couponRows.find(c => c.row_no === couponRowNo)
+      : couponRows[0];
+    if (!selectedCoupon) {
+      return res.status(400).json({ error: 'Coupon Test yang dipilih tidak ditemukan pada Permintaan ini' });
+    }
+    const refCode = selectedCoupon.ref_code || '';
 
     const { rows: [insp] } = await pool.query(
-      `INSERT INTO specimen_inspections (test_request_id, category, shape, ref_code)
-       VALUES ($1,$2,$3,$4) RETURNING id`,
-      [req.params.id, b.category, shape, refCode]
+      `INSERT INTO specimen_inspections (test_request_id, coupon_row_no, category, shape, ref_code)
+       VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [req.params.id, selectedCoupon.row_no, b.category, shape, refCode]
     );
     res.status(201).json(await getFullSpecimenInspection(insp.id));
   } catch (err) {
