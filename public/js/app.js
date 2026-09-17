@@ -1148,6 +1148,7 @@
   // ---------- router ----------
 
   function render() {
+    renderWorkflowSteps();
     if (state.view === 'list') renderList();
     else if (state.view === 'wo-list') renderWorkOrderList();
     else if (state.view === 'wo-form') renderWorkOrderForm();
@@ -1155,6 +1156,49 @@
     else if (state.view === 'specimen-list') renderSpecimenList();
     else if (state.view === 'specimen-form') renderSpecimenForm();
     else renderForm();
+  }
+
+  // ---------- workflow progress steps ----------
+
+  const WORKFLOW_STEPS = [
+    { key: 'permintaan-uji', label: 'Permintaan Uji', views: ['list', 'form'] },
+    { key: 'work-order', label: 'Work Order', views: ['wo-list', 'wo-form'] },
+    { key: 'pengecekan-spesimen', label: 'Pengecekan Spesimen', views: ['specimen-list', 'specimen-form'] }
+  ];
+
+  function goToWorkflowStep(key) {
+    if (key === 'permintaan-uji') { state.view = 'list'; state.editingId = null; }
+    else if (key === 'work-order') { state.view = 'wo-list'; state.woEditingId = null; }
+    else if (key === 'pengecekan-spesimen') { state.view = 'specimen-list'; }
+    document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.toggle('active', n.dataset.nav === key));
+    render();
+  }
+
+  function renderWorkflowSteps() {
+    const el = document.getElementById('workflowSteps');
+    if (!el) return;
+    const activeIdx = WORKFLOW_STEPS.findIndex(s => s.views.includes(state.view));
+    if (activeIdx === -1) { el.innerHTML = ''; el.hidden = true; return; }
+    el.hidden = false;
+
+    el.innerHTML = WORKFLOW_STEPS.map((s, i) => {
+      const status = i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'upcoming';
+      const connector = i < WORKFLOW_STEPS.length - 1 ? `<div class="step-connector ${i < activeIdx ? 'done' : ''}"></div>` : '';
+      return `
+        <div class="workflow-step ${status}" data-step-nav="${s.key}" role="button" tabindex="0">
+          <div class="step-circle">${status === 'done' ? '&#10003;' : (i + 1)}</div>
+          <div class="step-label">${esc(s.label)}</div>
+        </div>
+        ${connector}
+      `;
+    }).join('');
+
+    el.querySelectorAll('[data-step-nav]').forEach(node => {
+      node.addEventListener('click', () => goToWorkflowStep(node.dataset.stepNav));
+      node.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToWorkflowStep(node.dataset.stepNav); }
+      });
+    });
   }
 
   // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
