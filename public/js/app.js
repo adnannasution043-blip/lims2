@@ -1841,13 +1841,14 @@
         searchPlaceholder: 'Cari No. Pekerjaan atau Perusahaan...',
         renderTableHtml: (pageRows) => `
           <table class="data-table">
-            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Coupon</th><th>Jenis Pengujian</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Coupon</th><th>Jenis Pengujian</th><th>Qty</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
             <tbody>${pageRows.map(r => `
               <tr>
                 <td><strong>${esc(r.job_number)}</strong></td>
                 <td>${esc(r.company)}</td>
                 <td>${r.coupon_row_no ? 'Coupon #' + esc(r.coupon_row_no) : '-'}</td>
                 <td>${esc(r.test_name || SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
+                <td>${esc(r.qty) || '-'}</td>
                 <td>${esc(r.inspection_date) || '-'}</td>
                 <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
                 <td>

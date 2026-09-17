@@ -940,9 +940,11 @@ app.get('/api/specimen-inspections', async (req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT si.id, si.test_request_id, si.coupon_row_no, si.category, si.shape, si.test_name, si.inspection_date, si.status, si.created_at,
-              tr.job_number, tr.company
+              tr.job_number, tr.company, ti.qty
        FROM specimen_inspections si
        JOIN test_requests tr ON tr.id = si.test_request_id
+       LEFT JOIN coupon_tests ct ON ct.test_request_id = si.test_request_id AND ct.row_no = si.coupon_row_no
+       LEFT JOIN test_items ti ON ti.coupon_test_id = ct.id AND ti.test_name = si.test_name AND ti.checked = TRUE
        ORDER BY si.id DESC`
     );
     res.json(rows);
