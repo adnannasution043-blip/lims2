@@ -1296,8 +1296,8 @@
     return `Coupon #${row.row_no} — ${typeText}${refText}`;
   }
 
-  function blankSpecimenRow(category, shape) {
-    const defaultMarking = (state.specimenData && state.specimenData.suggested_marking) || '';
+  function blankSpecimenRow(category, shape, marking) {
+    const defaultMarking = marking || '';
     if (category === 'tensile') {
       const pointField = shape === 'round' ? { diameter: '', area: '' } : { width: '', thickness: '', area: '' };
       const measurements = {
@@ -1551,14 +1551,12 @@
     contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
     try {
       state.specimenData = await api(`/api/specimen-inspections/${id}`);
-      state.specimenRows = (state.specimenData.rows && state.specimenData.rows.length)
-        ? state.specimenData.rows
-        : [blankSpecimenRow(state.specimenData.category, state.specimenData.shape)];
-      if (state.specimenData.suggested_marking) {
-        state.specimenRows.forEach(row => {
-          if (!row.marking_specimen) row.marking_specimen = state.specimenData.suggested_marking;
-        });
-      }
+      const insp = state.specimenData;
+      state.specimenRows = (insp.rows && insp.rows.length)
+        ? insp.rows
+        : (insp.markings && insp.markings.length
+            ? insp.markings.map(m => blankSpecimenRow(insp.category, insp.shape, m))
+            : [blankSpecimenRow(insp.category, insp.shape, insp.sample_marking || '')]);
     } catch (e) {
       toast(e.message, 'error');
       state.view = 'specimen-list';
@@ -1688,7 +1686,10 @@
 
   function bindSpecimenFormEvents() {
     document.getElementById('btnAddSpecRow').addEventListener('click', () => {
-      const row = blankSpecimenRow(state.specimenData.category, state.specimenData.shape);
+      const insp = state.specimenData;
+      const nextIdx = state.specimenRows.length + 1;
+      const marking = (insp.sample_marking && insp.code) ? `${insp.sample_marking}-${insp.code}${nextIdx}` : '';
+      const row = blankSpecimenRow(insp.category, insp.shape, marking);
       applySelectedSpecimenTypeToRow(row);
       state.specimenRows.push(row);
       rerenderSpecimenRows();
@@ -1792,19 +1793,21 @@
             </select>
           </div>
           <div class="field">
-            <label>Kategori</label>
-            <select id="specCreateCategory">
-              <option value="tensile">Tensile</option>
-              <option value="bending">Bending</option>
-              <option value="charpy">Charpy Impact</option>
+            <label>Jenis Pengujian</label>
+            <select id="specCreateTestName" disabled>
+              <option value="">- Pilih Coupon Test dulu -</option>
             </select>
           </div>
-          <div class="field" id="specCreateShapeWrap">
-            <label>Bentuk</label>
+          <div class="field" id="specCreateShapeWrap" style="display:none;">
+            <label>Bentuk <span class="en">Auto-terisi dari jenis coupon, tetap bisa diubah manual</span></label>
             <select id="specCreateShape">
               <option value="flat">Flat</option>
               <option value="round">Round</option>
             </select>
+          </div>
+          <div class="field" id="specCreateQtyWrap" style="display:none;">
+            <label>Qty diminta</label>
+            <input type="text" id="specCreateQty" disabled>
           </div>
           <div class="field" style="justify-content:flex-end;">
             <button type="submit" class="btn btn-primary">Buat</button>
@@ -1838,13 +1841,13 @@
         searchPlaceholder: 'Cari No. Pekerjaan atau Perusahaan...',
         renderTableHtml: (pageRows) => `
           <table class="data-table">
-            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Coupon</th><th>Kategori</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Coupon</th><th>Jenis Pengujian</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
             <tbody>${pageRows.map(r => `
               <tr>
                 <td><strong>${esc(r.job_number)}</strong></td>
                 <td>${esc(r.company)}</td>
                 <td>${r.coupon_row_no ? 'Coupon #' + esc(r.coupon_row_no) : '-'}</td>
-                <td>${esc(SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
+                <td>${esc(r.test_name || SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
                 <td>${esc(r.inspection_date) || '-'}</td>
                 <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
                 <td>
@@ -1866,15 +1869,25 @@
     }
 
     if (state.specimenCreatorOpen) {
-      const categorySelect = document.getElementById('specCreateCategory');
-      const shapeWrap = document.getElementById('specCreateShapeWrap');
       const couponSelect = document.getElementById('specCreateCoupon');
-      const syncShapeVisibility = () => { shapeWrap.style.display = categorySelect.value === 'charpy' ? 'none' : ''; };
-      categorySelect.addEventListener('change', syncShapeVisibility);
-      syncShapeVisibility();
+      const testNameSelect = document.getElementById('specCreateTestName');
+      const shapeWrap = document.getElementById('specCreateShapeWrap');
+      const shapeSelect = document.getElementById('specCreateShape');
+      const qtyWrap = document.getElementById('specCreateQtyWrap');
+      const qtyInput = document.getElementById('specCreateQty');
+      let availableTests = [];
+
+      const resetTestNameSelect = (placeholder) => {
+        availableTests = [];
+        testNameSelect.innerHTML = `<option value="">${placeholder}</option>`;
+        testNameSelect.disabled = true;
+        shapeWrap.style.display = 'none';
+        qtyWrap.style.display = 'none';
+      };
 
       document.getElementById('specCreateRequest').addEventListener('change', async (e) => {
         const testRequestId = e.target.value;
+        resetTestNameSelect('- Pilih Coupon Test dulu -');
         if (!testRequestId) {
           couponSelect.innerHTML = '<option value="">- Pilih Permintaan Uji dulu -</option>';
           couponSelect.disabled = true;
@@ -1894,19 +1907,56 @@
         }
       });
 
+      couponSelect.addEventListener('change', async () => {
+        const testRequestId = document.getElementById('specCreateRequest').value;
+        const rowNo = couponSelect.value;
+        resetTestNameSelect('Memuat...');
+        if (!testRequestId || !rowNo) { resetTestNameSelect('- Pilih Coupon Test dulu -'); return; }
+        try {
+          const data = await api(`/api/requests/${testRequestId}/coupon-tests/${rowNo}/available-tests`);
+          availableTests = data.available || [];
+          if (!availableTests.length) {
+            testNameSelect.innerHTML = '<option value="">Semua Jenis Pengujian pada Coupon ini sudah dibuat sheetnya</option>';
+            testNameSelect.disabled = true;
+            return;
+          }
+          testNameSelect.innerHTML = '<option value="">- Pilih -</option>' +
+            availableTests.map(t => `<option value="${esc(t.test_name)}">${esc(t.test_name)} (Qty: ${esc(t.qty)})</option>`).join('');
+          testNameSelect.disabled = false;
+        } catch (err) {
+          testNameSelect.innerHTML = '<option value="">Gagal memuat Jenis Pengujian</option>';
+          toast(err.message, 'error');
+        }
+      });
+
+      testNameSelect.addEventListener('change', () => {
+        const chosen = availableTests.find(t => t.test_name === testNameSelect.value);
+        if (!chosen) { shapeWrap.style.display = 'none'; qtyWrap.style.display = 'none'; return; }
+        qtyWrap.style.display = '';
+        qtyInput.value = chosen.qty;
+        if (chosen.category === 'charpy') {
+          shapeWrap.style.display = 'none';
+        } else {
+          shapeWrap.style.display = '';
+          shapeSelect.value = chosen.suggested_shape || 'flat';
+        }
+      });
+
       document.getElementById('specCreateForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         const testRequestId = document.getElementById('specCreateRequest').value;
         if (!testRequestId) { toast('Pilih Permintaan Uji dulu', 'error'); return; }
         const couponRowNo = couponSelect.value;
         if (!couponRowNo) { toast('Pilih Coupon Test dulu', 'error'); return; }
-        const category = categorySelect.value;
-        const shape = document.getElementById('specCreateShape').value;
+        const testName = testNameSelect.value;
+        if (!testName) { toast('Pilih Jenis Pengujian dulu', 'error'); return; }
+        const chosen = availableTests.find(t => t.test_name === testName);
+        const shape = chosen && chosen.category !== 'charpy' ? shapeSelect.value : null;
         try {
           const created = await api(`/api/requests/${testRequestId}/specimen-inspections`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ category, shape, coupon_row_no: Number(couponRowNo) })
+            body: JSON.stringify({ test_name: testName, shape, coupon_row_no: Number(couponRowNo) })
           });
           toast('Pengecekan Spesimen dibuat', 'success');
           state.specimenCreatorOpen = false;

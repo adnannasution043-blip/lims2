@@ -117,22 +117,32 @@ async function getFullWorkOrder(id) {
 const SPECIMEN_SIGNATURE_FIELDS = ['inspected_by_signature', 'approved_by_signature'];
 
 // Which Jenis Pengujian (from the fixed TEST_TYPES list) a specimen inspection
-// category corresponds to, in priority order — used to look up its Qty and
-// build Marking Specimen = "{Sample Marking WO}-{code}{qty}".
+// category corresponds to — decides which of the 4 fixed print templates a
+// sheet for that Jenis Pengujian uses. Only Jenis Pengujian listed here can be
+// picked in the Pengecekan Spesimen creator, since the other TEST_TYPES have
+// no matching paper form template. Nick Break Test is grouped under "bending"
+// because it uses the same Type/Location/Accepted-Rejected layout as Bend Root/
+// Face/Side, not a template of its own.
 const CATEGORY_TEST_NAMES = {
   tensile: ['Tensile Test'],
-  bending: ['Bend Root', 'Bend Face', 'Bend Side'],
+  bending: ['Bend Root', 'Bend Face', 'Bend Side', 'Nick Break Test'],
   charpy: ['Charpy Impact Test']
 };
 
+const TEST_NAME_TO_CATEGORY = {};
+Object.entries(CATEGORY_TEST_NAMES).forEach(([cat, names]) => {
+  names.forEach(name => { TEST_NAME_TO_CATEGORY[name] = cat; });
+});
+
 // Returns the bare Sample Marking (e.g. "ADK.9.1", same value shown on the
-// Work Order) for the sheet's linked coupon row, plus the full Marking
-// Specimen suggestion ("{Sample Marking}-{code}{qty}") for the given
-// specimen inspection category — both computed off the same coupon/WO lookup.
+// Work Order) for the sheet's linked coupon row, plus — when testName is
+// given — the Jenis Pengujian's code, its checked Qty, and the full list of
+// per-specimen Marking Specimen values ("{Sample Marking}-{code}1",
+// "...{code}2", ... up to Qty), one per physical specimen in that row's Qty.
 // Falls back to the first coupon row when no coupon_row_no is set (older
 // sheets created before this field existed).
-async function computeMarkingInfo(testRequestId, category, couponRowNo) {
-  const empty = { sample_marking: '', suggested_marking: '' };
+async function computeMarkingInfo(testRequestId, testName, couponRowNo) {
+  const empty = { sample_marking: '', code: '', qty: 0, markings: [] };
 
   const { rows: couponRows } = await pool.query(
     couponRowNo
@@ -149,25 +159,21 @@ async function computeMarkingInfo(testRequestId, category, couponRowNo) {
   const couponInWo = (wo.coupon_tests || []).find(c => c.row_no === coupon.row_no);
   const sampleMarking = (couponInWo || {}).sample_marking || '';
   if (!sampleMarking) return empty;
+  if (!testName) return { sample_marking: sampleMarking, code: '', qty: 0, markings: [] };
 
-  const candidateNames = CATEGORY_TEST_NAMES[category] || [];
-  let suggestedMarking = '';
-  if (candidateNames.length) {
-    const { rows: items } = await pool.query(
-      `SELECT test_name, qty FROM test_items
-       WHERE coupon_test_id = $1 AND checked = TRUE AND test_name = ANY($2) AND qty IS NOT NULL AND qty <> ''
-       ORDER BY array_position($2, test_name) ASC LIMIT 1`,
-      [coupon.id, candidateNames]
-    );
-    const item = items[0];
-    if (item) {
-      const { rows: codeRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [item.test_name]);
-      const code = (codeRows[0] || {}).code || '';
-      suggestedMarking = `${sampleMarking}-${code}${item.qty}`;
-    }
-  }
+  const { rows: items } = await pool.query(
+    `SELECT qty FROM test_items WHERE coupon_test_id = $1 AND test_name = $2 AND checked = TRUE LIMIT 1`,
+    [coupon.id, testName]
+  );
+  const qty = items[0] ? (parseInt(items[0].qty, 10) || 0) : 0;
 
-  return { sample_marking: sampleMarking, suggested_marking: suggestedMarking };
+  const { rows: codeRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [testName]);
+  const code = (codeRows[0] || {}).code || '';
+
+  const markings = [];
+  for (let i = 1; i <= qty; i++) markings.push(`${sampleMarking}-${code}${i}`);
+
+  return { sample_marking: sampleMarking, code, qty, markings };
 }
 
 async function getFullSpecimenInspection(id) {
@@ -184,9 +190,11 @@ async function getFullSpecimenInspection(id) {
     [id]
   );
   insp.rows = specimenRows.map(r => ({ ...r, measurements: r.measurements || {} }));
-  const markingInfo = await computeMarkingInfo(insp.test_request_id, insp.category, insp.coupon_row_no);
+  const markingInfo = await computeMarkingInfo(insp.test_request_id, insp.test_name, insp.coupon_row_no);
   insp.sample_marking = markingInfo.sample_marking;
-  insp.suggested_marking = markingInfo.suggested_marking;
+  insp.code = markingInfo.code;
+  insp.qty = markingInfo.qty;
+  insp.markings = markingInfo.markings;
 
   // Coupon summary for on-screen traceability only — never printed on the PDF,
   // which must keep matching the official paper form.
@@ -931,7 +939,7 @@ app.delete('/api/specimen-types/:id', async (req, res) => {
 app.get('/api/specimen-inspections', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT si.id, si.test_request_id, si.coupon_row_no, si.category, si.shape, si.inspection_date, si.status, si.created_at,
+      `SELECT si.id, si.test_request_id, si.coupon_row_no, si.category, si.shape, si.test_name, si.inspection_date, si.status, si.created_at,
               tr.job_number, tr.company
        FROM specimen_inspections si
        JOIN test_requests tr ON tr.id = si.test_request_id
@@ -941,6 +949,63 @@ app.get('/api/specimen-inspections', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat data' });
+  }
+});
+
+// Jenis Pengujian checked on a specific Coupon Test row that (a) map to a
+// category with a print template and (b) don't already have a Pengecekan
+// Spesimen sheet for that coupon — this is what the creator wizard's "Jenis
+// Pengujian" dropdown is restricted to, so a sheet can't be made twice for
+// the same test on the same coupon.
+app.get('/api/requests/:id/coupon-tests/:rowNo/available-tests', async (req, res) => {
+  try {
+    const { rows: couponRows } = await pool.query(
+      `SELECT id, row_no, coupon_type, coupon_type_other, material_type_grade
+       FROM coupon_tests WHERE test_request_id = $1 AND row_no = $2`,
+      [req.params.id, req.params.rowNo]
+    );
+    const coupon = couponRows[0];
+    if (!coupon) return res.status(404).json({ error: 'Coupon Test tidak ditemukan' });
+
+    const { rows: items } = await pool.query(
+      `SELECT test_name, qty FROM test_items
+       WHERE coupon_test_id = $1 AND checked = TRUE AND qty IS NOT NULL AND qty <> ''`,
+      [coupon.id]
+    );
+    const { rows: usedRows } = await pool.query(
+      `SELECT test_name FROM specimen_inspections WHERE test_request_id = $1 AND coupon_row_no = $2`,
+      [req.params.id, req.params.rowNo]
+    );
+    const used = new Set(usedRows.map(r => r.test_name));
+
+    const { rows: codeRows } = await pool.query(`SELECT test_name, code FROM test_type_codes`);
+    const codeByName = {};
+    codeRows.forEach(c => { codeByName[c.test_name] = c.code; });
+
+    // Rough auto-suggestion for Bentuk from the coupon's Jenis Coupon text —
+    // stays a manually-editable select on the form either way.
+    const couponTypeText = [
+      ...(coupon.coupon_type || []), coupon.coupon_type_other || '', coupon.material_type_grade || ''
+    ].join(' ').toLowerCase();
+    const suggestedShape = /pipe|pipa|round|bulat|bar/.test(couponTypeText) ? 'round' : 'flat';
+
+    const available = items
+      .filter(it => TEST_NAME_TO_CATEGORY[it.test_name] && !used.has(it.test_name))
+      .map(it => {
+        const category = TEST_NAME_TO_CATEGORY[it.test_name];
+        return {
+          test_name: it.test_name,
+          qty: it.qty,
+          category,
+          code: codeByName[it.test_name] || '',
+          suggested_shape: category === 'charpy' ? null : suggestedShape
+        };
+      });
+
+    res.json({ available, suggested_shape: suggestedShape });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal memuat Jenis Pengujian' });
   }
 });
 
@@ -957,10 +1022,12 @@ app.get('/api/specimen-inspections/:id', async (req, res) => {
 
 app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
   const b = req.body || {};
-  if (!SPECIMEN_CATEGORIES.includes(b.category)) {
-    return res.status(400).json({ error: 'Kategori tidak valid' });
+  const testName = (b.test_name || '').trim();
+  const category = TEST_NAME_TO_CATEGORY[testName];
+  if (!testName || !category) {
+    return res.status(400).json({ error: 'Jenis Pengujian tidak valid' });
   }
-  const shape = b.category === 'charpy' ? null : (b.shape === 'round' ? 'round' : 'flat');
+  const shape = category === 'charpy' ? null : (b.shape === 'round' ? 'round' : 'flat');
   try {
     const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [req.params.id]);
     const testRequest = reqRows[0];
@@ -985,10 +1052,18 @@ app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
     }
     const refCode = selectedCoupon.ref_code || '';
 
+    const { rows: dupeRows } = await pool.query(
+      `SELECT id FROM specimen_inspections WHERE test_request_id = $1 AND coupon_row_no = $2 AND test_name = $3`,
+      [req.params.id, selectedCoupon.row_no, testName]
+    );
+    if (dupeRows.length) {
+      return res.status(400).json({ error: 'Jenis Pengujian ini sudah punya Pengecekan Spesimen untuk Coupon tersebut' });
+    }
+
     const { rows: [insp] } = await pool.query(
-      `INSERT INTO specimen_inspections (test_request_id, coupon_row_no, category, shape, ref_code)
-       VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-      [req.params.id, selectedCoupon.row_no, b.category, shape, refCode]
+      `INSERT INTO specimen_inspections (test_request_id, coupon_row_no, category, shape, ref_code, test_name)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.params.id, selectedCoupon.row_no, category, shape, refCode, testName]
     );
     res.status(201).json(await getFullSpecimenInspection(insp.id));
   } catch (err) {

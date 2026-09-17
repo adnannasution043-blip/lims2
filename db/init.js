@@ -281,6 +281,12 @@ async function initSchema() {
     -- specimen_inspections already existed before coupon_row_no was added.
     ALTER TABLE specimen_inspections ADD COLUMN IF NOT EXISTS coupon_row_no INTEGER;
 
+    -- Which exact checked Jenis Pengujian (test_items.test_name on the linked
+    -- coupon) this sheet was created for — drives the Qty/marking-sequence
+    -- lookup and lets the creator wizard hide Jenis Pengujian that already
+    -- have a sheet for that coupon. Existing sheets predate this column.
+    ALTER TABLE specimen_inspections ADD COLUMN IF NOT EXISTS test_name TEXT NOT NULL DEFAULT '';
+
     CREATE INDEX IF NOT EXISTS idx_specimen_inspections_request ON specimen_inspections(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_specimen_rows_inspection ON specimen_rows(specimen_inspection_id);
 
