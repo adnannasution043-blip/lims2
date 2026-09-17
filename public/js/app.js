@@ -14,7 +14,7 @@
   let WO_PICS = [];
   let TEST_METHODS = [];
   let CUSTOMERS = [];
-  let state = { view: 'list', editingId: null, couponRows: [], tableUI: {} };
+  let state = { view: 'dashboard', editingId: null, couponRows: [], tableUI: {} };
 
   // ---------- utils ----------
 
@@ -150,11 +150,10 @@
   document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
     el.addEventListener('click', () => {
       const key = el.dataset.nav;
-      if (key === 'permintaan-uji' || key === 'work-order' || key === 'manajemen-data' || key === 'pengecekan-spesimen') {
-        document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.remove('active'));
-        el.classList.add('active');
-      }
-      if (key === 'permintaan-uji') {
+      if (key === 'dashboard') {
+        state.view = 'dashboard';
+        render();
+      } else if (key === 'permintaan-uji') {
         state.view = 'list';
         state.editingId = null;
         render();
@@ -175,6 +174,196 @@
       }
     });
   });
+
+  // ---------- dashboard ----------
+
+  async function renderDashboard() {
+    pageTitle.textContent = 'Dashboard';
+    pageSubtitle.textContent = 'Ringkasan aktivitas laboratorium — DETECH LIMS';
+    topbarActions.innerHTML = '';
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+
+    let requests = [], workOrders = [], specimens = [];
+    try {
+      [requests, workOrders, specimens] = await Promise.all([
+        api('/api/requests'),
+        api('/api/work-orders'),
+        api('/api/specimen-inspections')
+      ]);
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      return;
+    }
+
+    const draftRequests = requests.filter(r => r.status !== 'final').length;
+    const finalRequests = requests.length - draftRequests;
+    const draftWO = workOrders.filter(w => w.status !== 'final').length;
+    const finalWO = workOrders.length - draftWO;
+    const draftSpecimens = specimens.filter(s => s.status !== 'final').length;
+    const finalSpecimens = specimens.length - draftSpecimens;
+
+    const specimenRequestIds = new Set(specimens.map(s => s.test_request_id));
+    const needsWO = requests.filter(r => r.status === 'final' && !r.work_order_id);
+    const needsSpecimen = workOrders.filter(w => w.status === 'final' && !specimenRequestIds.has(w.test_request_id));
+    const actionCount = needsWO.length + needsSpecimen.length;
+
+    const totalRequests = requests.length;
+    const funnelStages = [
+      { label: 'Permintaan Uji', count: requests.length, pct: 100 },
+      { label: 'Work Order', count: workOrders.length, pct: totalRequests ? Math.min(100, Math.round(workOrders.length / totalRequests * 100)) : 0 },
+      { label: 'Pengecekan Spesimen', count: specimenRequestIds.size, pct: totalRequests ? Math.min(100, Math.round(specimenRequestIds.size / totalRequests * 100)) : 0 }
+    ];
+
+    const now = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push({ key, label: d.toLocaleDateString('id-ID', { month: 'short' }), count: 0 });
+    }
+    requests.forEach(r => {
+      const bucket = months.find(m => m.key === (r.received_date || '').slice(0, 7));
+      if (bucket) bucket.count += 1;
+    });
+    const maxMonthCount = Math.max(1, ...months.map(m => m.count));
+
+    const ACTIVITY_ICON = { request: '&#128203;', wo: '&#128295;', specimen: '&#9879;' };
+    const activity = [
+      ...requests.map(r => ({ type: 'request', label: `Permintaan Uji ${r.job_number}`, sub: r.company, status: r.status, created_at: r.created_at })),
+      ...workOrders.map(w => ({ type: 'wo', label: `Work Order ${w.job_number}`, sub: w.company, status: w.status, created_at: w.created_at })),
+      ...specimens.map(s => ({ type: 'specimen', label: `Pengecekan Spesimen ${s.job_number}`, sub: s.test_name || SPECIMEN_CATEGORY_LABELS[s.category] || s.category, status: s.status, created_at: s.created_at }))
+    ].filter(a => a.created_at).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
+
+    const todayLabel = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+    contentEl.innerHTML = `
+      <div class="dash-hero">
+        <p class="dash-hero-eyebrow">Selamat datang kembali</p>
+        <h2 class="dash-hero-title">Ringkasan Laboratorium DETECH</h2>
+        <p class="muted">${esc(todayLabel)}</p>
+      </div>
+
+      <div class="dash-stats">
+        <div class="dash-stat-card">
+          <div class="dash-stat-icon">&#128203;</div>
+          <div>
+            <p class="dash-stat-value">${requests.length}</p>
+            <p class="dash-stat-label">Permintaan Uji</p>
+            <p class="dash-stat-sub">${draftRequests} draft &middot; ${finalRequests} final</p>
+          </div>
+        </div>
+        <div class="dash-stat-card">
+          <div class="dash-stat-icon">&#128295;</div>
+          <div>
+            <p class="dash-stat-value">${workOrders.length}</p>
+            <p class="dash-stat-label">Work Order</p>
+            <p class="dash-stat-sub">${draftWO} draft &middot; ${finalWO} final</p>
+          </div>
+        </div>
+        <div class="dash-stat-card">
+          <div class="dash-stat-icon">&#9879;</div>
+          <div>
+            <p class="dash-stat-value">${specimens.length}</p>
+            <p class="dash-stat-label">Pengecekan Spesimen</p>
+            <p class="dash-stat-sub">${draftSpecimens} draft &middot; ${finalSpecimens} final</p>
+          </div>
+        </div>
+        <div class="dash-stat-card ${actionCount ? 'is-alert' : ''}">
+          <div class="dash-stat-icon">&#9888;</div>
+          <div>
+            <p class="dash-stat-value">${actionCount}</p>
+            <p class="dash-stat-label">Perlu Tindak Lanjut</p>
+            <p class="dash-stat-sub">${actionCount ? 'Butuh langkah berikutnya' : 'Semua sudah tertangani'}</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card">
+          <p class="card-title">Alur Kerja</p>
+          <p class="card-desc">Permintaan Uji &rarr; Work Order &rarr; Pengecekan Spesimen</p>
+          <div class="dash-funnel">
+            ${funnelStages.map(s => `
+              <div class="dash-funnel-row">
+                <div class="dash-funnel-track"><div class="dash-funnel-fill" style="width:${s.pct}%"></div></div>
+                <div class="dash-funnel-meta"><span class="dash-funnel-name">${esc(s.label)}</span><span class="dash-funnel-count">${s.count}</span></div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="card-title">Permintaan Uji per Bulan</p>
+          <p class="card-desc">6 bulan terakhir</p>
+          <div class="dash-bars">
+            ${months.map(m => `
+              <div class="dash-bar-col">
+                <div class="dash-bar-track"><div class="dash-bar-fill" style="height:${Math.round(m.count / maxMonthCount * 100)}%"></div></div>
+                <span class="dash-bar-count">${m.count}</span>
+                <span class="dash-bar-label">${esc(m.label)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="card">
+          <p class="card-title">Perlu Tindak Lanjut</p>
+          <p class="card-desc">Langkah berikutnya yang belum diambil</p>
+          ${actionCount === 0 ? `<p class="dash-empty">Semua Permintaan Uji sudah lengkap sampai Pengecekan Spesimen.</p>` : `
+            <div class="dash-action-list">
+              ${needsWO.map(r => `
+                <div class="dash-action-item">
+                  <div>
+                    <strong>${esc(r.job_number)}</strong><span class="muted"> &middot; ${esc(r.company)}</span>
+                    <p class="dash-action-hint">Sudah Final, belum ada Work Order</p>
+                  </div>
+                  <button class="btn btn-sm btn-primary" data-action-wo="${r.id}">+ Work Order</button>
+                </div>`).join('')}
+              ${needsSpecimen.map(w => `
+                <div class="dash-action-item">
+                  <div>
+                    <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
+                    <p class="dash-action-hint">Work Order Final, belum ada Pengecekan Spesimen</p>
+                  </div>
+                  <button class="btn btn-sm" data-action-spec="${w.test_request_id}">Buat Sheet</button>
+                </div>`).join('')}
+            </div>
+          `}
+        </div>
+
+        <div class="card">
+          <p class="card-title">Aktivitas Terbaru</p>
+          <p class="card-desc">6 perubahan terakhir</p>
+          ${activity.length === 0 ? `<p class="dash-empty">Belum ada aktivitas.</p>` : `
+            <div class="dash-activity-list">
+              ${activity.map(a => `
+                <div class="dash-activity-item">
+                  <div class="dash-activity-icon">${ACTIVITY_ICON[a.type]}</div>
+                  <div class="dash-activity-body">
+                    <strong>${esc(a.label)}</strong>
+                    <span class="muted">${esc(a.sub || '')}</span>
+                  </div>
+                  <span class="badge badge-${a.status === 'final' ? 'final' : 'draft'}">${a.status === 'final' ? 'Final' : 'Draft'}</span>
+                </div>`).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+
+    contentEl.querySelectorAll('[data-action-wo]').forEach(btn =>
+      btn.addEventListener('click', () => createWorkOrder(btn.dataset.actionWo)));
+    contentEl.querySelectorAll('[data-action-spec]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        state.view = 'specimen-list';
+        state.specimenCreatorOpen = true;
+        state.specimenCreatorPrefillRequestId = btn.dataset.actionSpec;
+        render();
+      }));
+  }
 
   // ---------- list view ----------
 
@@ -1228,9 +1417,24 @@
 
   // ---------- router ----------
 
+  const VIEW_TO_NAV_KEY = {
+    dashboard: 'dashboard',
+    list: 'permintaan-uji', form: 'permintaan-uji',
+    'wo-list': 'work-order', 'wo-form': 'work-order',
+    'master-data': 'manajemen-data',
+    'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen'
+  };
+
+  function syncNavActive() {
+    const key = VIEW_TO_NAV_KEY[state.view];
+    document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.toggle('active', n.dataset.nav === key));
+  }
+
   function render() {
+    syncNavActive();
     renderWorkflowSteps();
-    if (state.view === 'list') renderList();
+    if (state.view === 'dashboard') renderDashboard();
+    else if (state.view === 'list') renderList();
     else if (state.view === 'wo-list') renderWorkOrderList();
     else if (state.view === 'wo-form') renderWorkOrderForm();
     else if (state.view === 'master-data') renderMasterData();
@@ -1251,7 +1455,6 @@
     if (key === 'permintaan-uji') { state.view = 'list'; state.editingId = null; }
     else if (key === 'work-order') { state.view = 'wo-list'; state.woEditingId = null; }
     else if (key === 'pengecekan-spesimen') { state.view = 'specimen-list'; }
-    document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.toggle('active', n.dataset.nav === key));
     render();
   }
 
@@ -1966,6 +2169,16 @@
           toast(err.message, 'error');
         }
       });
+
+      if (state.specimenCreatorPrefillRequestId) {
+        const prefillId = String(state.specimenCreatorPrefillRequestId);
+        state.specimenCreatorPrefillRequestId = null;
+        const reqSelect = document.getElementById('specCreateRequest');
+        if ([...reqSelect.options].some(o => o.value === prefillId)) {
+          reqSelect.value = prefillId;
+          reqSelect.dispatchEvent(new Event('change'));
+        }
+      }
     }
   }
 
