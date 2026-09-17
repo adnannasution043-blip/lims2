@@ -987,7 +987,7 @@ app.get('/api/requests/:id/coupon-tests/:rowNo/available-tests', async (req, res
     const couponTypeText = [
       ...(coupon.coupon_type || []), coupon.coupon_type_other || '', coupon.material_type_grade || ''
     ].join(' ').toLowerCase();
-    const suggestedShape = /pipe|pipa|round|bulat|bar/.test(couponTypeText) ? 'round' : 'flat';
+    const suggestedShape = /pipe|pipa|round|bulat|bar|bolt|nut|baut|mur/.test(couponTypeText) ? 'round' : 'flat';
 
     const available = items
       .filter(it => TEST_NAME_TO_CATEGORY[it.test_name] && !used.has(it.test_name))
