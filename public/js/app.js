@@ -14,7 +14,7 @@
   let WO_PICS = [];
   let TEST_METHODS = [];
   let CUSTOMERS = [];
-  let state = { view: 'list', editingId: null, couponRows: [] };
+  let state = { view: 'list', editingId: null, couponRows: [], tableUI: {} };
 
   // ---------- utils ----------
 
@@ -39,6 +39,69 @@
       throw e;
     }
     return res.status === 204 ? null : res.json();
+  }
+
+  // ---------- reusable searchable + paginated table ----------
+  // Client-side only: `allRows` is already fully loaded, this just filters by a
+  // substring match across `searchFields` and slices a page out of the result.
+  // Re-renders just its own container (search box + table + pager) on every
+  // keystroke/page change, without touching the rest of the page or the API.
+
+  function renderSearchablePaginatedTable(opts) {
+    const {
+      key, containerEl, allRows, searchFields, renderTableHtml,
+      bindRowEvents, emptyHtml, searchPlaceholder, pageSize = 10
+    } = opts;
+
+    const ui = (state.tableUI[key] = state.tableUI[key] || { search: '', page: 1 });
+    const term = ui.search.trim().toLowerCase();
+    const filtered = term
+      ? allRows.filter(r => searchFields.some(f => String(r[f] ?? '').toLowerCase().includes(term)))
+      : allRows;
+    const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+    if (ui.page > totalPages) ui.page = totalPages;
+    if (ui.page < 1) ui.page = 1;
+    const start = (ui.page - 1) * pageSize;
+    const pageRows = filtered.slice(start, start + pageSize);
+
+    const rerender = () => renderSearchablePaginatedTable(opts);
+
+    const pagerHtml = filtered.length > pageSize ? `
+      <div class="table-pager">
+        <span class="muted">Halaman ${ui.page} dari ${totalPages} &mdash; ${filtered.length} data</span>
+        <div class="table-pager-btns">
+          <button type="button" class="btn btn-sm" data-pg="prev" ${ui.page <= 1 ? 'disabled' : ''}>&larr; Sebelumnya</button>
+          <button type="button" class="btn btn-sm" data-pg="next" ${ui.page >= totalPages ? 'disabled' : ''}>Berikutnya &rarr;</button>
+        </div>
+      </div>` : '';
+
+    containerEl.innerHTML = `
+      <div class="table-search">
+        <input type="text" id="${key}-search" placeholder="${esc(searchPlaceholder || 'Cari...')}" value="${esc(ui.search)}">
+        ${term ? `<span class="muted">${filtered.length} dari ${allRows.length} data cocok</span>` : ''}
+      </div>
+      ${pageRows.length ? renderTableHtml(pageRows) : (emptyHtml || '<p class="muted" style="padding:16px 0;">Tidak ada data.</p>')}
+      ${pagerHtml}
+    `;
+
+    const searchInput = document.getElementById(`${key}-search`);
+    searchInput.addEventListener('input', (e) => {
+      ui.search = e.target.value;
+      ui.page = 1;
+      rerender();
+    });
+    // keep focus + caret position across the re-render triggered by typing
+    searchInput.focus();
+    searchInput.setSelectionRange(searchInput.value.length, searchInput.value.length);
+
+    containerEl.querySelectorAll('[data-pg]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        ui.page += btn.dataset.pg === 'next' ? 1 : -1;
+        rerender();
+      });
+    });
+
+    if (pageRows.length && bindRowEvents) bindRowEvents(containerEl);
   }
 
   function blankCouponRow() {
@@ -142,49 +205,58 @@
       return;
     }
 
-    const trs = rows.map(r => `
-      <tr>
-        <td><strong>${esc(r.job_number)}</strong></td>
-        <td>${esc(r.company)}</td>
-        <td>${esc(r.project_name)}</td>
-        <td>${esc(r.received_date)}</td>
-        <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
-        <td>
-          <button class="btn btn-sm" data-edit="${r.id}">Buka</button>
-          <button class="btn btn-sm" data-pdf="${r.id}">Export PDF</button>
-          ${r.status === 'final' ? (
-            r.work_order_id
-              ? `<button class="btn btn-sm" data-open-wo="${r.work_order_id}">Work Order</button>`
-              : `<button class="btn btn-sm" data-create-wo="${r.id}">+ Work Order</button>`
-          ) : ''}
-          <button class="btn btn-sm btn-danger" data-del="${r.id}">Hapus</button>
-        </td>
-      </tr>`).join('');
-
     contentEl.innerHTML = `
       <div class="card" style="padding:0;">
         <div style="padding:22px 24px 8px;">
           <p class="card-title">Daftar Tinjauan Permintaan Pengujian</p>
           <p class="card-desc">${rows.length} permintaan tersimpan</p>
         </div>
+        <div id="reqTableArea"></div>
+      </div>`;
+
+    renderSearchablePaginatedTable({
+      key: 'requests',
+      containerEl: document.getElementById('reqTableArea'),
+      allRows: rows,
+      searchFields: ['job_number', 'company', 'project_name'],
+      searchPlaceholder: 'Cari No. Pekerjaan, Perusahaan, atau Nama Projek...',
+      renderTableHtml: (pageRows) => `
         <table class="data-table">
           <thead><tr>
             <th>No. Pekerjaan</th><th>Perusahaan</th><th>Nama Projek</th><th>Tgl. Diterima</th><th>Status</th><th></th>
           </tr></thead>
-          <tbody>${trs}</tbody>
-        </table>
-      </div>`;
-
-    contentEl.querySelectorAll('[data-edit]').forEach(btn =>
-      btn.addEventListener('click', () => openForm(btn.dataset.edit)));
-    contentEl.querySelectorAll('[data-pdf]').forEach(btn =>
-      btn.addEventListener('click', () => window.open(`/requests/${btn.dataset.pdf}/print`, '_blank')));
-    contentEl.querySelectorAll('[data-open-wo]').forEach(btn =>
-      btn.addEventListener('click', () => openWorkOrderForm(btn.dataset.openWo)));
-    contentEl.querySelectorAll('[data-create-wo]').forEach(btn =>
-      btn.addEventListener('click', () => createWorkOrder(btn.dataset.createWo)));
-    contentEl.querySelectorAll('[data-del]').forEach(btn =>
-      btn.addEventListener('click', () => deleteRequest(btn.dataset.del)));
+          <tbody>${pageRows.map(r => `
+            <tr>
+              <td><strong>${esc(r.job_number)}</strong></td>
+              <td>${esc(r.company)}</td>
+              <td>${esc(r.project_name)}</td>
+              <td>${esc(r.received_date)}</td>
+              <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
+              <td>
+                <button class="btn btn-sm" data-edit="${r.id}">Buka</button>
+                <button class="btn btn-sm" data-pdf="${r.id}">Export PDF</button>
+                ${r.status === 'final' ? (
+                  r.work_order_id
+                    ? `<button class="btn btn-sm" data-open-wo="${r.work_order_id}">Work Order</button>`
+                    : `<button class="btn btn-sm" data-create-wo="${r.id}">+ Work Order</button>`
+                ) : ''}
+                <button class="btn btn-sm btn-danger" data-del="${r.id}">Hapus</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-edit]').forEach(btn =>
+          btn.addEventListener('click', () => openForm(btn.dataset.edit)));
+        container.querySelectorAll('[data-pdf]').forEach(btn =>
+          btn.addEventListener('click', () => window.open(`/requests/${btn.dataset.pdf}/print`, '_blank')));
+        container.querySelectorAll('[data-open-wo]').forEach(btn =>
+          btn.addEventListener('click', () => openWorkOrderForm(btn.dataset.openWo)));
+        container.querySelectorAll('[data-create-wo]').forEach(btn =>
+          btn.addEventListener('click', () => createWorkOrder(btn.dataset.createWo)));
+        container.querySelectorAll('[data-del]').forEach(btn =>
+          btn.addEventListener('click', () => deleteRequest(btn.dataset.del)));
+      }
+    });
   }
 
   async function createWorkOrder(testRequestId) {
@@ -897,40 +969,49 @@
       return;
     }
 
-    const trs = rows.map(r => `
-      <tr>
-        <td><strong>${esc(r.job_number)}</strong></td>
-        <td>${esc(r.company)}</td>
-        <td>${esc(r.project_name)}</td>
-        <td>${r.testing_date ? esc(r.testing_date) : '-'}</td>
-        <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
-        <td>
-          <button class="btn btn-sm" data-wo-edit="${r.id}">Buka</button>
-          <button class="btn btn-sm" data-wo-pdf="${r.id}">Export PDF</button>
-          <button class="btn btn-sm btn-danger" data-wo-del="${r.id}">Hapus</button>
-        </td>
-      </tr>`).join('');
-
     contentEl.innerHTML = `
       <div class="card" style="padding:0;">
         <div style="padding:22px 24px 8px;">
           <p class="card-title">Daftar Work Order</p>
           <p class="card-desc">${rows.length} Work Order tersimpan</p>
         </div>
+        <div id="woTableArea"></div>
+      </div>`;
+
+    renderSearchablePaginatedTable({
+      key: 'work-orders',
+      containerEl: document.getElementById('woTableArea'),
+      allRows: rows,
+      searchFields: ['job_number', 'company', 'project_name'],
+      searchPlaceholder: 'Cari No. Pekerjaan, Perusahaan, atau Nama Projek...',
+      renderTableHtml: (pageRows) => `
         <table class="data-table">
           <thead><tr>
             <th>No. Pekerjaan</th><th>Perusahaan</th><th>Nama Projek</th><th>Tgl. Testing</th><th>Status</th><th></th>
           </tr></thead>
-          <tbody>${trs}</tbody>
-        </table>
-      </div>`;
-
-    contentEl.querySelectorAll('[data-wo-edit]').forEach(btn =>
-      btn.addEventListener('click', () => openWorkOrderForm(btn.dataset.woEdit)));
-    contentEl.querySelectorAll('[data-wo-pdf]').forEach(btn =>
-      btn.addEventListener('click', () => window.open(`/work-orders/${btn.dataset.woPdf}/print`, '_blank')));
-    contentEl.querySelectorAll('[data-wo-del]').forEach(btn =>
-      btn.addEventListener('click', () => deleteWorkOrder(btn.dataset.woDel)));
+          <tbody>${pageRows.map(r => `
+            <tr>
+              <td><strong>${esc(r.job_number)}</strong></td>
+              <td>${esc(r.company)}</td>
+              <td>${esc(r.project_name)}</td>
+              <td>${r.testing_date ? esc(r.testing_date) : '-'}</td>
+              <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
+              <td>
+                <button class="btn btn-sm" data-wo-edit="${r.id}">Buka</button>
+                <button class="btn btn-sm" data-wo-pdf="${r.id}">Export PDF</button>
+                <button class="btn btn-sm btn-danger" data-wo-del="${r.id}">Hapus</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-wo-edit]').forEach(btn =>
+          btn.addEventListener('click', () => openWorkOrderForm(btn.dataset.woEdit)));
+        container.querySelectorAll('[data-wo-pdf]').forEach(btn =>
+          btn.addEventListener('click', () => window.open(`/work-orders/${btn.dataset.woPdf}/print`, '_blank')));
+        container.querySelectorAll('[data-wo-del]').forEach(btn =>
+          btn.addEventListener('click', () => deleteWorkOrder(btn.dataset.woDel)));
+      }
+    });
   }
 
   async function deleteWorkOrder(id) {
@@ -1740,32 +1821,48 @@
           <p class="card-desc">Klik &ldquo;+ Buat Pengecekan Baru&rdquo; untuk mulai membuat sheet Tensile/Bending/Charpy Impact.</p>
         </div>`;
     } else {
-      const trs = rows.map(r => `
-        <tr>
-          <td><strong>${esc(r.job_number)}</strong></td>
-          <td>${esc(r.company)}</td>
-          <td>${r.coupon_row_no ? 'Coupon #' + esc(r.coupon_row_no) : '-'}</td>
-          <td>${esc(SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
-          <td>${esc(r.inspection_date) || '-'}</td>
-          <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
-          <td>
-            <button class="btn btn-sm" data-spec-edit="${r.id}">Buka</button>
-            <button class="btn btn-sm" data-spec-pdf="${r.id}">Export PDF</button>
-            <button class="btn btn-sm btn-danger" data-spec-del="${r.id}">Hapus</button>
-          </td>
-        </tr>`).join('');
-
       contentEl.innerHTML = creatorHtml + `
         <div class="card" style="padding:0;">
           <div style="padding:22px 24px 8px;">
             <p class="card-title">Daftar Pengecekan Spesimen</p>
             <p class="card-desc">${rows.length} sheet tersimpan</p>
           </div>
+          <div id="specTableArea"></div>
+        </div>`;
+
+      renderSearchablePaginatedTable({
+        key: 'specimen-inspections',
+        containerEl: document.getElementById('specTableArea'),
+        allRows: rows,
+        searchFields: ['job_number', 'company'],
+        searchPlaceholder: 'Cari No. Pekerjaan atau Perusahaan...',
+        renderTableHtml: (pageRows) => `
           <table class="data-table">
             <thead><tr><th>No. Pekerjaan</th><th>Perusahaan</th><th>Coupon</th><th>Kategori</th><th>Tanggal</th><th>Status</th><th></th></tr></thead>
-            <tbody>${trs}</tbody>
-          </table>
-        </div>`;
+            <tbody>${pageRows.map(r => `
+              <tr>
+                <td><strong>${esc(r.job_number)}</strong></td>
+                <td>${esc(r.company)}</td>
+                <td>${r.coupon_row_no ? 'Coupon #' + esc(r.coupon_row_no) : '-'}</td>
+                <td>${esc(SPECIMEN_CATEGORY_LABELS[r.category] || r.category)}${r.shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[r.shape] || r.shape) : ''}</td>
+                <td>${esc(r.inspection_date) || '-'}</td>
+                <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
+                <td>
+                  <button class="btn btn-sm" data-spec-edit="${r.id}">Buka</button>
+                  <button class="btn btn-sm" data-spec-pdf="${r.id}">Export PDF</button>
+                  <button class="btn btn-sm btn-danger" data-spec-del="${r.id}">Hapus</button>
+                </td>
+              </tr>`).join('')}</tbody>
+          </table>`,
+        bindRowEvents: (container) => {
+          container.querySelectorAll('[data-spec-edit]').forEach(btn =>
+            btn.addEventListener('click', () => openSpecimenForm(btn.dataset.specEdit)));
+          container.querySelectorAll('[data-spec-pdf]').forEach(btn =>
+            btn.addEventListener('click', () => window.open(`/specimen-inspections/${btn.dataset.specPdf}/print`, '_blank')));
+          container.querySelectorAll('[data-spec-del]').forEach(btn =>
+            btn.addEventListener('click', () => deleteSpecimenInspection(btn.dataset.specDel)));
+        }
+      });
     }
 
     if (state.specimenCreatorOpen) {
@@ -1819,13 +1916,6 @@
         }
       });
     }
-
-    contentEl.querySelectorAll('[data-spec-edit]').forEach(btn =>
-      btn.addEventListener('click', () => openSpecimenForm(btn.dataset.specEdit)));
-    contentEl.querySelectorAll('[data-spec-pdf]').forEach(btn =>
-      btn.addEventListener('click', () => window.open(`/specimen-inspections/${btn.dataset.specPdf}/print`, '_blank')));
-    contentEl.querySelectorAll('[data-spec-del]').forEach(btn =>
-      btn.addEventListener('click', () => deleteSpecimenInspection(btn.dataset.specDel)));
   }
 
   // ---------- master data ----------
@@ -1897,11 +1987,6 @@
     }
 
     const wrap = document.getElementById('masterTabContent');
-    const rows = items.map(it => `
-      <tr>
-        <td>${esc(it.name)}</td>
-        <td><button class="btn btn-sm btn-danger" data-master-del="${it.id}">Hapus</button></td>
-      </tr>`).join('');
 
     wrap.innerHTML = `
       <div class="card">
@@ -1921,13 +2006,41 @@
           <p class="card-title">Daftar ${esc(label)}</p>
           <p class="card-desc">${items.length} data tersimpan</p>
         </div>
-        ${items.length ? `
-        <table class="data-table">
-          <thead><tr><th>Nama</th><th></th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada data. Tambahkan lewat form di atas.</p>`}
+        <div id="masterListArea"></div>
       </div>
     `;
+
+    renderSearchablePaginatedTable({
+      key: `master-${key}`,
+      containerEl: document.getElementById('masterListArea'),
+      allRows: items,
+      searchFields: ['name'],
+      searchPlaceholder: `Cari ${label}...`,
+      emptyHtml: `<p class="muted" style="padding:0 24px 16px;">Belum ada data. Tambahkan lewat form di atas.</p>`,
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Nama</th><th></th></tr></thead>
+          <tbody>${pageRows.map(it => `
+            <tr>
+              <td>${esc(it.name)}</td>
+              <td><button class="btn btn-sm btn-danger" data-master-del="${it.id}">Hapus</button></td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-master-del]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Hapus data ini dari master?')) return;
+            try {
+              await api(`/api/master/${key}/${btn.dataset.masterDel}`, { method: 'DELETE' });
+              toast('Data dihapus', 'success');
+              renderMasterData();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          });
+        });
+      }
+    });
 
     document.getElementById('masterAddForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1946,37 +2059,11 @@
         toast(err.message, 'error');
       }
     });
-
-    wrap.querySelectorAll('[data-master-del]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Hapus data ini dari master?')) return;
-        try {
-          await api(`/api/master/${key}/${btn.dataset.masterDel}`, { method: 'DELETE' });
-          toast('Data dihapus', 'success');
-          renderMasterData();
-        } catch (err) {
-          toast(err.message, 'error');
-        }
-      });
-    });
   }
 
   async function renderCustomerMaster() {
     await loadCustomers();
     const wrap = document.getElementById('masterTabContent');
-
-    const rowsHtml = (filter) => {
-      const f = (filter || '').toLowerCase();
-      const filtered = f
-        ? CUSTOMERS.filter(c => c.customer_id.toLowerCase().includes(f) || c.on_behalf_owner.toLowerCase().includes(f))
-        : CUSTOMERS;
-      return filtered.map(c => `
-        <tr>
-          <td>${esc(c.customer_id)}</td>
-          <td>${esc(c.on_behalf_owner)}</td>
-          <td><button class="btn btn-sm btn-danger" data-cust-del="${c.id}">Hapus</button></td>
-        </tr>`).join('');
-    };
 
     wrap.innerHTML = `
       <div class="card">
@@ -1999,34 +2086,41 @@
         <div style="padding:22px 24px 8px;">
           <p class="card-title">Daftar Customer</p>
           <p class="card-desc">${CUSTOMERS.length} data tersimpan</p>
-          <input type="text" id="custFilterInput" placeholder="Cari ID atau nama perusahaan..." style="margin-top:8px; max-width:320px;">
         </div>
-        <table class="data-table">
-          <thead><tr><th>ID Perusahaan</th><th>Atas Nama Perusahaan</th><th></th></tr></thead>
-          <tbody id="custTableBody">${rowsHtml('')}</tbody>
-        </table>
+        <div id="custTableArea"></div>
       </div>
     `;
 
-    function bindCustDeleteButtons() {
-      wrap.querySelectorAll('[data-cust-del]').forEach(btn => {
-        btn.addEventListener('click', async () => {
-          if (!confirm('Hapus customer ini dari master?')) return;
-          try {
-            await api(`/api/customers/${btn.dataset.custDel}`, { method: 'DELETE' });
-            toast('Customer dihapus', 'success');
-            renderMasterData();
-          } catch (err) {
-            toast(err.message, 'error');
-          }
+    renderSearchablePaginatedTable({
+      key: 'customers',
+      containerEl: document.getElementById('custTableArea'),
+      allRows: CUSTOMERS,
+      searchFields: ['customer_id', 'on_behalf_owner'],
+      searchPlaceholder: 'Cari ID atau nama perusahaan...',
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>ID Perusahaan</th><th>Atas Nama Perusahaan</th><th></th></tr></thead>
+          <tbody>${pageRows.map(c => `
+            <tr>
+              <td>${esc(c.customer_id)}</td>
+              <td>${esc(c.on_behalf_owner)}</td>
+              <td><button class="btn btn-sm btn-danger" data-cust-del="${c.id}">Hapus</button></td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-cust-del]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Hapus customer ini dari master?')) return;
+            try {
+              await api(`/api/customers/${btn.dataset.custDel}`, { method: 'DELETE' });
+              toast('Customer dihapus', 'success');
+              renderMasterData();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          });
         });
-      });
-    }
-    bindCustDeleteButtons();
-
-    document.getElementById('custFilterInput').addEventListener('input', (e) => {
-      document.getElementById('custTableBody').innerHTML = rowsHtml(e.target.value);
-      bindCustDeleteButtons();
+      }
     });
 
     document.getElementById('custAddForm').addEventListener('submit', async (e) => {
@@ -2087,13 +2181,6 @@
       types = [];
     }
 
-    const rowsHtml = types.map(t => `
-      <tr>
-        <td>${esc(t.name)}</td>
-        ${fields.map(f => `<td>${esc((t.code_values || {})[f.key] || '-')}</td>`).join('')}
-        <td><button class="btn btn-sm btn-danger" data-stype-del="${t.id}">Hapus</button></td>
-      </tr>`).join('');
-
     wrap.innerHTML = `
       <div class="card">
         <p class="section-title">Pilih Kategori</p>
@@ -2139,13 +2226,42 @@
           <p class="card-title">Daftar Tipe Spesimen &mdash; ${esc(SPECIMEN_CATEGORY_LABELS[category])}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}</p>
           <p class="card-desc">${types.length} tipe tersimpan &mdash; dipakai untuk auto-isi kolom Code di form Pengecekan Spesimen</p>
         </div>
-        ${types.length ? `
-        <table class="data-table">
-          <thead><tr><th>Nama Tipe</th>${fields.map(f => `<th>${esc(f.label)}</th>`).join('')}<th></th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada tipe untuk kombinasi ini. Tambahkan lewat form di atas.</p>`}
+        <div id="stypeTableArea"></div>
       </div>
     `;
+
+    renderSearchablePaginatedTable({
+      key: `specimen-types-${category}-${shape}`,
+      containerEl: document.getElementById('stypeTableArea'),
+      allRows: types,
+      searchFields: ['name'],
+      searchPlaceholder: 'Cari Tipe Spesimen...',
+      emptyHtml: `<p class="muted" style="padding:0 24px 16px;">Belum ada tipe untuk kombinasi ini. Tambahkan lewat form di atas.</p>`,
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Nama Tipe</th>${fields.map(f => `<th>${esc(f.label)}</th>`).join('')}<th></th></tr></thead>
+          <tbody>${pageRows.map(t => `
+            <tr>
+              <td>${esc(t.name)}</td>
+              ${fields.map(f => `<td>${esc((t.code_values || {})[f.key] || '-')}</td>`).join('')}
+              <td><button class="btn btn-sm btn-danger" data-stype-del="${t.id}">Hapus</button></td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-stype-del]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Hapus tipe spesimen ini?')) return;
+            try {
+              await api(`/api/specimen-types/${btn.dataset.stypeDel}`, { method: 'DELETE' });
+              toast('Tipe spesimen dihapus', 'success');
+              renderSpecimenTypeMaster();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          });
+        });
+      }
+    });
 
     document.getElementById('stypeCategory').addEventListener('change', (e) => {
       state.specimenTypeCategory = e.target.value;
@@ -2179,19 +2295,6 @@
         toast(err.message, 'error');
       }
     });
-
-    wrap.querySelectorAll('[data-stype-del]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Hapus tipe spesimen ini?')) return;
-        try {
-          await api(`/api/specimen-types/${btn.dataset.stypeDel}`, { method: 'DELETE' });
-          toast('Tipe spesimen dihapus', 'success');
-          renderSpecimenTypeMaster();
-        } catch (err) {
-          toast(err.message, 'error');
-        }
-      });
-    });
   }
 
   async function renderTestTypeCodeMaster() {
@@ -2203,12 +2306,6 @@
     }
 
     const wrap = document.getElementById('masterTabContent');
-    const rowsHtml = codes.map(c => `
-      <tr>
-        <td>${esc(c.test_name)}</td>
-        <td><input type="text" data-ttc-name="${esc(c.test_name)}" value="${esc(c.code)}" style="width:80px;"></td>
-        <td><button class="btn btn-sm btn-danger" data-ttc-del="${c.id}">Hapus</button></td>
-      </tr>`).join('');
 
     wrap.innerHTML = `
       <div class="card">
@@ -2232,13 +2329,55 @@
           <p class="card-title">Daftar Kode Jenis Pengujian</p>
           <p class="card-desc">${codes.length} data tersimpan &mdash; dipakai untuk auto-isi Marking Specimen di Pengecekan Spesimen</p>
         </div>
-        ${codes.length ? `
-        <table class="data-table">
-          <thead><tr><th>Jenis Pengujian</th><th>Kode</th><th></th></tr></thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>` : `<p class="muted" style="padding:0 24px 22px;">Belum ada data.</p>`}
+        <div id="ttcTableArea"></div>
       </div>
     `;
+
+    renderSearchablePaginatedTable({
+      key: 'test-type-codes',
+      containerEl: document.getElementById('ttcTableArea'),
+      allRows: codes,
+      searchFields: ['test_name', 'code'],
+      searchPlaceholder: 'Cari Jenis Pengujian atau Kode...',
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Jenis Pengujian</th><th>Kode</th><th></th></tr></thead>
+          <tbody>${pageRows.map(c => `
+            <tr>
+              <td>${esc(c.test_name)}</td>
+              <td><input type="text" data-ttc-name="${esc(c.test_name)}" value="${esc(c.code)}" style="width:80px;"></td>
+              <td><button class="btn btn-sm btn-danger" data-ttc-del="${c.id}">Hapus</button></td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-ttc-name]').forEach(input => {
+          input.addEventListener('change', async () => {
+            try {
+              await api('/api/test-type-codes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ test_name: input.dataset.ttcName, code: input.value.trim() })
+              });
+              toast('Kode diperbarui', 'success');
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          });
+        });
+        container.querySelectorAll('[data-ttc-del]').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            if (!confirm('Hapus kode ini?')) return;
+            try {
+              await api(`/api/test-type-codes/${btn.dataset.ttcDel}`, { method: 'DELETE' });
+              toast('Kode dihapus', 'success');
+              renderTestTypeCodeMaster();
+            } catch (err) {
+              toast(err.message, 'error');
+            }
+          });
+        });
+      }
+    });
 
     document.getElementById('ttcAddForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -2256,34 +2395,6 @@
       } catch (err) {
         toast(err.message, 'error');
       }
-    });
-
-    wrap.querySelectorAll('[data-ttc-name]').forEach(input => {
-      input.addEventListener('change', async () => {
-        try {
-          await api('/api/test-type-codes', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ test_name: input.dataset.ttcName, code: input.value.trim() })
-          });
-          toast('Kode diperbarui', 'success');
-        } catch (err) {
-          toast(err.message, 'error');
-        }
-      });
-    });
-
-    wrap.querySelectorAll('[data-ttc-del]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Hapus kode ini?')) return;
-        try {
-          await api(`/api/test-type-codes/${btn.dataset.ttcDel}`, { method: 'DELETE' });
-          toast('Kode dihapus', 'success');
-          renderTestTypeCodeMaster();
-        } catch (err) {
-          toast(err.message, 'error');
-        }
-      });
     });
   }
 
