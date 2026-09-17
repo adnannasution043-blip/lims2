@@ -83,11 +83,8 @@ body {
   flex-direction: column;
   gap: 3px;
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
   padding-right: 4px;
 }
-.nav::-webkit-scrollbar { width: 5px; }
 
 .nav-item {
   display: flex;
