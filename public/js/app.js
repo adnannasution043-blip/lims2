@@ -167,6 +167,9 @@
       } else if (key === 'pengecekan-spesimen') {
         state.view = 'specimen-list';
         render();
+      } else if (key === 'timeline') {
+        state.view = 'timeline';
+        render();
       } else if (key === 'keluar') {
         toast('Logout belum tersedia di tahap ini', 'error');
       } else {
@@ -363,6 +366,226 @@
         state.specimenCreatorPrefillRequestId = btn.dataset.actionSpec;
         render();
       }));
+  }
+
+  // ---------- timeline ----------
+
+  const TIMELINE_STAGES = {
+    draft: 'Draft',
+    'need-wo': 'Menunggu Work Order',
+    'need-spec': 'Menunggu Pengecekan Spesimen',
+    running: 'Pengecekan Berjalan',
+    done: 'Selesai'
+  };
+  const TIMELINE_PAGE_SIZE = 8;
+
+  function formatDateOnly(value) {
+    if (!value) return '';
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T00:00:00` : value);
+    return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+  }
+
+  function formatDateTimeID(value) {
+    if (!value) return '';
+    const d = new Date(value);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
+
+  function buildTimelineJobs(requests, workOrders, specimens) {
+    const woByRequest = new Map(workOrders.map(w => [w.test_request_id, w]));
+    const sheetsByRequest = new Map();
+    [...specimens].sort((a, b) => a.id - b.id).forEach(s => {
+      if (!sheetsByRequest.has(s.test_request_id)) sheetsByRequest.set(s.test_request_id, []);
+      sheetsByRequest.get(s.test_request_id).push(s);
+    });
+
+    return requests.map(r => {
+      const wo = woByRequest.get(r.id) || null;
+      const sheets = sheetsByRequest.get(r.id) || [];
+      const requestFinal = r.status === 'final';
+
+      let stage;
+      if (!requestFinal) stage = 'draft';
+      else if (!wo) stage = 'need-wo';
+      else if (!sheets.length) stage = 'need-spec';
+      else if (wo.status === 'final' && sheets.every(s => s.status === 'final')) stage = 'done';
+      else stage = 'running';
+
+      const steps = [];
+      steps.push({
+        done: true,
+        title: 'Permintaan diterima',
+        meta: r.received_date ? '' : 'Tanggal terima belum diisi',
+        when: formatDateOnly(r.received_date)
+      });
+      steps.push({
+        done: true,
+        title: 'Permintaan Uji dibuat',
+        meta: requestFinal ? '' : 'Belum difinalisasi',
+        when: formatDateTimeID(r.created_at),
+        status: r.status,
+        open: { type: 'request', id: r.id }
+      });
+      if (wo) {
+        steps.push({
+          done: true,
+          title: 'Work Order dibuat',
+          meta: wo.testing_date ? `Tanggal pengujian: ${formatDateOnly(wo.testing_date)}` : '',
+          when: formatDateTimeID(wo.created_at),
+          status: wo.status,
+          open: { type: 'wo', id: wo.id }
+        });
+      } else {
+        steps.push({
+          done: false,
+          title: 'Work Order',
+          meta: requestFinal ? 'Belum dibuat — siap dibuatkan Work Order' : 'Menunggu Permintaan Uji difinalisasi'
+        });
+      }
+      if (sheets.length) {
+        sheets.forEach(s => {
+          const label = s.test_name || SPECIMEN_CATEGORY_LABELS[s.category] || s.category;
+          const shape = s.shape ? ` - ${SPECIMEN_SHAPE_LABELS[s.shape] || s.shape}` : '';
+          const metaParts = [];
+          if (s.coupon_row_no) metaParts.push(`Coupon #${s.coupon_row_no}`);
+          if (s.qty) metaParts.push(`Qty ${s.qty}`);
+          if (s.inspection_date) metaParts.push(`Diperiksa ${formatDateOnly(s.inspection_date)}`);
+          steps.push({
+            done: true,
+            title: `Pengecekan Spesimen — ${label}${shape}`,
+            meta: metaParts.join(' · '),
+            when: formatDateTimeID(s.created_at),
+            status: s.status,
+            open: { type: 'specimen', id: s.id }
+          });
+        });
+      } else {
+        steps.push({
+          done: false,
+          title: 'Pengecekan Spesimen',
+          meta: wo ? 'Belum ada sheet Pengecekan Spesimen' : 'Menunggu Work Order'
+        });
+      }
+      const nextIdx = steps.findIndex(st => !st.done);
+      if (nextIdx !== -1) steps[nextIdx].next = true;
+
+      return { request: r, stage, steps };
+    });
+  }
+
+  async function renderTimeline() {
+    pageTitle.textContent = 'Timeline';
+    pageSubtitle.textContent = 'Jejak progres tiap pekerjaan — Permintaan Uji → Work Order → Pengecekan Spesimen';
+    topbarActions.innerHTML = '';
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+
+    let requests = [], workOrders = [], specimens = [];
+    try {
+      [requests, workOrders, specimens] = await Promise.all([
+        api('/api/requests'),
+        api('/api/work-orders'),
+        api('/api/specimen-inspections')
+      ]);
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      return;
+    }
+
+    if (!requests.length) {
+      contentEl.innerHTML = `
+        <div class="card empty-state">
+          <p class="card-title">Belum ada pekerjaan</p>
+          <p class="card-desc">Timeline akan muncul setelah ada Permintaan Uji.</p>
+        </div>`;
+      return;
+    }
+
+    const jobs = buildTimelineJobs(requests, workOrders, specimens);
+    const ui = { search: '', stage: 'all', shown: TIMELINE_PAGE_SIZE };
+    const stageCount = key => jobs.filter(j => j.stage === key).length;
+
+    contentEl.innerHTML = `
+      <div class="card tl-toolbar">
+        <input type="text" id="tlSearch" placeholder="Cari No. Pekerjaan, Perusahaan, atau Nama Projek..." autocomplete="off">
+        <div class="tl-chips" id="tlChips">
+          <button type="button" class="tl-chip active" data-tl-stage="all">Semua <span>${jobs.length}</span></button>
+          ${Object.keys(TIMELINE_STAGES).map(key => `
+            <button type="button" class="tl-chip" data-tl-stage="${key}">${esc(TIMELINE_STAGES[key])} <span>${stageCount(key)}</span></button>
+          `).join('')}
+        </div>
+      </div>
+      <div id="tlList"></div>
+    `;
+
+    const listEl = document.getElementById('tlList');
+
+    const stepHtml = (st) => `
+      <li class="tl-step ${st.done ? 'done' : 'pending'}${st.next ? ' next' : ''}">
+        <span class="tl-dot"></span>
+        <div class="tl-body">
+          <div class="tl-title">${esc(st.title)}${st.status ? ` <span class="badge badge-${st.status === 'final' ? 'final' : 'draft'}">${st.status === 'final' ? 'Final' : 'Draft'}</span>` : ''}</div>
+          ${st.meta ? `<div class="tl-meta">${esc(st.meta)}</div>` : ''}
+        </div>
+        <div class="tl-when">${esc(st.when || '')}</div>
+        ${st.open ? `<button type="button" class="btn btn-sm" data-tl-open="${st.open.type}:${st.open.id}">Buka</button>` : '<span class="tl-open-spacer"></span>'}
+      </li>`;
+
+    const renderList = () => {
+      const term = ui.search.trim().toLowerCase();
+      const filtered = jobs.filter(j => {
+        if (ui.stage !== 'all' && j.stage !== ui.stage) return false;
+        if (!term) return true;
+        const r = j.request;
+        return [r.job_number, r.company, r.project_name].some(v => String(v || '').toLowerCase().includes(term));
+      });
+
+      if (!filtered.length) {
+        listEl.innerHTML = `<div class="card empty-state"><p class="card-desc">Tidak ada pekerjaan yang cocok.</p></div>`;
+        return;
+      }
+
+      const visible = filtered.slice(0, ui.shown);
+      listEl.innerHTML = visible.map(j => `
+        <div class="card tl-job">
+          <div class="tl-job-head">
+            <div>
+              <strong>${esc(j.request.job_number)}</strong>
+              <span class="muted"> &middot; ${esc(j.request.company)}${j.request.project_name ? ' &middot; ' + esc(j.request.project_name) : ''}</span>
+            </div>
+            <span class="tl-stage tl-stage-${j.stage}">${esc(TIMELINE_STAGES[j.stage])}</span>
+          </div>
+          <ol class="tl-steps">${j.steps.map(stepHtml).join('')}</ol>
+        </div>
+      `).join('') + (filtered.length > visible.length ? `
+        <div style="text-align:center; margin-bottom:20px;">
+          <button type="button" class="btn" id="tlMore">Tampilkan lebih banyak (${filtered.length - visible.length} lagi)</button>
+        </div>` : '');
+
+      const more = document.getElementById('tlMore');
+      if (more) more.addEventListener('click', () => { ui.shown += TIMELINE_PAGE_SIZE; renderList(); });
+
+      listEl.querySelectorAll('[data-tl-open]').forEach(btn => btn.addEventListener('click', () => {
+        const [type, id] = btn.dataset.tlOpen.split(':');
+        if (type === 'request') openForm(id);
+        else if (type === 'wo') openWorkOrderForm(id);
+        else openSpecimenForm(id);
+      }));
+    };
+
+    document.getElementById('tlSearch').addEventListener('input', (e) => {
+      ui.search = e.target.value;
+      ui.shown = TIMELINE_PAGE_SIZE;
+      renderList();
+    });
+    document.querySelectorAll('#tlChips [data-tl-stage]').forEach(chip => chip.addEventListener('click', () => {
+      ui.stage = chip.dataset.tlStage;
+      ui.shown = TIMELINE_PAGE_SIZE;
+      document.querySelectorAll('#tlChips [data-tl-stage]').forEach(c => c.classList.toggle('active', c === chip));
+      renderList();
+    }));
+
+    renderList();
   }
 
   // ---------- list view ----------
@@ -1422,6 +1645,7 @@
     list: 'permintaan-uji', form: 'permintaan-uji',
     'wo-list': 'work-order', 'wo-form': 'work-order',
     'master-data': 'manajemen-data',
+    timeline: 'timeline',
     'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen'
   };
 
@@ -1434,6 +1658,7 @@
     syncNavActive();
     renderWorkflowSteps();
     if (state.view === 'dashboard') renderDashboard();
+    else if (state.view === 'timeline') renderTimeline();
     else if (state.view === 'list') renderList();
     else if (state.view === 'wo-list') renderWorkOrderList();
     else if (state.view === 'wo-form') renderWorkOrderForm();
