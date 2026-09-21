@@ -165,6 +165,10 @@ async function initSchema() {
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS checked_by_signature BYTEA;
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS approved_by_signature BYTEA;
 
+    -- PIC tahap Released (Tasks). Sengaja bukan bagian Description of Process di form/PDF
+    -- Work Order (DPI-LP-FR-25), yang tetap 6 PIC lama.
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS released_pic TEXT;
+
     -- Sample Marking per baris coupon test, dikaitkan lewat row_no (bukan coupon_tests.id)
     -- karena PUT /api/requests/:id men-delete+insert ulang seluruh coupon_tests setiap
     -- request disimpan — mengikat lewat id akan membuat data ini gampang lepas/orphan.
@@ -179,9 +183,9 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_work_orders_request ON work_orders(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_wo_sample_marks_wo ON work_order_sample_marks(work_order_id);
 
-    -- Tahap pengerjaan ("Tasks") per Work Order: Receiving, Machining, Testing,
-    -- Reporting, Doc. Check. Inspection sengaja tidak punya baris di sini — statusnya
-    -- diturunkan dari sheet Pengecekan Spesimen. Tidak ada baris = tahap belum dimulai.
+    -- Tahap pengerjaan ("Tasks") per Work Order: Receiving, Testing, Reporting,
+    -- Review & Approval, Released. Preparation (= Pengecekan Spesimen) sengaja tidak punya
+    -- baris di sini — statusnya diturunkan dari sheet. Tidak ada baris = tahap belum dimulai.
     -- "data" JSONB menyimpan isian per baris, kuncinya coupon_row_no atau
     -- "coupon_row_no|test_name" (bukan id) karena PUT /api/requests/:id menghapus+memasukkan
     -- ulang coupon_tests/test_items setiap disimpan. PIC tiap tahap tetap disimpan di
@@ -189,13 +193,13 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS work_order_tasks (
       id SERIAL PRIMARY KEY,
       work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
-      task_key TEXT NOT NULL,             -- 'receiving' | 'machining' | 'testing' | 'reporting' | 'doc_check'
+      task_key TEXT NOT NULL,             -- 'receiving' | 'testing' | 'reporting' | 'review' | 'released'
       status TEXT NOT NULL DEFAULT 'draft', -- 'draft' | 'final'
       task_date TEXT,
       notes TEXT,
       data JSONB NOT NULL DEFAULT '{}',
 
-      -- Hanya dipakai tahap approval (Reporting & Doc. Check).
+      -- Hanya dipakai tahap Review & Approval.
       approval_status TEXT NOT NULL DEFAULT '', -- '' (menunggu) | 'approved' | 'rejected'
       approver_name TEXT,
       approver_signature BYTEA,
