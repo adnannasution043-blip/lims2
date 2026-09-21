@@ -6,6 +6,7 @@ const { renderPrintHtml } = require('./lib/printView');
 const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
 const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
 const { PROCESS_STEPS } = require('./db/workOrderSteps');
+const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -839,6 +840,12 @@ app.get('/work-orders/:id/print', async (req, res) => {
     console.error(err);
     res.status(500).send('Gagal membuat halaman cetak');
   }
+});
+
+// ---------- Work Order: Tasks (Receiving..Doc. Check) ----------
+
+registerWorkOrderTaskRoutes(app, {
+  pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY
 });
 
 // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
