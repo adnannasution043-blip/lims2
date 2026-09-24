@@ -520,7 +520,6 @@ body {
 .st-pill.st-na { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-muted); }
 
 .wo-progress-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-.wo-progress-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
 .wo-progress-pct { font-size: 32px; font-weight: 800; color: var(--navy); line-height: 1; }
 .wo-progress-bar { height: 8px; background: var(--bg); border-radius: 6px; overflow: hidden; }
 .wo-progress-bar > div {
@@ -825,6 +824,140 @@ table.data-table th.tk-th, table.data-table td.tk-td { text-align: center; }
 .tk-legend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; padding: 14px 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
 .mini-bar { display: inline-block; width: 80px; height: 6px; border-radius: 4px; background: var(--bg); overflow: hidden; vertical-align: middle; margin-right: 8px; }
 .mini-bar > div { height: 100%; background: linear-gradient(90deg, var(--navy), var(--accent)); }
+
+/* ---------- Work Order detail: header, progress bar, sample cards ---------- */
+
+.stage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.stage-badge .sb-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.stage-badge.sb-pending { background: #EEF0F4; color: var(--text-muted); }
+.stage-badge.sb-draft { background: #E8EEF9; color: var(--navy); }
+.stage-badge.sb-final { background: var(--success-bg); color: var(--success); }
+.stage-badge.sb-rejected { background: var(--danger-bg); color: var(--danger); }
+.stage-badge.sb-na { background: transparent; border: 1px dashed var(--border-strong); color: var(--text-muted); }
+.stage-count { margin-left: 6px; font-size: 12px; }
+
+.wo-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 32px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(120deg, var(--navy) 0%, #164a96 60%, #1c5cb8 100%);
+  box-shadow: 0 8px 24px rgba(14, 50, 112, 0.22);
+}
+.wo-hero::after {
+  content: '';
+  position: absolute;
+  right: -60px;
+  top: -80px;
+  width: 260px;
+  height: 260px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+}
+.wo-hero > * { position: relative; z-index: 1; }
+.wo-hero-badges { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.wo-hero .stage-badge { background: rgba(255, 255, 255, 0.18); color: #fff; border: 1px solid rgba(255, 255, 255, 0.32); }
+.wo-hero-tag {
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.wo-hero-title { margin: 0 0 8px; font-size: 28px; line-height: 1.2; font-weight: 800; }
+.wo-hero-company { margin: 0; font-size: 15px; color: rgba(255, 255, 255, 0.85); }
+.wo-hero-tile {
+  flex-shrink: 0;
+  text-align: right;
+  padding: 14px 22px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+.wo-hero-tile span {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+.wo-hero-tile strong { font-size: 22px; font-weight: 800; letter-spacing: 0.3px; }
+
+.wo-bar-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+.wo-seg-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.wo-seg { display: flex; flex-direction: column; gap: 8px; }
+.wo-seg-fill { display: block; height: 10px; border-radius: 6px; background: var(--border); }
+.wo-seg.st-final .wo-seg-fill { background: linear-gradient(90deg, var(--navy), #164a96); }
+.wo-seg.st-draft .wo-seg-fill { background: linear-gradient(90deg, var(--accent) 50%, var(--accent-light) 50%); }
+.wo-seg.st-rejected .wo-seg-fill { background: var(--danger); }
+.wo-seg.st-na .wo-seg-fill { background: transparent; border: 1px dashed var(--border-strong); }
+.wo-seg-label { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.wo-seg-label b {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--bg);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10.5px;
+  flex-shrink: 0;
+}
+.wo-seg.st-final .wo-seg-label { color: var(--navy); }
+.wo-seg.st-final .wo-seg-label b { background: var(--navy); color: #fff; }
+.wo-seg.st-draft .wo-seg-label { color: var(--accent-dark); }
+.wo-seg.st-draft .wo-seg-label b { background: var(--accent-light); color: var(--accent); }
+
+.info-facts-lg { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+
+.coupon-card { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 16px; overflow: hidden; background: var(--surface); }
+.coupon-card:last-child { margin-bottom: 0; }
+.coupon-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: linear-gradient(90deg, var(--accent-light), var(--surface));
+  border-bottom: 1px solid var(--border);
+}
+.coupon-no {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.coupon-title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.coupon-types { display: flex; flex-wrap: wrap; gap: 6px; }
+.type-chip { background: var(--navy); color: #fff; border-radius: 6px; padding: 3px 10px; font-size: 12px; font-weight: 700; }
+.coupon-mark { width: 210px; flex-shrink: 0; }
+.coupon-specs { margin: 14px 18px 12px; }
+.coupon-note { margin: 0 18px 12px; font-size: 12.5px; color: var(--text); }
+.coupon-note span { font-weight: 700; color: var(--navy); }
+.coupon-tests { margin: 0 18px 14px; }
 
 /* ---------- Buttons ---------- */
 
@@ -1245,4 +1378,10 @@ table.test-items-table input[type="text"] {
   .tw { grid-template-columns: 1fr; }
   .tw-rail { position: static; }
   .pipe-strip { grid-template-columns: repeat(4, 1fr); }
+  .wo-hero { flex-direction: column; align-items: flex-start; padding: 22px; }
+  .wo-hero-tile { text-align: left; }
+  .wo-hero-title { font-size: 22px; }
+  .wo-seg-bar { grid-template-columns: repeat(3, 1fr); row-gap: 14px; }
+  .coupon-card-head { flex-wrap: wrap; }
+  .coupon-mark { width: 100%; }
 }

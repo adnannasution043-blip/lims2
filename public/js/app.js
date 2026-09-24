@@ -6,7 +6,6 @@
   const toastEl = document.getElementById('toast');
 
   let TEST_TYPES = [];
-  let WO_STEPS = [];
   let WELDING_PROCESSES = [];
   let WELDING_POSITIONS = [];
   let REF_CODES = [];
@@ -1410,7 +1409,7 @@
               <td>${esc(r.company)}</td>
               <td>${esc(r.project_name)}</td>
               <td>${r.testing_date ? esc(r.testing_date) : '-'}</td>
-              <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
+              <td>${r.stage ? `${stageBadgeHtml(r.stage.label, r.stage.status)}<span class="muted stage-count">${r.stage.done_count}/${r.stage.total}</span>` : '<span class="muted">-</span>'}</td>
               <td>
                 <button class="btn btn-sm" data-wo-edit="${r.id}">Buka</button>
                 <button class="btn btn-sm" data-wo-pdf="${r.id}">Export PDF</button>
@@ -1458,12 +1457,112 @@
     render();
   }
 
+  // ---------- work order: detail view ----------
+  // Urutan halaman: header projek -> progress bar -> informasi projek & work order ->
+  // informasi sample/coupon -> informasi proses (detail tiap tahap) -> approval.
+  // Tanggal testing dan info projek dibaca dari Permintaan Uji, tidak diisi ulang di sini.
+
+  function fmtDateCell(value) {
+    return value ? esc(formatDateOnly(value)) : '-';
+  }
+
+  function infoFactHtml(label, valueHtml) {
+    return `<div class="info-fact"><span>${esc(label)}</span><strong>${valueHtml}</strong></div>`;
+  }
+
+  function stageBadgeHtml(label, status, id) {
+    return `<span ${id ? `id="${id}"` : ''} class="stage-badge sb-${status}" title="${esc(label)} — ${esc(STAGE_STATUS_LABELS[status] || '')}"><i class="sb-dot"></i>${esc(label)}</span>`;
+  }
+
+  function currentStageInfo(stages) {
+    const idx = stages.findIndex(s => !isStageDone(s.status));
+    return stages[idx === -1 ? stages.length - 1 : idx];
+  }
+
+  function woHeroHtml(tr) {
+    return `
+      <div class="wo-hero">
+        <div class="wo-hero-main">
+          <div class="wo-hero-badges">
+            <span id="woStageBadge" class="stage-badge sb-pending"><i class="sb-dot"></i>Memuat status...</span>
+            ${tr.witness_status ? `<span class="wo-hero-tag">${esc(tr.witness_status)}</span>` : ''}
+          </div>
+          <h2 class="wo-hero-title">${esc(tr.project_name) || 'Projek tanpa nama'}</h2>
+          <p class="wo-hero-company"><span aria-hidden="true">&#127970;</span> ${esc(tr.company) || '-'}</p>
+        </div>
+        <div class="wo-hero-tile">
+          <span>No. Permintaan Uji</span>
+          <strong>${esc(tr.job_number) || '-'}</strong>
+        </div>
+      </div>`;
+  }
+
+  // Keterangan tambahan untuk baris Jenis Pengujian tertentu (data dari form Permintaan Uji).
+  function testExtraText(row, testName) {
+    if (testName === 'Hardness Test' && row.hardness_spot) return `Jumlah spot: ${row.hardness_spot}`;
+    if (testName === 'Charpy Impact Test') {
+      const parts = [];
+      if (row.charpy_temp) parts.push(`Suhu ${row.charpy_temp}`);
+      [['WM', row.charpy_wm], ['BM', row.charpy_bm], ['HAZ', row.charpy_haz], ['FL', row.charpy_fl],
+        ['FL+2', row.charpy_fl2], [row.charpy_optional_label || 'Opsional', row.charpy_optional]]
+        .forEach(([label, value]) => { if (value) parts.push(`${label} ${value}`); });
+      return parts.join(' · ');
+    }
+    return '';
+  }
+
+  function woCouponCardHtml(row) {
+    const types = [...(row.coupon_type || [])];
+    if (row.coupon_type_other) types.push(row.coupon_type_other);
+    const specs = [
+      ['Material / Grade', row.material_type_grade], ['Ukuran Material', row.material_size],
+      ['Outside Diameter', row.outside_diameter], ['Tebal', row.thickness], ['Heat Number', row.heat_number],
+      ['Proses Pengelasan', row.welding_process], ['Posisi Pengelasan', row.welding_position],
+      ['Ref. Code', row.ref_code], ['No. WPS', row.no_wps], ['Tujuan Pengujian', row.testing_purpose]
+    ].filter(([, value]) => value);
+    const tests = [
+      ...(row.test_items || []).filter(t => t.checked),
+      ...(row.other_tests || []).filter(t => t.test_name)
+    ];
+    const totalQty = tests.reduce((sum, t) => sum + (parseInt(t.qty, 10) || 0), 0);
+
+    return `
+      <div class="coupon-card">
+        <div class="coupon-card-head">
+          <span class="coupon-no">#${esc(row.row_no)}</span>
+          <div class="coupon-title">
+            <div class="coupon-types">${types.length
+              ? types.map(t => `<span class="type-chip">${esc(t)}</span>`).join('')
+              : '<span class="muted">Jenis coupon belum diisi</span>'}</div>
+            <span class="muted">${tests.length} jenis pengujian &middot; total qty ${totalQty}</span>
+          </div>
+          <div class="field coupon-mark">
+            <label>Sample Marking</label>
+            <input type="text" data-row-no="${esc(row.row_no)}" data-sample-marking value="${esc(row.sample_marking)}">
+          </div>
+        </div>
+        ${specs.length ? `<div class="info-facts coupon-specs">${specs.map(([label, value]) => infoFactHtml(label, esc(value))).join('')}</div>` : ''}
+        ${row.note ? `<p class="coupon-note"><span>Catatan:</span> ${esc(row.note)}</p>` : ''}
+        <div class="task-table-wrap coupon-tests"><table class="task-table info-table">
+          <thead><tr><th>Jenis Pengujian</th><th>Qty</th><th>Metode / Standar</th><th>Keterangan</th></tr></thead>
+          <tbody>${tests.map(t => `
+            <tr>
+              <td><strong>${esc(t.test_name)}</strong></td>
+              <td>${esc(t.qty) || '-'}</td>
+              <td>${esc(t.method) || '-'}</td>
+              <td>${esc(testExtraText(row, t.test_name)) || '-'}</td>
+            </tr>`).join('') || '<tr><td colspan="4" class="muted">Belum ada Jenis Pengujian yang dipilih.</td></tr>'}
+          </tbody>
+        </table></div>
+      </div>`;
+  }
+
   function renderWorkOrderForm() {
     const wo = state.woData || {};
     const tr = wo.test_request || {};
 
     pageTitle.textContent = 'Work Order';
-    pageSubtitle.textContent = `Work Order — ${esc(tr.job_number || '')}`;
+    pageSubtitle.textContent = `Work Order — ${tr.job_number || ''}`;
     topbarActions.innerHTML = `
       <button class="btn" id="btnWoBack">&larr; Kembali ke Daftar</button>
       <button type="button" class="btn" id="btnWoExportPdf">Export PDF</button>
@@ -1473,63 +1572,26 @@
       window.open(`/work-orders/${state.woEditingId}/print`, '_blank'));
 
     const couponRows = wo.coupon_tests || [];
-    const couponSummary = couponRows.map((row, idx) => {
-      const types = [...(row.coupon_type || [])];
-      if (row.coupon_type_other) types.push(row.coupon_type_other);
-      const checkedItems = [
-        ...(row.test_items || []).filter(ti => ti.checked),
-        ...(row.other_tests || []).filter(ot => ot.test_name)
-      ];
-      const itemsText = checkedItems.length
-        ? checkedItems.map(ti => `${esc(ti.test_name)} (Qty ${esc(ti.qty) || '-'}, ${esc(ti.method) || '-'})`).join('; ')
-        : '-';
-      return `
-        <div class="wo-coupon-row">
-          <div class="wo-coupon-summary">
-            <strong>Coupon #${idx + 1}</strong> &mdash; ${esc(types.join(', ')) || '-'}<br>
-            <span class="muted">${esc(row.material_type_grade) || '-'} &middot; Ref. Code: ${esc(row.ref_code) || '-'}</span><br>
-            <span class="muted">Jenis Pengujian: ${itemsText}</span>
-          </div>
-          <div class="field">
-            <label>Sample Marking</label>
-            <input type="text" data-row-no="${row.row_no}" data-sample-marking value="${esc(row.sample_marking)}">
-          </div>
-        </div>`;
-    }).join('');
-
-    const stepFields = WO_STEPS.map(step => `
-      <div class="field">
-        <label>${esc(step.label)}</label>
-        <select name="${step.key}">
-          <option value="">-</option>
-          ${WO_PICS.map(p => `<option value="${esc(p.name)}" ${wo[step.key] === p.name ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
-        </select>
-      </div>`).join('');
 
     contentEl.innerHTML = `
-      <div id="woProgressSlot" data-wo-id="${esc(wo.id)}"></div>
+      ${woHeroHtml(tr)}
+      <div id="woBarSlot"></div>
       <form id="woForm">
 
         <div class="card">
-          <p class="section-title">Info Permintaan <span class="en">(dari Tinjauan Permintaan Pengujian, hanya baca)</span></p>
-          <div class="form-grid">
-            <div class="field"><label>Nomor Pekerjaan</label><input type="text" value="${esc(tr.job_number)}" disabled></div>
-            <div class="field"><label>Tgl. Request</label><input type="text" value="${esc(tr.received_date)}" disabled></div>
-            <div class="field"><label>Perusahaan</label><input type="text" value="${esc(tr.company)}" disabled></div>
-            <div class="field"><label>Atas Nama Perusahaan</label><input type="text" value="${esc(tr.on_behalf_owner)}" disabled></div>
-            <div class="field"><label>ID Perusahaan</label><input type="text" value="${esc(tr.customer_id)}" disabled></div>
-            <div class="field"><label>Nama Projek</label><input type="text" value="${esc(tr.project_name)}" disabled></div>
-            <div class="field"><label>Customer Witness</label><input type="text" value="${esc(tr.witness_status) || '-'}" disabled></div>
+          <p class="section-title">Informasi Projek &amp; Work Order <span class="en">(diambil dari Permintaan Uji)</span></p>
+          <div class="info-facts info-facts-lg">
+            ${infoFactHtml('Tgl. Request', fmtDateCell(tr.received_date))}
+            ${infoFactHtml('Atas Nama Perusahaan', esc(tr.on_behalf_owner) || '-')}
+            ${infoFactHtml('ID Perusahaan', esc(tr.customer_id) || '-')}
+            ${infoFactHtml('Nomor PO', esc(tr.po_number) || '-')}
+            ${infoFactHtml('Pelaksanaan Pengujian', esc(tr.witness_status) || '-')}
+            ${infoFactHtml('Tgl. Testing', fmtDateCell(wo.testing_date))}
+            ${infoFactHtml('Benda Uji', esc(tr.specimen_status) || '-')}
+            ${infoFactHtml('Target Penyelesaian LHU', fmtDateCell(tr.lhu_target_date))}
+            ${infoFactHtml('Penanganan LHU', esc(tr.lhu_handling) || '-')}
           </div>
-        </div>
-
-        <div class="card">
-          <p class="section-title">Info Work Order</p>
-          <div class="form-grid">
-            <div class="field">
-              <label>Tgl. Testing <span class="en">Testing Date</span></label>
-              <input type="date" name="testing_date" value="${esc(wo.testing_date)}">
-            </div>
+          <div class="form-grid" style="margin-top:16px;">
             <div class="field">
               <label>Our Reference</label>
               <input type="text" name="our_reference" value="${esc(wo.our_reference)}">
@@ -1542,14 +1604,11 @@
         </div>
 
         <div class="card">
-          <p class="section-title">Sample Marking per Coupon Test</p>
-          <div id="woCouponRows">${couponSummary || '<p class="muted">Tidak ada coupon test pada permintaan ini.</p>'}</div>
+          <p class="section-title">Informasi Sample / Coupon <span class="en">${couponRows.length} coupon &mdash; Sample Marking bisa diubah</span></p>
+          ${couponRows.map(woCouponCardHtml).join('') || '<p class="muted">Tidak ada coupon test pada permintaan ini.</p>'}
         </div>
 
-        <div class="card">
-          <p class="section-title">Description of Process</p>
-          <div class="form-grid">${stepFields}</div>
-        </div>
+        <div id="woProgressSlot" data-wo-id="${esc(wo.id)}"></div>
 
         <div class="card">
           <p class="section-title">Approval</p>
@@ -1691,20 +1750,38 @@
     </table></div>`;
   }
 
+  // Progress bar ringkas (tanpa info detail) di bawah header.
+  function woProgressBarHtml(p) {
+    return `
+      <div class="card wo-bar-card">
+        <div class="wo-bar-head">
+          <div>
+            <p class="card-title">Progress Pengerjaan</p>
+            <p class="card-desc" style="margin:0;">${p.done_count} dari ${p.total} tahap selesai</p>
+          </div>
+          <div class="wo-progress-pct">${p.percent}%</div>
+        </div>
+        <div class="wo-seg-bar">
+          ${p.stages.map((s, i) => `
+            <div class="wo-seg st-${s.status}" title="${esc(s.label)} — ${esc(STAGE_STATUS_LABELS[s.status])}">
+              <span class="wo-seg-fill"></span>
+              <span class="wo-seg-label"><b>${i + 1}</b>${esc(s.label)}</span>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  // Informasi proses secara detail (hanya baca), ditaruh di bawah informasi sample.
   function woProgressInfoHtml(p) {
     return `
       <div class="card wo-progress">
         <div class="wo-progress-head">
           <div>
-            <p class="card-title">Progress Pengerjaan</p>
-            <p class="card-desc" style="margin-bottom:12px;">${p.done_count} dari ${p.total} tahap selesai &mdash; halaman ini hanya menampilkan info, pengisian form ada di menu Tasks</p>
+            <p class="card-title">Informasi Proses</p>
+            <p class="card-desc" style="margin-bottom:6px;">Rincian tiap tahap pengerjaan &mdash; hanya info, pengisian form ada di menu Tasks</p>
           </div>
-          <div class="wo-progress-side">
-            <div class="wo-progress-pct">${p.percent}%</div>
-            <button type="button" class="btn btn-sm btn-primary" data-wo-stage="${firstOpenStageKey(p.stages)}">Kerjakan di Tasks &rarr;</button>
-          </div>
+          <button type="button" class="btn btn-sm btn-primary" data-wo-stage="${firstOpenStageKey(p.stages)}">Kerjakan di Tasks &rarr;</button>
         </div>
-        <div class="wo-progress-bar"><div style="width:${p.percent}%"></div></div>
         <ol class="wo-flow">
           ${p.stages.map((s, i) => `
             <li class="wo-flow-item st-${s.status}">
@@ -1727,18 +1804,28 @@
   }
 
   async function loadWoProgressInto(woId) {
-    const slot = document.getElementById('woProgressSlot');
-    if (!slot) return;
-    slot.innerHTML = `<div class="card"><p class="muted">Memuat progress pengerjaan...</p></div>`;
+    const flowSlot = document.getElementById('woProgressSlot');
+    const barSlot = document.getElementById('woBarSlot');
+    if (!flowSlot) return;
+    if (barSlot) barSlot.innerHTML = `<div class="card"><p class="muted">Memuat progress pengerjaan...</p></div>`;
     let progress = null;
     try {
       progress = await api(`/api/work-orders/${woId}/progress`);
     } catch (e) { /* progress adalah tambahan; form Work Order tetap bisa dipakai */ }
-    const current = document.getElementById('woProgressSlot');
-    if (!current || current.dataset.woId !== String(woId)) return;
-    if (!progress) { current.innerHTML = ''; return; }
-    current.innerHTML = woProgressInfoHtml(progress);
-    current.querySelectorAll('[data-wo-stage]').forEach(btn =>
+
+    const flow = document.getElementById('woProgressSlot');
+    if (!flow || flow.dataset.woId !== String(woId)) return;   // halaman sudah berganti
+    const bar = document.getElementById('woBarSlot');
+    if (!progress) { if (bar) bar.innerHTML = ''; return; }
+
+    if (bar) bar.innerHTML = woProgressBarHtml(progress);
+    flow.innerHTML = woProgressInfoHtml(progress);
+    const badge = document.getElementById('woStageBadge');
+    if (badge) {
+      const current = currentStageInfo(progress.stages);
+      badge.outerHTML = stageBadgeHtml(current.label, current.status, 'woStageBadge');
+    }
+    flow.querySelectorAll('[data-wo-stage]').forEach(btn =>
       btn.addEventListener('click', () => openWoTask(woId, btn.dataset.woStage)));
   }
 
@@ -3643,12 +3730,6 @@
       TEST_TYPES = r.testTypes;
     } catch (e) {
       TEST_TYPES = [];
-    }
-    try {
-      const r2 = await api('/api/work-order-steps');
-      WO_STEPS = r2.steps;
-    } catch (e) {
-      WO_STEPS = [];
     }
     await loadWeldingProcesses();
     await loadWeldingPositions();

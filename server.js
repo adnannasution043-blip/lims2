@@ -35,6 +35,11 @@ function signatureToBuffer(dataUrl) {
   return match ? Buffer.from(match[1], 'base64') : null;
 }
 
+// undefined (field tidak dikirim) -> null supaya COALESCE mempertahankan nilai lama.
+function optionalText(value) {
+  return value === undefined || value === null ? null : String(value);
+}
+
 function signatureToDataUrl(buf) {
   return buf ? `data:image/png;base64,${buf.toString('base64')}` : null;
 }
@@ -95,6 +100,9 @@ async function getFullWorkOrder(id) {
 
   const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [wo.test_request_id]);
   wo.test_request = attachSignatureUrls(reqRows[0] || null, REQUEST_SIGNATURE_FIELDS);
+  // Tanggal testing tidak diisi di Work Order: ikut tanggal "Pelaksanaan pengujian" di Permintaan Uji
+  // (kolom work_orders.testing_date hanya cadangan untuk data lama).
+  wo.testing_date = (wo.test_request && wo.test_request.witness_date) || wo.testing_date || '';
 
   const couponRows = await serializeCouponRows(wo.test_request_id);
   const { rows: marks } = await pool.query(
@@ -705,16 +713,29 @@ app.get('/api/work-order-steps', (req, res) => {
   res.json({ steps: PROCESS_STEPS });
 });
 
+// Rute Tasks (Receiving .. Released) + status tahap tiap Work Order.
+const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
+  pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY
+});
+
+// "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
+// Tanggal testing diambil dari Permintaan Uji (tanggal "Pelaksanaan pengujian").
 app.get('/api/work-orders', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT wo.id, wo.test_request_id, wo.testing_date, wo.status, wo.created_at,
+      `SELECT wo.id, wo.test_request_id,
+              COALESCE(NULLIF(tr.witness_date, ''), wo.testing_date) AS testing_date, wo.status, wo.created_at,
               tr.job_number, tr.company, tr.project_name
        FROM work_orders wo
        JOIN test_requests tr ON tr.id = wo.test_request_id
        ORDER BY wo.id DESC`
     );
-    res.json(rows);
+    const progress = await loadProgressRows();
+    const byWorkOrder = new Map(progress.map(p => [p.work_order_id, p]));
+    res.json(rows.map(r => {
+      const p = byWorkOrder.get(r.id);
+      return { ...r, stage: p ? { ...p.current, done_count: p.done_count, total: p.total } : null };
+    }));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat data' });
@@ -780,17 +801,19 @@ app.put('/api/work-orders/:id', async (req, res) => {
 
     await client.query(
       `UPDATE work_orders SET
-         testing_date=$1, our_reference=$2, contact_person=$3,
-         receiving_pic=$4, machining_pic=$5, inspection_pic=$6, testing_pic=$7, reporting_pic=$8, doc_checked_pic=$9,
-         prepared_by_name=$10, prepared_by_signature=$11,
-         checked_by_name=$12, checked_by_signature=$13,
-         approved_by_name=$14, approved_by_signature=$15, approval_date=$16,
-         status=$17, updated_at=NOW()
-       WHERE id=$18`,
+         our_reference=$1, contact_person=$2,
+         receiving_pic=COALESCE($3, receiving_pic), machining_pic=COALESCE($4, machining_pic),
+         inspection_pic=COALESCE($5, inspection_pic), testing_pic=COALESCE($6, testing_pic),
+         reporting_pic=COALESCE($7, reporting_pic), doc_checked_pic=COALESCE($8, doc_checked_pic),
+         prepared_by_name=$9, prepared_by_signature=$10,
+         checked_by_name=$11, checked_by_signature=$12,
+         approved_by_name=$13, approved_by_signature=$14, approval_date=$15,
+         status=$16, updated_at=NOW()
+       WHERE id=$17`,
       [
-        b.testing_date || '', b.our_reference || '', b.contact_person || '',
-        b.receiving_pic || '', b.machining_pic || '', b.inspection_pic || '',
-        b.testing_pic || '', b.reporting_pic || '', b.doc_checked_pic || '',
+        b.our_reference || '', b.contact_person || '',
+        optionalText(b.receiving_pic), optionalText(b.machining_pic), optionalText(b.inspection_pic),
+        optionalText(b.testing_pic), optionalText(b.reporting_pic), optionalText(b.doc_checked_pic),
         b.prepared_by_name || '', signatureToBuffer(b.prepared_by_signature),
         b.checked_by_name || '', signatureToBuffer(b.checked_by_signature),
         b.approved_by_name || '', signatureToBuffer(b.approved_by_signature), b.approval_date || '',
@@ -840,12 +863,6 @@ app.get('/work-orders/:id/print', async (req, res) => {
     console.error(err);
     res.status(500).send('Gagal membuat halaman cetak');
   }
-});
-
-// ---------- Work Order: Tasks (Receiving..Doc. Check) ----------
-
-registerWorkOrderTaskRoutes(app, {
-  pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY
 });
 
 // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
