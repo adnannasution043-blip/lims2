@@ -1967,7 +1967,7 @@
     if (it.has_template) {
       return `<button type="button" class="btn btn-sm btn-primary" data-create-sheet data-coupon="${esc(it.coupon_row_no)}" data-test="${esc(it.test_name)}">+ Buat Sheet</button>`;
     }
-    return '<span class="muted">Tanpa sheet</span>';
+    return '<span class="muted" title="Isi Qty jenis pengujian ini di Permintaan Uji dulu">Qty belum diisi</span>';
   }
 
   // Preparation = Pengecekan Spesimen (marking, cutting, machining specimen): tidak ada form
@@ -2945,7 +2945,7 @@
 
   // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
 
-  const SPECIMEN_CATEGORY_LABELS = { tensile: 'Tensile', bending: 'Bending', charpy: 'Charpy Impact' };
+  const SPECIMEN_CATEGORY_LABELS = { tensile: 'Tensile', bending: 'Bending', charpy: 'Charpy Impact', general: 'Umum' };
   const SPECIMEN_SHAPE_LABELS = { flat: 'Flat', round: 'Round' };
   const SPECIMEN_LOCATIONS = ['Base Metal', 'Weld Metal', 'HAZ', 'Fusion Line', 'Fusion Line +2', 'Fusion Line +5'];
 
@@ -2983,6 +2983,15 @@
             radius_code: '', radius_actual: '', length_code: '', length_actual: ''
           };
       return { marking_specimen: defaultMarking, type_lt: 'T', accepted: 'Y', measurements };
+    }
+    if (category === 'general') {
+      return {
+        marking_specimen: defaultMarking, type_lt: 'L', accepted: 'Y',
+        measurements: {
+          length_code: '', length_actual: '', width_code: '', width_actual: '',
+          thickness_code: '', thickness_actual: '', note: ''
+        }
+      };
     }
     return {
       marking_specimen: defaultMarking, type_lt: 'L', location: 'Weld Metal', accepted: 'Y',
@@ -3096,7 +3105,35 @@
     </tr>`;
   }
 
+  // Layout umum untuk jenis pengujian yang belum punya form resmi (Hardness, Microstructure, PMI, dst).
+  function generalRowHtml(row, idx) {
+    const m = row.measurements;
+    const dim = field => `<td><input type="text" data-srow="${idx}" data-mfield="${field}" value="${esc(m[field])}" style="width:52px;"></td>`;
+    return `<tr>
+      <td><input type="text" data-srow="${idx}" data-sfield="marking_specimen" value="${esc(row.marking_specimen)}" style="width:100px;" placeholder="Marking Specimen"></td>
+      <td>${ltSelectHtml(idx, row.type_lt)}</td>
+      ${dim('length_code')}${dim('length_actual')}${dim('width_code')}${dim('width_actual')}${dim('thickness_code')}${dim('thickness_actual')}
+      <td>${ynSelectHtml(idx, row.accepted)}</td>
+      <td><input type="text" data-srow="${idx}" data-mfield="note" value="${esc(m.note)}" style="width:120px;" placeholder="Catatan"></td>
+      <td><button type="button" class="btn btn-sm btn-danger" data-sremove="${idx}">&#128465;</button></td>
+    </tr>`;
+  }
+
   function specimenTableHtml(category, shape, rows) {
+    if (category === 'general') {
+      return `
+        <table class="test-items-table specimen-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Marking Specimen</th><th rowspan="2">Type<br>L/T</th>
+              <th colspan="2">Length</th><th colspan="2">Width / Diameter</th><th colspan="2">Thickness</th>
+              <th rowspan="2">Accepted<br>Y/N</th><th rowspan="2">Catatan</th><th rowspan="2"></th>
+            </tr>
+            <tr><th>Code</th><th>Actual</th><th>Code</th><th>Actual</th><th>Code</th><th>Actual</th></tr>
+          </thead>
+          <tbody>${rows.map((r, i) => generalRowHtml(r, i)).join('')}</tbody>
+        </table>`;
+    }
     if (category === 'tensile') {
       const isRound = shape === 'round';
       return `
@@ -3262,7 +3299,7 @@
           <div class="form-grid">
             <div class="field"><label>No. Pekerjaan</label><input type="text" value="${esc(tr.job_number)}" disabled></div>
             <div class="field"><label>Pelanggan</label><input type="text" value="${esc(tr.on_behalf_owner)}" disabled></div>
-            <div class="field"><label>Kategori</label><input type="text" value="${esc(SPECIMEN_CATEGORY_LABELS[category] || '')}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}" disabled></div>
+            <div class="field"><label>Kategori</label><input type="text" value="${esc(category === 'general' && insp.test_name ? insp.test_name : (SPECIMEN_CATEGORY_LABELS[category] || ''))}${shape ? ' - ' + esc(SPECIMEN_SHAPE_LABELS[shape]) : ''}" disabled></div>
             <div class="field"><label>Coupon Test <span class="en">(untuk telusur, tidak tercetak di PDF)</span></label><input type="text" value="${insp.coupon ? esc(couponRowLabel(insp.coupon)) : '-'}" disabled></div>
           </div>
         </div>
@@ -3458,6 +3495,7 @@
             <select id="specCreateTestName" disabled>
               <option value="">- Pilih Coupon Test dulu -</option>
             </select>
+            <p class="muted" id="specCreateHint" style="margin:2px 0 0;"></p>
           </div>
           <div class="field" id="specCreateShapeWrap" style="display:none;">
             <label>Bentuk <span class="en">Auto-terisi dari jenis coupon, tetap bisa diubah manual</span></label>
@@ -3539,8 +3577,10 @@
       const qtyInput = document.getElementById('specCreateQty');
       let availableTests = [];
 
+      const hintEl = document.getElementById('specCreateHint');
       const resetTestNameSelect = (placeholder) => {
         availableTests = [];
+        hintEl.textContent = '';
         testNameSelect.innerHTML = `<option value="">${placeholder}</option>`;
         testNameSelect.disabled = true;
         shapeWrap.style.display = 'none';
@@ -3577,13 +3617,19 @@
           const data = await api(`/api/requests/${testRequestId}/coupon-tests/${rowNo}/available-tests`);
           availableTests = data.available || [];
           if (!availableTests.length) {
-            testNameSelect.innerHTML = '<option value="">Semua Jenis Pengujian pada Coupon ini sudah dibuat sheetnya</option>';
+            let reason = 'Semua Jenis Pengujian pada Coupon ini sudah dibuat sheetnya';
+            if (data.missing_qty && data.missing_qty.length) reason = `Qty belum diisi di Permintaan Uji untuk: ${data.missing_qty.join(', ')}`;
+            else if (!data.checked_count) reason = 'Coupon ini belum memilih Jenis Pengujian di Permintaan Uji';
+            testNameSelect.innerHTML = `<option value="">${esc(reason)}</option>`;
             testNameSelect.disabled = true;
             return;
           }
           testNameSelect.innerHTML = '<option value="">- Pilih -</option>' +
             availableTests.map(t => `<option value="${esc(t.test_name)}">${esc(t.test_name)} (Qty: ${esc(t.qty)})</option>`).join('');
           testNameSelect.disabled = false;
+          if (data.missing_qty && data.missing_qty.length) {
+            hintEl.textContent = `Belum bisa dibuat karena Qty kosong di Permintaan Uji: ${data.missing_qty.join(', ')}`;
+          }
         } catch (err) {
           testNameSelect.innerHTML = '<option value="">Gagal memuat Jenis Pengujian</option>';
           toast(err.message, 'error');
@@ -3595,7 +3641,7 @@
         if (!chosen) { shapeWrap.style.display = 'none'; qtyWrap.style.display = 'none'; return; }
         qtyWrap.style.display = '';
         qtyInput.value = chosen.qty;
-        if (chosen.category === 'charpy') {
+        if (chosen.category === 'charpy' || chosen.category === 'general') {
           shapeWrap.style.display = 'none';
         } else {
           shapeWrap.style.display = '';
@@ -3616,7 +3662,7 @@
         const testName = testNameSelect.value;
         if (!testName) { toast('Pilih Jenis Pengujian dulu', 'error'); return; }
         const chosen = availableTests.find(t => t.test_name === testName);
-        const shape = chosen && chosen.category !== 'charpy' ? shapeSelect.value : null;
+        const shape = chosen && chosen.category !== 'charpy' && chosen.category !== 'general' ? shapeSelect.value : null;
         try {
           const created = await api(`/api/requests/${testRequestId}/specimen-inspections`, {
             method: 'POST',

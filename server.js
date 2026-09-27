@@ -125,13 +125,12 @@ async function getFullWorkOrder(id) {
 
 const SPECIMEN_SIGNATURE_FIELDS = ['inspected_by_signature', 'approved_by_signature'];
 
-// Which Jenis Pengujian (from the fixed TEST_TYPES list) a specimen inspection
-// category corresponds to — decides which of the 4 fixed print templates a
-// sheet for that Jenis Pengujian uses. Only Jenis Pengujian listed here can be
-// picked in the Pengecekan Spesimen creator, since the other TEST_TYPES have
-// no matching paper form template. Nick Break Test is grouped under "bending"
+// Which Jenis Pengujian (from the fixed TEST_TYPES list) has one of the paper-form
+// layouts (Tensile / Bending / Charpy). Nick Break Test is grouped under "bending"
 // because it uses the same Type/Location/Accepted-Rejected layout as Bend Root/
-// Face/Side, not a template of its own.
+// Face/Side. Every OTHER Jenis Pengujian (Hardness, Macro, Microstructure, PMI, free
+// "other tests", ...) has no official paper form yet and uses the generic layout
+// (category 'general') so that every coupon can still get a Pengecekan Spesimen.
 const CATEGORY_TEST_NAMES = {
   tensile: ['Tensile Test'],
   bending: ['Bend Root', 'Bend Face', 'Bend Side', 'Nick Break Test'],
@@ -987,11 +986,11 @@ app.get('/api/specimen-inspections', async (req, res) => {
   }
 });
 
-// Jenis Pengujian checked on a specific Coupon Test row that (a) map to a
-// category with a print template and (b) don't already have a Pengecekan
-// Spesimen sheet for that coupon — this is what the creator wizard's "Jenis
-// Pengujian" dropdown is restricted to, so a sheet can't be made twice for
-// the same test on the same coupon.
+// Jenis Pengujian checked on a specific Coupon Test row (with a Qty) that don't
+// already have a Pengecekan Spesimen sheet for that coupon — this is what the
+// creator wizard's "Jenis Pengujian" dropdown is restricted to, so a sheet can't be
+// made twice for the same test on the same coupon. Checked tests without a Qty are
+// reported separately (missing_qty) so the UI can say why they are not listed.
 app.get('/api/requests/:id/coupon-tests/:rowNo/available-tests', async (req, res) => {
   try {
     const { rows: couponRows } = await pool.query(
@@ -1002,11 +1001,13 @@ app.get('/api/requests/:id/coupon-tests/:rowNo/available-tests', async (req, res
     const coupon = couponRows[0];
     if (!coupon) return res.status(404).json({ error: 'Coupon Test tidak ditemukan' });
 
-    const { rows: items } = await pool.query(
-      `SELECT test_name, qty FROM test_items
-       WHERE coupon_test_id = $1 AND checked = TRUE AND qty IS NOT NULL AND qty <> ''`,
+    const { rows: checkedItems } = await pool.query(
+      `SELECT test_name, qty FROM test_items WHERE coupon_test_id = $1 AND checked = TRUE ORDER BY id`,
       [coupon.id]
     );
+    const hasQty = it => it.qty !== null && it.qty !== undefined && String(it.qty).trim() !== '';
+    const items = checkedItems.filter(hasQty);
+    const missingQty = checkedItems.filter(it => !hasQty(it)).map(it => it.test_name);
     const { rows: usedRows } = await pool.query(
       `SELECT test_name FROM specimen_inspections WHERE test_request_id = $1 AND coupon_row_no = $2`,
       [req.params.id, req.params.rowNo]
@@ -1025,19 +1026,19 @@ app.get('/api/requests/:id/coupon-tests/:rowNo/available-tests', async (req, res
     const suggestedShape = /pipe|pipa|round|bulat|bar|bolt|nut|baut|mur/.test(couponTypeText) ? 'round' : 'flat';
 
     const available = items
-      .filter(it => TEST_NAME_TO_CATEGORY[it.test_name] && !used.has(it.test_name))
+      .filter(it => !used.has(it.test_name))
       .map(it => {
-        const category = TEST_NAME_TO_CATEGORY[it.test_name];
+        const category = TEST_NAME_TO_CATEGORY[it.test_name] || 'general';
         return {
           test_name: it.test_name,
           qty: it.qty,
           category,
           code: codeByName[it.test_name] || '',
-          suggested_shape: category === 'charpy' ? null : suggestedShape
+          suggested_shape: (category === 'charpy' || category === 'general') ? null : suggestedShape
         };
       });
 
-    res.json({ available, suggested_shape: suggestedShape });
+    res.json({ available, suggested_shape: suggestedShape, checked_count: checkedItems.length, missing_qty: missingQty });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Gagal memuat Jenis Pengujian' });
@@ -1058,11 +1059,11 @@ app.get('/api/specimen-inspections/:id', async (req, res) => {
 app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
   const b = req.body || {};
   const testName = (b.test_name || '').trim();
-  const category = TEST_NAME_TO_CATEGORY[testName];
-  if (!testName || !category) {
+  if (!testName) {
     return res.status(400).json({ error: 'Jenis Pengujian tidak valid' });
   }
-  const shape = category === 'charpy' ? null : (b.shape === 'round' ? 'round' : 'flat');
+  const category = TEST_NAME_TO_CATEGORY[testName] || 'general';
+  const shape = (category === 'charpy' || category === 'general') ? null : (b.shape === 'round' ? 'round' : 'flat');
   try {
     const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [req.params.id]);
     const testRequest = reqRows[0];
@@ -1086,6 +1087,16 @@ app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
       return res.status(400).json({ error: 'Coupon Test yang dipilih tidak ditemukan pada Permintaan ini' });
     }
     const refCode = selectedCoupon.ref_code || '';
+
+    // Jenis Pengujian harus benar-benar dipilih pada coupon ini (bukan sembarang teks).
+    const { rows: onCoupon } = await pool.query(
+      `SELECT 1 FROM test_items ti JOIN coupon_tests ct ON ct.id = ti.coupon_test_id
+       WHERE ct.test_request_id = $1 AND ct.row_no = $2 AND ti.test_name = $3 AND ti.checked = TRUE`,
+      [req.params.id, selectedCoupon.row_no, testName]
+    );
+    if (!onCoupon.length) {
+      return res.status(400).json({ error: 'Jenis Pengujian ini tidak dipilih pada Coupon tersebut' });
+    }
 
     const { rows: dupeRows } = await pool.query(
       `SELECT id FROM specimen_inspections WHERE test_request_id = $1 AND coupon_row_no = $2 AND test_name = $3`,
