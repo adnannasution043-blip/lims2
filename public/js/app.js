@@ -172,6 +172,9 @@
       } else if (key === 'tasks') {
         state.view = 'wo-tasks';
         render();
+      } else if (key.startsWith('q-')) {
+        state.view = 'queue-' + key.slice(2);
+        render();
       } else if (key === 'keluar') {
         toast('Logout belum tersedia di tahap ini', 'error');
       } else {
@@ -2526,6 +2529,7 @@
         body: JSON.stringify(payload)
       });
       toast(payload.status === 'final' ? `Tahap ${t.stage.label} diselesaikan` : 'Draft tersimpan', 'success');
+      state.queueCountsAt = 0;
       render();
     } catch (err) {
       if (Array.isArray(err.problems) && err.problems.length) {
@@ -2642,6 +2646,224 @@
     });
   }
 
+  // ---------- peran & antrian kerja ----------
+  // Peran belum terhubung ke login (modul Pengguna belum ada): dipilih manual di sidebar dan
+  // hanya mengatur tampilan menu/halaman. Ini BUKAN pengamanan sampai autentikasi dibuat.
+
+  const ROLES = [['teknisi', 'Teknisi'], ['qaqc', 'QA/QC'], ['techmgr', 'Technical Manager'], ['admin', 'Admin']];
+  const REVIEW_ROLES = ['qaqc', 'techmgr', 'admin'];
+
+  function getRole() {
+    try {
+      const saved = localStorage.getItem('detechRole');
+      if (ROLES.some(r => r[0] === saved)) return saved;
+    } catch (e) { /* localStorage tidak tersedia */ }
+    return 'admin';
+  }
+
+  const canSeeReviewQueue = () => REVIEW_ROLES.includes(getRole());
+
+  function applyRoleVisibility() {
+    const item = document.querySelector('.nav-item[data-nav="q-review"]');
+    if (item) item.hidden = !canSeeReviewQueue();
+  }
+
+  (function initRoleSwitch() {
+    const select = document.getElementById('roleSelect');
+    if (!select) return;
+    select.innerHTML = ROLES.map(([key, label]) => `<option value="${key}">${label}</option>`).join('');
+    select.value = getRole();
+    applyRoleVisibility();
+    select.addEventListener('change', () => {
+      try { localStorage.setItem('detechRole', select.value); } catch (e) { /* abaikan */ }
+      applyRoleVisibility();
+      state.queueCountsAt = 0;
+      if (state.view === 'queue-review') render();
+      else refreshQueueBadges(true);
+    });
+  })();
+
+  function applyQueueCounts(counts) {
+    state.queueCountsAt = Date.now();
+    document.querySelectorAll('.nav-badge[data-badge]').forEach(badge => {
+      const n = (counts || {})[badge.dataset.badge] || 0;
+      badge.textContent = n;
+      badge.hidden = n === 0;
+    });
+  }
+
+  // Jumlah antrian di sidebar; diperbarui paling sering tiap 5 detik supaya tidak membebani server.
+  async function refreshQueueBadges(force) {
+    if (!force && state.queueCountsAt && Date.now() - state.queueCountsAt < 5000) return;
+    state.queueCountsAt = Date.now();
+    try {
+      applyQueueCounts((await api('/api/queues/summary')).counts);
+    } catch (e) { /* badge hanya pelengkap */ }
+  }
+
+  const QUEUE_DEFS = {
+    receiving: {
+      title: 'Receiving Queue',
+      subtitle: 'Antrian penerimaan — sampel yang belum diterima',
+      unit: 'Sampel menunggu',
+      empty: 'Tidak ada sampel yang menunggu penerimaan. Semua sudah diterima.'
+    },
+    preparation: {
+      title: 'Preparation Queue',
+      subtitle: 'Antrian persiapan — sampel sudah diterima, menunggu machining, marking, dan pemeriksaan spesimen',
+      unit: 'Spesimen menunggu',
+      empty: 'Tidak ada sampel yang menunggu persiapan.'
+    },
+    testing: {
+      title: 'Testing Queue',
+      subtitle: 'Antrian pengujian — spesimen yang lolos pemeriksaan dan siap diuji',
+      unit: 'Pengujian menunggu',
+      empty: 'Tidak ada pengujian yang menunggu.'
+    },
+    review: {
+      title: 'Review & Approval Queue',
+      subtitle: 'Antrian review — laporan hasil uji yang menunggu pemeriksaan dan approval',
+      unit: 'Laporan menunggu',
+      empty: 'Tidak ada laporan yang menunggu review.'
+    }
+  };
+
+  function queueWoCellHtml(r) {
+    return `<strong>${esc(r.job_number)}</strong><br><span class="muted">${esc(r.company)}${r.project_name ? ' &middot; ' + esc(r.project_name) : ''}</span>
+      <div class="q-date">Tgl. Testing: ${r.testing_date ? esc(formatDateOnly(r.testing_date)) : '-'}</div>`;
+  }
+
+  function queueSheetButtonHtml(r) {
+    if (r.sheet_id) return `<button type="button" class="btn btn-sm" data-open-sheet="${r.sheet_id}">Buka Sheet</button>`;
+    return `<button type="button" class="btn btn-sm" data-q-create data-req="${r.test_request_id}" data-coupon="${esc(r.coupon_row_no)}" data-test="${esc(r.test_name)}">+ Buat Sheet</button>`;
+  }
+
+  const QUEUE_TABLES = {
+    receiving: {
+      head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Spesimen', 'Status', ''],
+      row: r => `
+        <td>${queueWoCellHtml(r)}</td>
+        <td>${couponCellHtml(r)}</td>
+        <td>${r.tests.map(t => esc(t)).join('<br>') || '<span class="muted">-</span>'}</td>
+        <td><span class="qty-pill">${r.specimens}</span></td>
+        <td>${r.received === 'N' ? '<span class="st-pill st-rejected">Tidak diterima</span>' : '<span class="st-pill st-pending">Belum diterima</span>'}</td>
+        <td class="q-actions"><button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:receiving">Terima &rarr;</button></td>`
+    },
+    preparation: {
+      head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Specimen Marking', 'Status Sheet', ''],
+      row: r => `
+        <td>${queueWoCellHtml(r)}</td>
+        <td>${couponCellHtml(r)}</td>
+        <td><strong>${esc(r.test_name)}</strong><br><span class="muted">Qty ${esc(r.qty) || '-'}${r.method ? ' &middot; ' + esc(r.method) : ''}</span></td>
+        <td>${markingChipsHtml(r)}</td>
+        <td>${r.sheet_status
+          ? `<span class="badge badge-${r.sheet_status === 'final' ? 'final' : 'draft'}">${r.sheet_status === 'final' ? 'Final' : 'Draft'}</span>`
+          : '<span class="st-pill st-pending">Belum dibuat</span>'}</td>
+        <td class="q-actions">${queueSheetButtonHtml(r)}
+          <button type="button" class="btn btn-sm" data-q-open="${r.work_order_id}:preparation">Detail</button></td>`
+    },
+    testing: {
+      head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Specimen Marking', 'Status', ''],
+      row: r => `
+        <td>${queueWoCellHtml(r)}</td>
+        <td>${couponCellHtml(r)}</td>
+        <td><strong>${esc(r.test_name)}</strong><br><span class="muted">Qty ${esc(r.qty) || '-'}${r.method ? ' &middot; ' + esc(r.method) : ''}</span></td>
+        <td>${markingChipsHtml(r)}</td>
+        <td>${r.status === 'proses' ? '<span class="st-pill st-draft">Sedang diuji</span>' : '<span class="st-pill st-pending">Belum dimulai</span>'}</td>
+        <td class="q-actions">${r.sheet_id ? `<button type="button" class="btn btn-sm" data-open-sheet="${r.sheet_id}">Buka Sheet</button>` : ''}
+          <button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:testing">Uji &rarr;</button></td>`
+    },
+    review: {
+      head: ['Work Order', 'No. Laporan', 'Hasil Pengujian', 'Checklist', 'Status', ''],
+      row: r => `
+        <td>${queueWoCellHtml(r)}</td>
+        <td><strong>${esc(r.report_no) || '-'}</strong></td>
+        <td>Accepted ${r.results.accepted} &middot; Rejected ${r.results.rejected}<br><span class="muted">dari ${r.results.total} pengujian</span></td>
+        <td>${r.checklist_ok}/${r.checklist_total} butir</td>
+        <td>${r.review_status === 'rejected' ? '<span class="st-pill st-rejected">Perlu revisi</span>' : '<span class="st-pill st-pending">Menunggu review</span>'}</td>
+        <td class="q-actions"><button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:review">Review &rarr;</button></td>`
+    }
+  };
+
+  async function renderQueue(name) {
+    const def = QUEUE_DEFS[name];
+    pageTitle.textContent = def.title;
+    pageSubtitle.textContent = def.subtitle;
+    topbarActions.innerHTML = `<button class="btn" id="btnQueueRefresh">Muat ulang</button>`;
+    document.getElementById('btnQueueRefresh').addEventListener('click', () => renderQueue(name));
+
+    if (name === 'review' && !canSeeReviewQueue()) {
+      const roleLabel = (ROLES.find(r => r[0] === getRole()) || [])[1] || '';
+      contentEl.innerHTML = `
+        <div class="card empty-state">
+          <p class="card-title">Akses dibatasi</p>
+          <p class="card-desc">Halaman ini hanya untuk QA/QC atau Technical Manager. Peran aktif saat ini: <strong>${esc(roleLabel)}</strong>.</p>
+        </div>`;
+      return;
+    }
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat antrian...</p></div>`;
+    let data;
+    try {
+      data = await api(`/api/queues/${name}`);
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat antrian: ${esc(e.message)}</p></div>`;
+      return;
+    }
+    if (state.view !== `queue-${name}`) return;   // pengguna sudah pindah halaman
+    applyQueueCounts(data.counts);
+
+    const rows = data.rows;
+    const woCount = new Set(rows.map(r => r.work_order_id)).size;
+    const specimenTotal = rows.reduce((sum, r) => sum + (r.specimens != null ? r.specimens : (parseInt(r.qty, 10) || 0)), 0);
+    const thirdTile = name === 'review'
+      ? `<div class="task-stat bad"><b>${rows.filter(r => r.review_status === 'rejected').length}</b><span>Perlu revisi</span></div>`
+      : `<div class="task-stat"><b>${specimenTotal}</b><span>Total spesimen</span></div>`;
+
+    contentEl.innerHTML = `
+      <div class="task-stats">
+        <div class="task-stat ${rows.length ? '' : 'ok'}"><b>${rows.length}</b><span>${esc(def.unit)}</span></div>
+        <div class="task-stat"><b>${woCount}</b><span>Work Order terkait</span></div>
+        ${thirdTile}
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">${esc(def.title)}</p>
+          <p class="card-desc">Diurutkan berdasarkan tanggal testing terdekat</p>
+        </div>
+        <div id="queueTableArea"></div>
+      </div>`;
+
+    const table = QUEUE_TABLES[name];
+    renderSearchablePaginatedTable({
+      key: `queue-${name}`,
+      containerEl: document.getElementById('queueTableArea'),
+      allRows: rows,
+      searchFields: ['job_number', 'company', 'project_name', 'sample_marking', 'test_name', 'test_names_text', 'report_no'],
+      searchPlaceholder: 'Cari No. Pekerjaan, Perusahaan, Sample Marking, atau Jenis Pengujian...',
+      emptyHtml: `<p class="muted" style="padding:24px;">${esc(def.empty)}</p>`,
+      renderTableHtml: (pageRows) => `
+        <table class="data-table queue-table">
+          <thead><tr>${table.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+          <tbody>${pageRows.map(r => `<tr>${table.row(r)}</tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-q-open]').forEach(btn => btn.addEventListener('click', () => {
+          const [woId, key] = btn.dataset.qOpen.split(':');
+          openWoTask(woId, key);
+        }));
+        container.querySelectorAll('[data-open-sheet]').forEach(btn =>
+          btn.addEventListener('click', () => openSpecimenForm(btn.dataset.openSheet)));
+        container.querySelectorAll('[data-q-create]').forEach(btn => btn.addEventListener('click', () => {
+          state.view = 'specimen-list';
+          state.specimenCreatorOpen = true;
+          state.specimenCreatorPrefill = { requestId: btn.dataset.req, couponRowNo: btn.dataset.coupon, testName: btn.dataset.test };
+          render();
+        }));
+      }
+    });
+  }
+
   // ---------- router ----------
 
   const VIEW_TO_NAV_KEY = {
@@ -2649,6 +2871,8 @@
     list: 'permintaan-uji', form: 'permintaan-uji',
     'wo-list': 'work-order', 'wo-form': 'work-order', 'wo-task': 'work-order',
     'wo-tasks': 'tasks',
+    'queue-receiving': 'q-receiving', 'queue-preparation': 'q-preparation',
+    'queue-testing': 'q-testing', 'queue-review': 'q-review',
     'master-data': 'manajemen-data',
     timeline: 'timeline',
     'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen'
@@ -2661,6 +2885,7 @@
 
   function render() {
     syncNavActive();
+    refreshQueueBadges();
     renderWorkflowSteps();
     if (state.view === 'dashboard') renderDashboard();
     else if (state.view === 'timeline') renderTimeline();
@@ -2669,6 +2894,7 @@
     else if (state.view === 'wo-form') renderWorkOrderForm();
     else if (state.view === 'wo-tasks') renderWoTasks();
     else if (state.view === 'wo-task') renderWoTask();
+    else if (state.view.startsWith('queue-')) renderQueue(state.view.slice(6));
     else if (state.view === 'master-data') renderMasterData();
     else if (state.view === 'specimen-list') renderSpecimenList();
     else if (state.view === 'specimen-form') renderSpecimenForm();

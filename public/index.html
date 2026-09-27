@@ -33,6 +33,20 @@
       <a class="nav-item" data-nav="pengecekan-spesimen">
         <span class="nav-icon">&#9879;</span> Pengecekan Spesimen
       </a>
+      <div class="nav-section">Antrian Kerja</div>
+      <a class="nav-item" data-nav="q-receiving">
+        <span class="nav-icon">&#128229;</span> Receiving Queue <span class="nav-badge" data-badge="receiving" hidden></span>
+      </a>
+      <a class="nav-item" data-nav="q-preparation">
+        <span class="nav-icon">&#128297;</span> Preparation Queue <span class="nav-badge" data-badge="preparation" hidden></span>
+      </a>
+      <a class="nav-item" data-nav="q-testing">
+        <span class="nav-icon">&#128202;</span> Testing Queue <span class="nav-badge" data-badge="testing" hidden></span>
+      </a>
+      <a class="nav-item" data-nav="q-review">
+        <span class="nav-icon">&#9989;</span> Review &amp; Approval Queue <span class="nav-badge" data-badge="review" hidden></span>
+      </a>
+      <div class="nav-section">Lainnya</div>
       <a class="nav-item" data-nav="timeline" hidden>
         <span class="nav-icon">&#9202;</span> Timeline
       </a>
@@ -46,6 +60,11 @@
         <span class="nav-icon">&#9881;</span> Pengaturan
       </a>
     </nav>
+
+    <div class="role-switch">
+      <label for="roleSelect">Masuk sebagai</label>
+      <select id="roleSelect" aria-label="Peran pengguna"></select>
+    </div>
 
     <a class="nav-item nav-exit" data-nav="keluar">
       <span class="nav-icon">&#8618;</span> Keluar

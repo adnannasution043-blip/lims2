@@ -83,7 +83,56 @@ body {
   flex-direction: column;
   gap: 3px;
   flex: 1;
+  min-height: 0;
   padding-right: 4px;
+  /* Menu bertambah banyak: tetap bisa di-scroll di layar pendek, tanpa menampilkan scrollbar. */
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.nav::-webkit-scrollbar { display: none; }
+
+.nav-section {
+  margin: 12px 12px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+.nav-badge {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.nav-badge[hidden] { display: none; }
+.nav-item.active .nav-badge { background: #fff; color: var(--accent); }
+
+.role-switch { padding: 10px 12px 0 0; border-top: 1px solid var(--border); margin-top: 8px; }
+.role-switch label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.role-switch select {
+  width: calc(100% - 4px);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
 }
 
 .nav-item {
@@ -1036,6 +1085,12 @@ table.matrix-table tfoot td { font-weight: 700; color: var(--navy); border-top: 
 }
 .ev-del:hover { background: var(--danger); }
 #woEvidence.is-uploading { opacity: 0.55; pointer-events: none; }
+
+/* Antrian kerja */
+.queue-table td { vertical-align: middle; }
+.q-date { margin-top: 3px; font-size: 11.5px; color: var(--text-muted); }
+.q-actions { white-space: nowrap; }
+.q-actions .btn { margin-left: 4px; }
 
 /* ---------- Buttons ---------- */
 
