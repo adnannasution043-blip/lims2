@@ -17,6 +17,12 @@
 .sd-edge{stroke:${LINE};stroke-width:1.4;fill:none}
 .sd-groove{fill:#b9c8e6;stroke:${LINE};stroke-width:1.4}
 .sd-center{stroke:#9db3d9;stroke-width:1;fill:none;stroke-dasharray:14 4 3 4}
+.sd-hl{fill:none;stroke:#f0821e;stroke-width:1.9}
+.sd-hl-dash{fill:none;stroke:#f0821e;stroke-width:1.2;stroke-dasharray:3 3}
+.sd-frame{fill:#fff;stroke:${LINE};stroke-width:1.2;stroke-dasharray:4 4}
+.sd-vprofile{fill:none;stroke:#2a3f6f;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
+.sd-marker{fill:#fff;stroke:#f0821e;stroke-width:1.5}
+.sd-marker-t{fill:#f0821e;font-size:14px;font-weight:700;text-anchor:middle;font-family:'Segoe UI',Arial,sans-serif}
 .sd-note{fill:#6b7a93;font-size:15px;font-family:'Segoe UI',Arial,sans-serif;font-style:italic}
 .sd-dim line{stroke:${LINE};stroke-width:1.4;fill:none}
 .sd-dim text{fill:${LINE};font-size:17px;font-family:'Segoe UI',Arial,sans-serif}
@@ -40,7 +46,7 @@
     const has = k => values[k] !== undefined && values[k] !== null && String(values[k]).trim() !== '';
     return {
       id,
-      val: k => (has(k) ? `<tspan class="sd-val">= ${esc(txt(values[k]))}</tspan>` : ''),
+      val: k => (has(k) ? `<tspan class="sd-val">${isNaN(Number(values[k])) ? '' : '= '}${esc(txt(values[k]))}</tspan>` : ''),
       // garis dimensi berpanah
       arrow: (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ${arrows}/>`,
       line: (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`,
@@ -121,20 +127,27 @@
       // jarak pusat V-notch ke ujung kiri / kanan, di atas sisi belakang muka atas
       const bx0 = fx0 + dx, bx1 = fx1 + dx, bcx = cx + dx, by = fy0 + dy;
       body += `
-      ${dim('NL', `${line(bx0, by - 4, bx0, by - 40)}${line(bcx, by - 4, bcx, by - 40)}${arrow(bx0 + 4, by - 32, bcx - 4, by - 32)}<text x="${(bx0 + bcx) / 2}" y="${by - 40}" text-anchor="middle">Notch L ${val('NL')}</text>`, [bx0, by - 60, bcx - bx0, 60])}
-      ${dim('NR', `${line(bx1, by - 4, bx1, by - 40)}${arrow(bcx + 4, by - 32, bx1 - 4, by - 32)}<text x="${(bcx + bx1) / 2}" y="${by - 40}" text-anchor="middle">Notch R ${val('NR')}</text>`, [bcx, by - 60, bx1 - bcx, 60])}`;
+      ${dim('NL', `${line(bx0, by - 4, bx0, by - 40)}${line(bcx, by - 4, bcx, by - 40)}${arrow(bx0 + 4, by - 32, bcx - 4, by - 32)}<text x="${(bx0 + bcx) / 2}" y="${by - 40}" text-anchor="middle">Center L ${val('NL')}</text>`, [bx0, by - 60, bcx - bx0, 60])}
+      ${dim('NR', `${line(bx1, by - 4, bx1, by - 40)}${arrow(bcx + 4, by - 32, bx1 - 4, by - 32)}<text x="${(bcx + bx1) / 2}" y="${by - 40}" text-anchor="middle">Center R ${val('NR')}</text>`, [bcx, by - 60, bx1 - bcx, 60])}`;
     }
     if (o.notch) {
-      // detail profil V-notch (dicek dengan profile projector), di bawah label Width
-      const oy = 62;
+      // penanda "A" pada V-notch + DETAIL A (Profile Projector Check), mengikuti form referensi Detech
+      const nx = cx, ny = fy0;
+      const dx0 = 965, dy0 = 340;     // pusat lingkaran detail
       body += `
-      <text class="sd-note" x="880" y="${oy + 204}">Detail V-notch (diperbesar)</text>
-      <g transform="translate(870,${oy + 250}) scale(1.2) translate(-870,-${oy + 250})">
-      <path class="sd-edge" d="M870,${250 + oy} L925,${250 + oy} L950,${296 + oy} Q956,${306 + oy} 962,${296 + oy} L987,${250 + oy} L1040,${250 + oy}"/>
-      ${dim('PW', `${line(925, 246 + oy, 925, 236 + oy)}${line(987, 246 + oy, 987, 236 + oy)}${arrow(929, 240 + oy, 983, 240 + oy)}<text x="956" y="${232 + oy}" text-anchor="middle">Width ${val('PW')}</text>`, [920, 215 + oy, 75, 34])}
-      ${dim('PD', `${line(1000, 250 + oy, 1050, 250 + oy)}${line(966, 300 + oy, 1050, 300 + oy)}${arrow(1040, 254 + oy, 1040, 296 + oy)}<text transform="translate(1030,${275 + oy}) rotate(-90)" text-anchor="middle">Depth ${val('PD')}</text>`, [1010, 250 + oy, 50, 50])}
-      ${dim('PR', `${line(936, 336 + oy, 955, 309 + oy)}<path d="M957,${306 + oy} L954.6,${316.5 + oy} L948,${311.9 + oy} Z" fill="${LINE}"/><text x="930" y="${346 + oy}" text-anchor="end">Radius ${val('PR')}</text>`, [820, 300 + oy, 140, 52])}
-      </g>`;
+      <polyline class="sd-hl" points="${nx - 14},${ny} ${nx},${ny + 22} ${nx + 14},${ny}"/>
+      <circle class="sd-hl-dash" cx="${nx}" cy="${ny + 8}" r="18"/>
+      <line class="sd-hl-dash" x1="${nx + 13}" y1="${ny + 20}" x2="${nx + 40}" y2="${ny + 46}"/>
+      <circle class="sd-marker" cx="${nx + 46}" cy="${ny + 52}" r="10"/>
+      <text class="sd-marker-t" x="${nx + 46}" y="${ny + 57}">A</text>
+
+      <circle class="sd-frame" cx="${dx0}" cy="${dy0}" r="84"/>
+      <polyline class="sd-vprofile" points="${dx0 - 38},${dy0 - 40} ${dx0},${dy0 + 22} ${dx0 + 38},${dy0 - 40}"/>
+      <path class="sd-hl" d="M${dx0 - 6},${dy0 + 16} a8,8 0 0 0 12,0"/>
+      ${dim('PW', `${line(dx0 - 38, dy0 - 44, dx0 - 38, dy0 - 60)}${line(dx0 + 38, dy0 - 44, dx0 + 38, dy0 - 60)}${arrow(dx0 - 34, dy0 - 56, dx0 + 34, dy0 - 56)}<text x="${dx0}" y="${dy0 - 64}" text-anchor="middle">Width 2 mm ${val('PW')}</text>`, [dx0 - 60, dy0 - 82, 120, 40])}
+      ${dim('PD', `${line(dx0 + 42, dy0 - 40, dx0 + 66, dy0 - 40)}${line(dx0 + 6, dy0 + 22, dx0 + 66, dy0 + 22)}${arrow(dx0 + 60, dy0 - 36, dx0 + 60, dy0 + 18)}<text x="${dx0 + 68}" y="${dy0 - 8}">Depth</text><text x="${dx0 + 68}" y="${dy0 + 12}">2 mm ${val('PD')}</text>`, [dx0 + 40, dy0 - 44, 90, 70])}
+      ${dim('PR', `${line(dx0 - 34, dy0 + 64, dx0 - 4, dy0 + 32)}<path d="M${dx0 - 2},${dy0 + 29} L${dx0 - 6},${dy0 + 39} L${dx0 - 12},${dy0 + 33} Z" fill="${LINE}"/><text x="${dx0 - 30}" y="${dy0 + 76}" text-anchor="end">Radius 0.25 mm ${val('PR')}</text>`, [dx0 - 200, dy0 + 40, 200, 44])}
+      <text class="sd-note" x="${dx0}" y="${dy0 + 108}" text-anchor="middle">DETAIL A — Profile Projector Check</text>`;
     }
     if (o.radiusInset) {
       // penampang: lebar x tebal dengan radius sisi
@@ -144,7 +157,7 @@
       ${dim('R', `${line(1012, 328, 984, 300)}<path d="M982,298 L986,308 L992,302 Z" fill="${LINE}"/><text x="1018" y="334">Radius ${val('R')}</text>`, [960, 290, 240, 60])}`;
     }
     return {
-      viewBox: o.notch ? '0 0 1120 440' : (o.radiusInset ? '0 0 1200 360' : '0 0 1080 360'),
+      viewBox: o.notch ? '0 0 1120 470' : (o.radiusInset ? '0 0 1200 360' : '0 0 1080 360'),
       label: o.label,
       body
     };
