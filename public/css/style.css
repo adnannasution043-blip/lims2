@@ -959,6 +959,30 @@ table.data-table th.tk-th, table.data-table td.tk-td { text-align: center; }
 .coupon-note span { font-weight: 700; color: var(--navy); }
 .coupon-tests { margin: 0 18px 14px; }
 
+/* Ringkasan sample: matriks jenis pengujian x coupon + pill qty */
+.matrix-title { margin: 6px 0 10px; font-size: 12.5px; font-weight: 700; color: var(--navy); }
+.matrix-title .en { font-weight: 400; font-style: italic; color: var(--text-muted); }
+.matrix-wrap { margin-bottom: 4px; }
+table.matrix-table th.mx-col, table.matrix-table td.mx-cell { text-align: center; }
+table.matrix-table th.mx-col small { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 600; color: var(--accent-dark); }
+table.matrix-table td:first-child, table.matrix-table th:first-child { position: sticky; left: 0; background: var(--surface); }
+table.matrix-table tfoot td { font-weight: 700; color: var(--navy); border-top: 2px solid var(--border-strong); background: var(--bg); }
+.mx-empty { color: var(--border-strong); }
+.mx-total { font-weight: 800; color: var(--navy); background: var(--bg); }
+.qty-pill {
+  display: inline-block;
+  min-width: 30px;
+  padding: 2px 9px;
+  border-radius: 6px;
+  background: var(--accent-light);
+  color: var(--accent-dark);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-align: center;
+}
+.qty-pill.qty-total { background: var(--navy); color: #fff; }
+.coupon-tests tfoot td { font-weight: 700; color: var(--navy); border-top: 2px solid var(--border-strong); background: var(--bg); }
+
 /* ---------- Buttons ---------- */
 
 .btn {

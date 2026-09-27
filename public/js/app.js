@@ -210,7 +210,7 @@
 
     const specimenRequestIds = new Set(specimens.map(s => s.test_request_id));
     const needsWO = requests.filter(r => r.status === 'final' && !r.work_order_id);
-    const needsSpecimen = workOrders.filter(w => w.status === 'final' && !specimenRequestIds.has(w.test_request_id));
+    const needsSpecimen = workOrders.filter(w => w.stage && w.stage.statuses && w.stage.statuses.preparation === 'pending');
     const actionCount = needsWO.length + needsSpecimen.length;
 
     const totalRequests = requests.length;
@@ -236,7 +236,7 @@
     const ACTIVITY_ICON = { request: '&#128203;', wo: '&#128295;', specimen: '&#9879;' };
     const activity = [
       ...requests.map(r => ({ type: 'request', label: `Permintaan Uji ${r.job_number}`, sub: r.company, status: r.status, created_at: r.created_at })),
-      ...workOrders.map(w => ({ type: 'wo', label: `Work Order ${w.job_number}`, sub: w.company, status: w.status, created_at: w.created_at })),
+      ...workOrders.map(w => ({ type: 'wo', label: `Work Order ${w.job_number}`, sub: w.company, status: w.status, created_at: w.created_at, badgeHtml: w.stage ? stageBadgeHtml(w.stage.label, w.stage.status) : '' })),
       ...specimens.map(s => ({ type: 'specimen', label: `Pengecekan Spesimen ${s.job_number}`, sub: s.test_name || SPECIMEN_CATEGORY_LABELS[s.category] || s.category, status: s.status, created_at: s.created_at }))
     ].filter(a => a.created_at).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
 
@@ -263,7 +263,7 @@
           <div>
             <p class="dash-stat-value">${workOrders.length}</p>
             <p class="dash-stat-label">Work Order</p>
-            <p class="dash-stat-sub">${draftWO} draft &middot; ${finalWO} final</p>
+            <p class="dash-stat-sub">${draftWO} berjalan &middot; ${finalWO} selesai</p>
           </div>
         </div>
         <div class="dash-stat-card">
@@ -331,7 +331,7 @@
                 <div class="dash-action-item">
                   <div>
                     <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
-                    <p class="dash-action-hint">Work Order Final, belum ada Pengecekan Spesimen</p>
+                    <p class="dash-action-hint">Work Order dibuat, belum ada Pengecekan Spesimen</p>
                   </div>
                   <button class="btn btn-sm" data-action-spec="${w.test_request_id}">Buat Sheet</button>
                 </div>`).join('')}
@@ -351,7 +351,7 @@
                     <strong>${esc(a.label)}</strong>
                     <span class="muted">${esc(a.sub || '')}</span>
                   </div>
-                  <span class="badge badge-${a.status === 'final' ? 'final' : 'draft'}">${a.status === 'final' ? 'Final' : 'Draft'}</span>
+                  ${a.badgeHtml || `<span class="badge badge-${a.status === 'final' ? 'final' : 'draft'}">${a.status === 'final' ? 'Final' : 'Draft'}</span>`}
                 </div>`).join('')}
             </div>
           `}
@@ -1511,6 +1511,57 @@
     return '';
   }
 
+  function couponTestsOf(row) {
+    return [
+      ...(row.test_items || []).filter(t => t.checked),
+      ...(row.other_tests || []).filter(t => t.test_name)
+    ];
+  }
+
+  const qtyNumber = q => parseInt(q, 10) || 0;
+
+  // Ringkasan sekilas: berapa coupon, jenis pengujian, total qty, dan matriks
+  // jenis pengujian x coupon (angka = qty) lengkap dengan total.
+  function woSampleSummaryHtml(couponRows) {
+    const names = [];
+    TEST_TYPES.forEach(n => { if (couponRows.some(r => couponTestsOf(r).some(t => t.test_name === n))) names.push(n); });
+    couponRows.forEach(r => couponTestsOf(r).forEach(t => { if (!names.includes(t.test_name)) names.push(t.test_name); }));
+    if (!names.length) return '';
+
+    const totalByCoupon = couponRows.map(r => couponTestsOf(r).reduce((sum, t) => sum + qtyNumber(t.qty), 0));
+    const grandTotal = totalByCoupon.reduce((a, b) => a + b, 0);
+
+    return `
+      <div class="task-stats">
+        <div class="task-stat"><b>${couponRows.length}</b><span>Coupon</span></div>
+        <div class="task-stat"><b>${names.length}</b><span>Jenis pengujian</span></div>
+        <div class="task-stat ok"><b>${grandTotal}</b><span>Total qty spesimen</span></div>
+      </div>
+      <p class="matrix-title">Ringkasan Jenis Pengujian &times; Coupon <span class="en">(angka = qty)</span></p>
+      <div class="task-table-wrap matrix-wrap"><table class="task-table info-table matrix-table">
+        <thead><tr>
+          <th>Jenis Pengujian</th>
+          ${couponRows.map(r => `<th class="mx-col">Coupon #${esc(r.row_no)}<small>${esc(r.sample_marking) || '-'}</small></th>`).join('')}
+          <th class="mx-col">Total</th>
+        </tr></thead>
+        <tbody>${names.map(name => {
+          const cells = couponRows.map(r => couponTestsOf(r).find(t => t.test_name === name) || null);
+          const total = cells.reduce((sum, t) => sum + (t ? qtyNumber(t.qty) : 0), 0);
+          return `<tr>
+            <td><strong>${esc(name)}</strong></td>
+            ${cells.map(t => `<td class="mx-cell">${t ? `<span class="qty-pill">${esc(t.qty) || '&#10003;'}</span>` : '<span class="mx-empty">&ndash;</span>'}</td>`).join('')}
+            <td class="mx-cell mx-total">${total}</td>
+          </tr>`;
+        }).join('')}</tbody>
+        <tfoot><tr>
+          <td>Total qty per coupon</td>
+          ${totalByCoupon.map(n => `<td class="mx-cell">${n}</td>`).join('')}
+          <td class="mx-cell mx-total">${grandTotal}</td>
+        </tr></tfoot>
+      </table></div>
+      <p class="matrix-title" style="margin-top:22px;">Detail per Coupon</p>`;
+  }
+
   function woCouponCardHtml(row) {
     const types = [...(row.coupon_type || [])];
     if (row.coupon_type_other) types.push(row.coupon_type_other);
@@ -1520,11 +1571,8 @@
       ['Proses Pengelasan', row.welding_process], ['Posisi Pengelasan', row.welding_position],
       ['Ref. Code', row.ref_code], ['No. WPS', row.no_wps], ['Tujuan Pengujian', row.testing_purpose]
     ].filter(([, value]) => value);
-    const tests = [
-      ...(row.test_items || []).filter(t => t.checked),
-      ...(row.other_tests || []).filter(t => t.test_name)
-    ];
-    const totalQty = tests.reduce((sum, t) => sum + (parseInt(t.qty, 10) || 0), 0);
+    const tests = couponTestsOf(row);
+    const totalQty = tests.reduce((sum, t) => sum + qtyNumber(t.qty), 0);
 
     return `
       <div class="coupon-card">
@@ -1548,11 +1596,12 @@
           <tbody>${tests.map(t => `
             <tr>
               <td><strong>${esc(t.test_name)}</strong></td>
-              <td>${esc(t.qty) || '-'}</td>
+              <td><span class="qty-pill">${esc(t.qty) || '-'}</span></td>
               <td>${esc(t.method) || '-'}</td>
               <td>${esc(testExtraText(row, t.test_name)) || '-'}</td>
             </tr>`).join('') || '<tr><td colspan="4" class="muted">Belum ada Jenis Pengujian yang dipilih.</td></tr>'}
           </tbody>
+          ${tests.length ? `<tfoot><tr><td>Total qty</td><td><span class="qty-pill qty-total">${totalQty}</span></td><td colspan="2"></td></tr></tfoot>` : ''}
         </table></div>
       </div>`;
   }
@@ -1605,13 +1654,14 @@
 
         <div class="card">
           <p class="section-title">Informasi Sample / Coupon <span class="en">${couponRows.length} coupon &mdash; Sample Marking bisa diubah</span></p>
+          ${woSampleSummaryHtml(couponRows)}
           ${couponRows.map(woCouponCardHtml).join('') || '<p class="muted">Tidak ada coupon test pada permintaan ini.</p>'}
         </div>
 
         <div id="woProgressSlot" data-wo-id="${esc(wo.id)}"></div>
 
         <div class="card">
-          <p class="section-title">Approval</p>
+          <p class="section-title">Approval <span class="en">untuk approval manual &mdash; Work Order otomatis Final setelah semua tahap proses selesai</span></p>
           <div class="signature-columns cols-3">
             <div class="signature-column">
               <div class="field">
@@ -1652,8 +1702,7 @@
             <button type="button" class="btn btn-danger" id="btnWoDelete">Hapus Work Order</button>
           </div>
           <div class="right">
-            <button type="submit" class="btn" data-status="draft">Simpan sebagai Draft</button>
-            <button type="submit" class="btn btn-primary" data-status="final">Simpan &amp; Finalisasi</button>
+            <button type="submit" class="btn btn-primary">Simpan</button>
           </div>
         </div>
       </form>
@@ -1667,9 +1716,6 @@
   function bindWorkOrderFormEvents() {
     document.getElementById('btnWoDelete').addEventListener('click', () => deleteWorkOrder(state.woEditingId));
     document.getElementById('woForm').addEventListener('submit', onWorkOrderSubmit);
-    contentEl.querySelectorAll('button[type="submit"]').forEach(b => {
-      b.addEventListener('click', () => { state.woPendingStatus = b.dataset.status; });
-    });
   }
 
   async function onWorkOrderSubmit(e) {
@@ -1677,7 +1723,6 @@
     const form = e.target;
     const fd = new FormData(form);
     const payload = Object.fromEntries(fd.entries());
-    payload.status = state.woPendingStatus || 'draft';
 
     payload.sample_marks = Array.from(contentEl.querySelectorAll('[data-sample-marking]')).map(input => ({
       row_no: Number(input.dataset.rowNo),

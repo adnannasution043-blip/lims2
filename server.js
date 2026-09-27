@@ -719,6 +719,7 @@ const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
 });
 
 // "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
+// "status" Work Order tidak lagi difinalisasi manual: Final otomatis setelah semua tahap selesai.
 // Tanggal testing diambil dari Permintaan Uji (tanggal "Pelaksanaan pengujian").
 app.get('/api/work-orders', async (req, res) => {
   try {
@@ -734,7 +735,13 @@ app.get('/api/work-orders', async (req, res) => {
     const byWorkOrder = new Map(progress.map(p => [p.work_order_id, p]));
     res.json(rows.map(r => {
       const p = byWorkOrder.get(r.id);
-      return { ...r, stage: p ? { ...p.current, done_count: p.done_count, total: p.total } : null };
+      if (!p) return { ...r, stage: null };
+      const statuses = Object.fromEntries(p.stages.map(s => [s.key, s.status]));
+      return {
+        ...r,
+        status: p.done_count === p.total ? 'final' : 'draft',
+        stage: { ...p.current, done_count: p.done_count, total: p.total, statuses }
+      };
     }));
   } catch (err) {
     console.error(err);
@@ -808,8 +815,8 @@ app.put('/api/work-orders/:id', async (req, res) => {
          prepared_by_name=$9, prepared_by_signature=$10,
          checked_by_name=$11, checked_by_signature=$12,
          approved_by_name=$13, approved_by_signature=$14, approval_date=$15,
-         status=$16, updated_at=NOW()
-       WHERE id=$17`,
+         updated_at=NOW()
+       WHERE id=$16`,
       [
         b.our_reference || '', b.contact_person || '',
         optionalText(b.receiving_pic), optionalText(b.machining_pic), optionalText(b.inspection_pic),
@@ -817,7 +824,7 @@ app.put('/api/work-orders/:id', async (req, res) => {
         b.prepared_by_name || '', signatureToBuffer(b.prepared_by_signature),
         b.checked_by_name || '', signatureToBuffer(b.checked_by_signature),
         b.approved_by_name || '', signatureToBuffer(b.approved_by_signature), b.approval_date || '',
-        b.status || 'draft', id
+        id
       ]
     );
 
