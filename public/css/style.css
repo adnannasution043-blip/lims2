@@ -1047,7 +1047,9 @@ table.matrix-table tfoot td { font-weight: 700; color: var(--navy); border-top: 
   white-space: nowrap;
 }
 .test-cell-mk { margin-top: 6px; }
-.test-cell-sheet { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.test-cell-sheet { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; }
+.test-cell-report { white-space: nowrap; }
+.test-cell-report > div { margin-bottom: 4px; }
 .task-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .ev-group { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }

@@ -231,6 +231,48 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_wo_files_wo ON work_order_files(work_order_id, task_key);
 
+    -- Lembar hasil uji ("Testing Sheet") tahap Testing — satu per coupon + Jenis Pengujian, dibuat
+    -- lewat halaman Testing (bukan Pengecekan Spesimen, yang tetap milik tahap Preparation). Sheet ini
+    -- SEKALIGUS jadi Laporan Hasil Uji yang diekspor sebagai PDF. category='bending' memakai layout
+    -- resmi DE.1/TR/02/BEND.SEC (Bend Root/Face/Side/Nick Break); kategori lain memakai layout umum
+    -- sampai ada form resmi Detech untuk jenis itu. coupon_row_no+test_name (bukan id) mengaitkan ke
+    -- coupon/jenis pengujian, sama alasannya dengan tabel tahap lain.
+    CREATE TABLE IF NOT EXISTS test_reports (
+      id SERIAL PRIMARY KEY,
+      test_request_id INTEGER NOT NULL REFERENCES test_requests(id) ON DELETE CASCADE,
+      coupon_row_no INTEGER NOT NULL,
+      test_name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+
+      report_no TEXT,
+      date_tested TEXT,
+      environment_temp TEXT,
+      test_method TEXT,
+      reference_code TEXT,
+      testing_purpose TEXT,
+
+      -- Khusus Bend Test (DE.1/TR/02/BEND.SEC); kosong/tidak dipakai untuk kategori lain.
+      specimen_width_code TEXT, specimen_width_actual TEXT,
+      former_diameter_code TEXT, former_diameter_actual TEXT,
+      bend_angle_code TEXT, bend_angle_actual TEXT,
+      shoulder_distance_code TEXT, shoulder_distance_actual TEXT,
+
+      testing_machine TEXT,
+      welder_name TEXT,
+      witnessed_by TEXT,
+      test_conducted_by TEXT,
+      remarks TEXT,
+
+      rows JSONB NOT NULL DEFAULT '[]',  -- [{marking_specimen, observation, result}], satu per spesimen fisik
+
+      status TEXT NOT NULL DEFAULT 'draft',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(test_request_id, coupon_row_no, test_name)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_test_reports_request ON test_reports(test_request_id);
+
     CREATE TABLE IF NOT EXISTS welding_processes (
       id SERIAL PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,

@@ -1921,6 +1921,15 @@
     return status ? `<span class="badge badge-${status === 'final' ? 'final' : 'draft'}">Sheet ${status === 'final' ? 'Final' : 'Draft'}</span>` : '';
   }
 
+  // Tombol menuju Lembar Hasil Uji tahap Testing (test_reports) — berbeda dari sheetActionHtml
+  // yang menuju Pengecekan Spesimen (tahap Preparation). Selalu bisa dibuat asal baris punya Qty;
+  // tidak digantung pada template PDF resmi seperti sheet Pengecekan Spesimen.
+  function reportActionHtml(it) {
+    if (it.report_id) return `<button type="button" class="btn btn-sm" data-open-report="${it.report_id}">Buka</button>`;
+    if (!it.qty) return '<span class="muted">Qty belum diisi</span>';
+    return `<button type="button" class="btn btn-sm btn-primary" data-create-report data-coupon="${esc(it.coupon_row_no)}" data-test="${esc(it.test_name)}">+ Buat Sheet</button>`;
+  }
+
   function resultBadge(result) {
     if (result === 'accepted') return '<span class="badge badge-final">Accepted</span>';
     if (result === 'rejected') return '<span class="badge badge-draft">Rejected</span>';
@@ -2026,25 +2035,26 @@
         <div class="task-card-head">
           <p class="section-title">Pelaksanaan Pengujian <span class="en">(baris otomatis dari Jenis Pengujian di Permintaan Uji)</span></p>
           <div class="task-head-actions">
-            <button type="button" class="btn btn-sm" id="btnGotoSpecimenList">Buka Sheet Spesimen</button>
+            <button type="button" class="btn btn-sm" id="btnGotoSpecimenList">Lihat Pengecekan Spesimen</button>
             <button type="button" class="btn btn-sm" id="btnMarkAllTested">Tandai semua selesai</button>
           </div>
         </div>
         <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian &amp; Specimen Marking</th><th>Tgl. Uji</th><th>Alat</th><th>Status</th><th>Catatan</th></tr></thead>
+          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian &amp; Specimen Marking</th><th>Tgl. Uji</th><th>Alat</th><th>Status</th><th>Catatan</th><th>Lembar Hasil Uji</th></tr></thead>
           <tbody>${t.items.map(it => `
             <tr data-task-row data-key="${esc(it.key)}">
               <td>${couponCellHtml(it)}</td>
               <td class="test-cell">
                 <strong>${esc(it.test_name)}</strong><br><span class="muted">Qty ${esc(it.qty) || '-'}${it.method ? ' &middot; ' + esc(it.method) : ''}</span>
                 <div class="test-cell-mk">${markingChipsHtml(it)}</div>
-                <div class="test-cell-sheet">${it.sheet_status ? sheetBadge(it.sheet_status) + ' ' : ''}${sheetActionHtml(it)}</div>
+                ${it.sheet_status ? `<div class="test-cell-sheet muted">Spesimen: ${it.sheet_status === 'final' ? 'Final' : 'Draft'}</div>` : ''}
               </td>
               <td><input type="date" data-f="tested_date" value="${esc(it.tested_date)}"></td>
               <td><input type="text" data-f="equipment" list="testEquipmentList" autocomplete="off" value="${esc(it.equipment)}" placeholder="Pilih / ketik"></td>
               <td><select data-f="status">${woSelectOptions(TEST_STATUS_OPTIONS, it.status)}</select></td>
               <td><input type="text" data-f="note" value="${esc(it.note)}" placeholder="Catatan"></td>
-            </tr>`).join('') || '<tr><td colspan="6" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
+              <td class="test-cell-report">${it.report_status ? `<div>${sheetBadge(it.report_status)}</div>` : ''}${reportActionHtml(it)}</td>
+            </tr>`).join('') || '<tr><td colspan="7" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
           </tbody>
         </table></div>
       </div>`;
@@ -2418,6 +2428,14 @@
       if (!confirmLeaveTask()) return;
       openSpecimenForm(btn.dataset.openSheet);
     }));
+    contentEl.querySelectorAll('[data-open-report]').forEach(btn => btn.addEventListener('click', () => {
+      if (!confirmLeaveTask()) return;
+      openTestReportForm(btn.dataset.openReport, wo.id, stage.key);
+    }));
+    contentEl.querySelectorAll('[data-create-report]').forEach(btn => btn.addEventListener('click', () => {
+      if (!confirmLeaveTask()) return;
+      createTestReportForRow(wo.id, btn.dataset.coupon, btn.dataset.test, stage.key);
+    }));
 
     if (stage.kind === 'derived') bindWoPreparationEvents(t);
     else bindWoTaskFormEvents(t);
@@ -2441,6 +2459,258 @@
     if (list) list.addEventListener('click', () => go(null));
     contentEl.querySelectorAll('[data-create-sheet]').forEach(btn => btn.addEventListener('click', () =>
       go({ couponRowNo: btn.dataset.coupon, testName: btn.dataset.test })));
+  }
+
+  // ---------- Lembar Hasil Uji (tahap Testing) ----------
+  // Beda dari Pengecekan Spesimen (marking/cutting/machining, milik tahap Preparation): sheet ini
+  // langsung berfungsi sebagai Laporan Hasil Uji — sekali diisi & difinalisasi, halaman yang sama
+  // yang diekspor jadi PDF. category='bending' memakai isian sesuai form resmi Detech
+  // (DE.1/TR/02/BEND.SEC); kategori lain memakai isian umum sampai form resminya ada.
+
+  const RESULT_OPTIONS = [['', 'Belum ada hasil'], ['accepted', 'Accepted'], ['rejected', 'Rejected']];
+
+  async function createTestReportForRow(woId, couponRowNo, testName, stageKey) {
+    try {
+      const created = await api(`/api/work-orders/${woId}/test-reports`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coupon_row_no: Number(couponRowNo), test_name: testName })
+      });
+      toast('Lembar Hasil Uji dibuat', 'success');
+      openTestReportLoaded(created, woId, stageKey);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  async function openTestReportForm(id, woId, stageKey) {
+    state.view = 'test-report-form';
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+    try {
+      const data = await api(`/api/test-reports/${id}`);
+      openTestReportLoaded(data, woId, stageKey);
+    } catch (e) {
+      toast(e.message, 'error');
+      openWoTask(woId, stageKey);
+    }
+  }
+
+  function openTestReportLoaded(data, woId, stageKey) {
+    state.view = 'test-report-form';
+    state.testReport = data;
+    state.testReportRows = (data.rows && data.rows.length) ? data.rows.map(r => ({ ...r })) : [{ marking_specimen: '', observation: '', result: '' }];
+    state.testReportDirty = false;
+    state.testReportReturn = { woId, stageKey };
+    render();
+  }
+
+  function confirmLeaveTestReport() {
+    return !state.testReportDirty || confirm('Perubahan pada Lembar Hasil Uji ini belum disimpan. Tetap pindah halaman?');
+  }
+
+  function blankTestReportRow() {
+    return { marking_specimen: '', observation: '', result: '' };
+  }
+
+  function testReportRowsHtml() {
+    return `<table class="task-table">
+      <thead><tr><th>Specimen No.</th><th>Observation</th><th>Result</th><th></th></tr></thead>
+      <tbody>${state.testReportRows.map((r, idx) => `
+        <tr data-trow="${idx}">
+          <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}" placeholder="mis. ABN.9.1-BR1"></td>
+          <td><input type="text" data-tfield="observation" value="${esc(r.observation)}" placeholder="Observation"></td>
+          <td><select data-tfield="result">${woSelectOptions(RESULT_OPTIONS, r.result)}</select></td>
+          <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+  }
+
+  function rerenderTestReportRows() {
+    document.getElementById('testReportRowsWrap').innerHTML = testReportRowsHtml();
+    bindTestReportRowEvents();
+  }
+
+  function bindTestReportRowEvents() {
+    const wrap = document.getElementById('testReportRowsWrap');
+    wrap.addEventListener('input', handleTestReportRowInput);
+    wrap.addEventListener('change', handleTestReportRowInput);
+    wrap.querySelectorAll('[data-trow-remove]').forEach(btn => btn.addEventListener('click', () => {
+      if (state.testReportRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
+      state.testReportRows.splice(Number(btn.dataset.trowRemove), 1);
+      state.testReportDirty = true;
+      rerenderTestReportRows();
+    }));
+  }
+
+  function handleTestReportRowInput(e) {
+    const idx = e.target.dataset.trow !== undefined ? e.target.dataset.trow : e.target.closest('[data-trow]')?.dataset.trow;
+    if (idx === undefined) return;
+    const row = state.testReportRows[Number(idx)];
+    if (!row || !e.target.dataset.tfield) return;
+    row[e.target.dataset.tfield] = e.target.value;
+    state.testReportDirty = true;
+  }
+
+  function testReportBendFieldsHtml(r) {
+    const pair = (label, codeName, actualName, codeVal, actualVal, placeholder) => `
+      <div class="field"><label>${esc(label)} <span class="en">Code</span></label><input type="text" name="${codeName}" value="${esc(codeVal)}" placeholder="${esc(placeholder || '')}"></div>
+      <div class="field"><label>${esc(label)} <span class="en">Actual</span></label><input type="text" name="${actualName}" value="${esc(actualVal)}"></div>`;
+    return `
+      <div class="card">
+        <p class="section-title">Dimensi Pengujian Bend <span class="en">sesuai form DE.1/TR/02/BEND.SEC</span></p>
+        <div class="form-grid">
+          ${pair('Test Specimen Width (mm)', 'specimen_width_code', 'specimen_width_actual', r.specimen_width_code, r.specimen_width_actual)}
+          ${pair('Former Diameter (mm)', 'former_diameter_code', 'former_diameter_actual', r.former_diameter_code, r.former_diameter_actual)}
+          ${pair('Bend Angle (Degree)', 'bend_angle_code', 'bend_angle_actual', r.bend_angle_code, r.bend_angle_actual, '180')}
+          ${pair('Shoulder Distance (mm)', 'shoulder_distance_code', 'shoulder_distance_actual', r.shoulder_distance_code, r.shoulder_distance_actual)}
+        </div>
+      </div>`;
+  }
+
+  function renderTestReportForm() {
+    const r = state.testReport || {};
+    const tr = r.test_request || {};
+    const coupon = r.coupon || {};
+    const sig = r.approved_signatory;
+
+    pageTitle.textContent = 'Lembar Hasil Uji';
+    pageSubtitle.textContent = `${r.title || ''} — ${esc(tr.job_number || '')}`;
+    topbarActions.innerHTML = `
+      <button class="btn" id="btnReportBack">&larr; Kembali ke Testing</button>
+      <button type="button" class="btn" id="btnReportExportPdf">Export PDF</button>
+    `;
+    document.getElementById('btnReportBack').addEventListener('click', () => {
+      if (!confirmLeaveTestReport()) return;
+      openWoTask(state.testReportReturn.woId, state.testReportReturn.stageKey);
+    });
+    document.getElementById('btnReportExportPdf').addEventListener('click', () =>
+      window.open(`/test-reports/${r.id}/print`, '_blank'));
+
+    contentEl.innerHTML = `
+      <form id="testReportForm">
+        <div class="card">
+          <p class="section-title">Info Pengujian <span class="en">(hanya baca, dari Permintaan Uji &amp; Work Order)</span></p>
+          <div class="info-facts">
+            ${infoFactHtml('No. Pekerjaan', esc(tr.job_number) || '-')}
+            ${infoFactHtml('Perusahaan', esc(tr.company) || '-')}
+            ${infoFactHtml('Nama Projek', esc(tr.project_name) || '-')}
+            ${infoFactHtml('Coupon', esc(coupon.label) || '-')}
+            ${infoFactHtml('Sample Marking', esc(r.sample_marking) || '-')}
+            ${infoFactHtml('Jenis Pengujian', esc(r.test_name) || '-')}
+            ${infoFactHtml('Qty', esc(r.qty) || '-')}
+            ${infoFactHtml('WPS No', esc(coupon.no_wps) || '-')}
+            ${infoFactHtml('Material Type/Grade', esc(coupon.material_type_grade) || '-')}
+            ${infoFactHtml('Material Size', esc(coupon.material_size) || '-')}
+            ${infoFactHtml('Test Weldment Thickness', esc(coupon.thickness) || '-')}
+            ${infoFactHtml('Welding Position', esc(coupon.welding_position) || '-')}
+            ${infoFactHtml('Welding Process', esc(coupon.welding_process) || '-')}
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="section-title">Info Laporan</p>
+          <div class="form-grid">
+            <div class="field"><label>No. Laporan <span class="en">Report No.</span></label><input type="text" name="report_no" value="${esc(r.report_no)}"></div>
+            <div class="field"><label>Tanggal Diuji <span class="en">Date of Tested</span></label><input type="date" name="date_tested" value="${esc(r.date_tested)}"></div>
+            <div class="field"><label>Environment Temp</label><input type="text" name="environment_temp" value="${esc(r.environment_temp)}" placeholder="25 &plusmn; 2 &deg;C"></div>
+            <div class="field"><label>Test Method</label><input type="text" name="test_method" value="${esc(r.test_method) || esc(r.method)}"></div>
+            <div class="field"><label>Reference Code</label><input type="text" name="reference_code" value="${esc(r.reference_code)}"></div>
+            <div class="field"><label>Testing Purpose</label><input type="text" name="testing_purpose" value="${esc(r.testing_purpose)}"></div>
+          </div>
+        </div>
+
+        ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
+
+        <div class="card">
+          <p class="section-title">Hasil per Spesimen</p>
+          <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
+          <button type="button" class="btn btn-sm" id="btnAddReportRow" style="margin-top:10px;">+ Tambah Baris</button>
+        </div>
+
+        <div class="card">
+          <p class="section-title">Info Tambahan</p>
+          <div class="form-grid">
+            <div class="field"><label>Testing Machine Used</label><input type="text" name="testing_machine" value="${esc(r.testing_machine)}" placeholder="Hydraulic Press Machine, Capacity : 400 Bar"></div>
+            <div class="field"><label>Welder's Name</label><input type="text" name="welder_name" value="${esc(r.welder_name)}"></div>
+            <div class="field"><label>Witnessed By</label><input type="text" name="witnessed_by" value="${esc(r.witnessed_by)}"></div>
+            <div class="field"><label>Test Conducted by</label><input type="text" name="test_conducted_by" value="${esc(r.test_conducted_by) || esc(r.testing_pic)}"></div>
+            <div class="field full"><label>Remarks</label><textarea name="remarks">${esc(r.remarks)}</textarea></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <p class="section-title">Approval <span class="en">diisi otomatis dari tahap Review &amp; Approval</span></p>
+          ${sig ? `
+            <div class="info-facts">
+              ${infoFactHtml('Approved Signatory', esc(sig.name) || '-')}
+              ${infoFactHtml('Status', sig.status === 'approved' ? 'Disetujui' : (sig.status === 'rejected' ? 'Ditolak' : 'Menunggu'))}
+            </div>
+            ${sig.signature ? `<img src="${sig.signature}" alt="Tanda tangan" style="max-height:70px; margin-top:8px;">` : ''}
+          ` : '<p class="muted">Belum ada approval dari tahap Review &amp; Approval.</p>'}
+        </div>
+
+        <div class="form-actions">
+          <div><button type="button" class="btn btn-danger" id="btnReportDelete">Hapus</button></div>
+          <div class="right">
+            <button type="submit" class="btn" data-status="draft">Simpan sebagai Draft</button>
+            <button type="submit" class="btn btn-primary" data-status="final">Simpan &amp; Finalisasi</button>
+          </div>
+        </div>
+      </form>`;
+
+    bindTestReportFormEvents();
+  }
+
+  function bindTestReportFormEvents() {
+    const form = document.getElementById('testReportForm');
+    const markDirty = () => { state.testReportDirty = true; };
+    form.addEventListener('input', markDirty);
+    form.addEventListener('change', markDirty);
+    form.querySelectorAll('button[type="submit"]').forEach(b => {
+      b.addEventListener('click', () => { state.testReportPendingStatus = b.dataset.status; });
+    });
+    form.addEventListener('submit', onTestReportSubmit);
+
+    document.getElementById('btnAddReportRow').addEventListener('click', () => {
+      state.testReportRows.push(blankTestReportRow());
+      state.testReportDirty = true;
+      rerenderTestReportRows();
+    });
+    bindTestReportRowEvents();
+
+    document.getElementById('btnReportDelete').addEventListener('click', () => deleteTestReport(state.testReport.id));
+  }
+
+  async function onTestReportSubmit(e) {
+    e.preventDefault();
+    const payload = Object.fromEntries(new FormData(e.target).entries());
+    payload.status = state.testReportPendingStatus || 'draft';
+    payload.rows = state.testReportRows;
+    try {
+      state.testReport = await api(`/api/test-reports/${state.testReport.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
+      state.testReportDirty = false;
+      toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
+      render();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  }
+
+  async function deleteTestReport(id) {
+    if (!confirm('Hapus Lembar Hasil Uji ini? Tindakan tidak dapat dibatalkan.')) return;
+    try {
+      await api(`/api/test-reports/${id}`, { method: 'DELETE' });
+      toast('Lembar Hasil Uji dihapus', 'success');
+      state.testReportDirty = false;
+      openWoTask(state.testReportReturn.woId, state.testReportReturn.stageKey);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
   }
 
   function bindWoPreparationEvents(t) {
@@ -2869,7 +3139,7 @@
   const VIEW_TO_NAV_KEY = {
     dashboard: 'dashboard',
     list: 'permintaan-uji', form: 'permintaan-uji',
-    'wo-list': 'work-order', 'wo-form': 'work-order', 'wo-task': 'work-order',
+    'wo-list': 'work-order', 'wo-form': 'work-order', 'wo-task': 'work-order', 'test-report-form': 'work-order',
     'wo-tasks': 'tasks',
     'queue-receiving': 'q-receiving', 'queue-preparation': 'q-preparation',
     'queue-testing': 'q-testing', 'queue-review': 'q-review',
@@ -2894,6 +3164,7 @@
     else if (state.view === 'wo-form') renderWorkOrderForm();
     else if (state.view === 'wo-tasks') renderWoTasks();
     else if (state.view === 'wo-task') renderWoTask();
+    else if (state.view === 'test-report-form') renderTestReportForm();
     else if (state.view.startsWith('queue-')) renderQueue(state.view.slice(6));
     else if (state.view === 'master-data') renderMasterData();
     else if (state.view === 'specimen-list') renderSpecimenList();

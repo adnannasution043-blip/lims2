@@ -7,6 +7,7 @@ const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
 const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
 const { PROCESS_STEPS } = require('./db/workOrderSteps');
 const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
+const { registerTestReportRoutes } = require('./lib/testReports');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -717,6 +718,11 @@ const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
   pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY,
   // upload evidence: body mentah (gambar/PDF), tanpa library multipart
   rawBody: express.raw({ type: () => true, limit: '12mb' })
+});
+
+// Lembar Hasil Uji tahap Testing (beda dari Pengecekan Spesimen milik tahap Preparation).
+registerTestReportRoutes(app, {
+  pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl
 });
 
 // "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
