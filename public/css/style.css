@@ -1092,6 +1092,20 @@ table.matrix-table tfoot td { font-weight: 700; color: var(--navy); border-top: 
 .q-actions { white-space: nowrap; }
 .q-actions .btn { margin-left: 4px; }
 
+/* Gambar spesimen */
+.spec-diagram { padding: 4px 0; overflow-x: auto; }
+.spec-diagram .sd-svg { min-width: 560px; max-height: 420px; margin: 0 auto; }
+.spec-diagram-pick { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+.spec-diagram-pick select {
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* ---------- Buttons ---------- */
 
 .btn {

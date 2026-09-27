@@ -3199,10 +3199,92 @@
       </table>`;
   }
 
+  // ----- Gambar spesimen (sesuai kategori & bentuk) -----
+
+  function specDiagramCardHtml(insp) {
+    if (!window.SpecimenDiagrams) return '';
+    const title = insp.category === 'general' && insp.test_name
+      ? insp.test_name
+      : `${SPECIMEN_CATEGORY_LABELS[insp.category] || ''}${insp.shape ? ' - ' + SPECIMEN_SHAPE_LABELS[insp.shape] : ''}`;
+    return `
+      <div class="card">
+        <div class="task-card-head">
+          <p class="section-title">Gambar Spesimen <span class="en">(${esc(title)})</span></p>
+          <label class="spec-diagram-pick">Nilai untuk spesimen
+            <select id="specDiagramRow"></select>
+          </label>
+        </div>
+        <div id="specDiagram" class="spec-diagram"></div>
+        <p class="muted" style="margin-top:8px;">Arahkan kursor atau klik kolom di tabel Data Spesimen untuk menyorot dimensinya. Angka pada gambar adalah ukuran <em>Actual</em> spesimen yang dipilih; klik dimensi pada gambar untuk mengisinya.</p>
+      </div>`;
+  }
+
+  function applySpecDiagramHighlight() {
+    const box = document.getElementById('specDiagram');
+    if (!box) return;
+    const keys = state.specDiagramHl || [];
+    box.querySelectorAll('.sd-dim').forEach(g => g.classList.toggle('active', keys.includes(g.dataset.key)));
+  }
+
+  function refreshSpecDiagram() {
+    const box = document.getElementById('specDiagram');
+    const sel = document.getElementById('specDiagramRow');
+    if (!box || !sel || !window.SpecimenDiagrams || !state.specimenRows.length) return;
+    const insp = state.specimenData;
+    const previous = Number(sel.value) || 0;
+    sel.innerHTML = state.specimenRows.map((r, i) =>
+      `<option value="${i}">${esc(r.marking_specimen || 'Spesimen ' + (i + 1))}</option>`).join('');
+    sel.value = String(Math.min(previous, state.specimenRows.length - 1));
+    const row = state.specimenRows[Number(sel.value)];
+    box.innerHTML = SpecimenDiagrams.render(insp.category, insp.shape, {
+      idPrefix: 'sdf',
+      values: SpecimenDiagrams.rowValues(insp.category, insp.shape, row)
+    });
+    applySpecDiagramHighlight();
+  }
+
+  function specInputKeys(el) {
+    if (!el || el.dataset.srow === undefined) return [];
+    const insp = state.specimenData;
+    return SpecimenDiagrams.keysForInput(insp.category, insp.shape, {
+      mfield: el.dataset.mfield, pfield: el.dataset.pfield, spoint: el.dataset.spoint
+    });
+  }
+
+  function bindSpecDiagramEvents() {
+    const wrap = document.getElementById('specimenRowsWrap');
+    const box = document.getElementById('specDiagram');
+    const sel = document.getElementById('specDiagramRow');
+    if (!wrap || !box || !sel || !window.SpecimenDiagrams) return;
+    state.specDiagramHl = [];
+
+    const setHl = keys => { state.specDiagramHl = keys; applySpecDiagramHighlight(); };
+    wrap.addEventListener('focusin', e => { setHl(specInputKeys(e.target)); const r = e.target.dataset.srow; if (r !== undefined && sel.value !== r) { sel.value = r; refreshSpecDiagram(); } });
+    wrap.addEventListener('focusout', () => setHl([]));
+    wrap.addEventListener('mouseover', e => { const k = specInputKeys(e.target); if (k.length) setHl(k); });
+    wrap.addEventListener('mouseout', () => setHl(specInputKeys(document.activeElement)));
+    sel.addEventListener('change', refreshSpecDiagram);
+
+    // klik dimensi di gambar -> fokus ke kolom Actual yang sesuai pada baris terpilih
+    box.addEventListener('click', e => {
+      const g = e.target.closest('.sd-dim');
+      if (!g) return;
+      const candidates = Array.from(wrap.querySelectorAll(`[data-srow="${sel.value}"]`))
+        .filter(el => specInputKeys(el).includes(g.dataset.key));
+      const target = candidates.find(el => /_actual$|^v_notch|^profile_|^point/.test(el.dataset.mfield || '') || el.dataset.pfield) || candidates[0];
+      if (target) target.focus();
+    });
+    box.addEventListener('mouseover', e => { const g = e.target.closest('.sd-dim'); if (g) setHl([g.dataset.key]); });
+    box.addEventListener('mouseout', () => setHl(specInputKeys(document.activeElement)));
+
+    refreshSpecDiagram();
+  }
+
   function rerenderSpecimenRows() {
     document.getElementById('specimenRowsWrap').innerHTML =
       specimenTableHtml(state.specimenData.category, state.specimenData.shape, state.specimenRows);
     bindSpecRemoveButtons();
+    refreshSpecDiagram();
   }
 
   function bindSpecRemoveButtons() {
@@ -3241,6 +3323,7 @@
     } else if (t.dataset.mfield) {
       row.measurements[t.dataset.mfield] = t.type === 'checkbox' ? t.checked : t.value;
     }
+    refreshSpecDiagram();
   }
 
   async function openSpecimenForm(id) {
@@ -3326,6 +3409,8 @@
           </div>
         </div>
 
+        ${specDiagramCardHtml(insp)}
+
         <div class="card">
           <p class="section-title">Data Spesimen</p>
           <div id="specimenRowsWrap" style="overflow-x:auto;">
@@ -3371,6 +3456,7 @@
     `;
 
     bindSpecimenFormEvents();
+    bindSpecDiagramEvents();
     initSignaturePads();
   }
 
