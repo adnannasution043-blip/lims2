@@ -365,7 +365,7 @@
       btn.addEventListener('click', () => {
         state.view = 'specimen-list';
         state.specimenCreatorOpen = true;
-        state.specimenCreatorPrefillRequestId = btn.dataset.actionSpec;
+        state.specimenCreatorPrefill = { requestId: btn.dataset.actionSpec };
         render();
       }));
   }
@@ -1947,38 +1947,57 @@
       </div>`;
   }
 
-  // Preparation = Pengecekan Spesimen (marking, cutting, machining specimen): tidak ada
-  // form di sini, statusnya mengikuti sheet.
+  // Specimen Marking = Sample Marking + kode jenis pengujian + nomor urut (sama dengan Marking
+  // Specimen di sheet Pengecekan Spesimen, jadi otomatis diteruskan ke sana).
+  function markingChipsHtml(it) {
+    if (it.markings && it.markings.length) {
+      return `<div class="mk-list">${it.markings.map(m => `<span class="mk-chip">${esc(m)}</span>`).join('')}</div>`;
+    }
+    return it.qty
+      ? '<span class="muted" title="Kode jenis pengujian ini belum diatur di Master Data > Kode Jenis Pengujian">Kode belum diatur</span>'
+      : '<span class="muted">-</span>';
+  }
+
+  // Tombol menuju sheet untuk satu baris: Buka (sudah ada) / Buat Sheet (punya template) / -.
+  function sheetActionHtml(it) {
+    if (it.sheet_id) return `<button type="button" class="btn btn-sm" data-open-sheet="${it.sheet_id}">Buka Sheet</button>`;
+    if (it.has_template) {
+      return `<button type="button" class="btn btn-sm btn-primary" data-create-sheet data-coupon="${esc(it.coupon_row_no)}" data-test="${esc(it.test_name)}">+ Buat Sheet</button>`;
+    }
+    return '<span class="muted">Tanpa sheet</span>';
+  }
+
+  // Preparation = Pengecekan Spesimen (marking, cutting, machining specimen): tidak ada form
+  // di sini, statusnya mengikuti sheet. Semua coupon & jenis pengujian ditampilkan, termasuk yang
+  // tidak punya template sheet (tetap di-marking, dipotong, dan di-machining).
   function preparationBodyHtml(t) {
     const { stage, items, stats } = t;
-    const empty = !stats.required && !stats.created;
     return `
       <div class="task-stats">
+        <div class="task-stat"><b>${stats.coupons}</b><span>Coupon</span></div>
+        <div class="task-stat"><b>${stats.specimens}</b><span>Total spesimen</span></div>
         <div class="task-stat"><b>${stats.required}</b><span>Sheet dibutuhkan</span></div>
-        <div class="task-stat"><b>${stats.created}</b><span>Sheet dibuat</span></div>
         <div class="task-stat ok"><b>${stats.finals}</b><span>Sheet Final</span></div>
       </div>
       <div class="card">
         <div class="task-card-head">
-          <p class="section-title">Pengecekan Spesimen <span class="en">(marking, cutting, machining specimen dicatat lewat sheet)</span></p>
+          <p class="section-title">Spesimen &amp; Marking <span class="en">(otomatis dari Permintaan Uji, diteruskan ke Pengecekan Spesimen)</span></p>
           <button type="button" class="btn btn-sm" id="btnGotoSpecimenList">Buka Pengecekan Spesimen</button>
         </div>
-        ${empty ? '<p class="muted">Tidak ada Jenis Pengujian pada Work Order ini yang memerlukan sheet Pengecekan Spesimen, jadi tahap ini otomatis tidak berlaku.</p>' : `
         <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian</th><th>Status Sheet</th><th></th></tr></thead>
+          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian</th><th>Specimen Marking</th><th>Status Sheet</th><th></th></tr></thead>
           <tbody>${items.map(it => `
             <tr>
               <td>${couponCellHtml(it)}</td>
-              <td><strong>${esc(it.test_name)}</strong><br><span class="muted">Qty ${esc(it.qty) || '-'}</span></td>
+              <td><strong>${esc(it.test_name)}</strong><br><span class="muted">Qty ${esc(it.qty) || '-'}${it.method ? ' &middot; ' + esc(it.method) : ''}</span></td>
+              <td>${markingChipsHtml(it)}</td>
               <td>${it.sheet_status
                 ? `<span class="badge badge-${it.sheet_status === 'final' ? 'final' : 'draft'}">${it.sheet_status === 'final' ? 'Final' : 'Draft'}</span>`
-                : '<span class="st-pill st-pending">Belum dibuat</span>'}</td>
-              <td>${it.sheet_id
-                ? `<button type="button" class="btn btn-sm" data-open-sheet="${it.sheet_id}">Buka</button>`
-                : '<button type="button" class="btn btn-sm btn-primary" data-create-sheet>+ Buat Sheet</button>'}</td>
-            </tr>`).join('')}
+                : (it.has_template ? '<span class="st-pill st-pending">Belum dibuat</span>' : '<span class="muted">-</span>')}</td>
+              <td>${sheetActionHtml(it)}</td>
+            </tr>`).join('') || '<tr><td colspan="5" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
           </tbody>
-        </table></div>`}
+        </table></div>
       </div>
       <div class="card">
         <p class="section-title">Info Tahap Preparation</p>
@@ -2003,15 +2022,21 @@
       <div class="card">
         <div class="task-card-head">
           <p class="section-title">Pelaksanaan Pengujian <span class="en">(baris otomatis dari Jenis Pengujian di Permintaan Uji)</span></p>
-          <button type="button" class="btn btn-sm" id="btnMarkAllTested">Tandai semua selesai</button>
+          <div class="task-head-actions">
+            <button type="button" class="btn btn-sm" id="btnGotoSpecimenList">Buka Sheet Spesimen</button>
+            <button type="button" class="btn btn-sm" id="btnMarkAllTested">Tandai semua selesai</button>
+          </div>
         </div>
         <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian</th><th>Tgl. Uji</th><th>Alat</th><th>Status</th><th>Catatan</th></tr></thead>
+          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian &amp; Specimen Marking</th><th>Tgl. Uji</th><th>Alat</th><th>Status</th><th>Catatan</th></tr></thead>
           <tbody>${t.items.map(it => `
             <tr data-task-row data-key="${esc(it.key)}">
               <td>${couponCellHtml(it)}</td>
-              <td><strong>${esc(it.test_name)}</strong><br><span class="muted">Qty ${esc(it.qty) || '-'}${it.method ? ' &middot; ' + esc(it.method) : ''}</span>
-                ${it.sheet_status ? `<div style="margin-top:4px;">${sheetBadge(it.sheet_status)}</div>` : ''}</td>
+              <td class="test-cell">
+                <strong>${esc(it.test_name)}</strong><br><span class="muted">Qty ${esc(it.qty) || '-'}${it.method ? ' &middot; ' + esc(it.method) : ''}</span>
+                <div class="test-cell-mk">${markingChipsHtml(it)}</div>
+                <div class="test-cell-sheet">${it.sheet_status ? sheetBadge(it.sheet_status) + ' ' : ''}${sheetActionHtml(it)}</div>
+              </td>
               <td><input type="date" data-f="tested_date" value="${esc(it.tested_date)}"></td>
               <td><input type="text" data-f="equipment" list="testEquipmentList" autocomplete="off" value="${esc(it.equipment)}" placeholder="Pilih / ketik"></td>
               <td><select data-f="status">${woSelectOptions(TEST_STATUS_OPTIONS, it.status)}</select></td>
@@ -2122,6 +2147,162 @@
       </div>`;
   }
 
+  // ----- Receiving: upload foto / dokumen evidence sample (belum / sudah dimarking) -----
+
+  const EVIDENCE_MAX_BYTES = 10 * 1024 * 1024;
+
+  function fmtFileSize(bytes) {
+    return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  // Foto dari kamera bisa 5-12 MB; dikecilkan dulu supaya database tidak cepat penuh.
+  async function prepareEvidenceFile(file) {
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1.2 * 1024 * 1024) return file;
+    try {
+      const bitmap = await createImageBitmap(file);
+      const scale = Math.min(1, 1920 / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+      if (blob && blob.size < file.size) {
+        return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+      }
+    } catch (e) { /* pakai file asli */ }
+    return file;
+  }
+
+  function evidenceTileHtml(f) {
+    const url = `/api/work-order-files/${f.id}`;
+    const isImage = f.mime_type.startsWith('image/');
+    return `
+      <div class="ev-tile">
+        <a href="${url}" target="_blank" rel="noopener" class="ev-thumb" title="Buka ${esc(f.filename)}">
+          ${isImage ? `<img src="${url}" alt="${esc(f.filename)}" loading="lazy">` : '<span class="ev-doc">PDF</span>'}
+        </a>
+        <div class="ev-meta"><span class="ev-name" title="${esc(f.filename)}">${esc(f.filename)}</span><small>${fmtFileSize(f.size_bytes)}</small></div>
+        <button type="button" class="ev-del" data-ev-del="${f.id}" title="Hapus file" aria-label="Hapus file">&times;</button>
+      </div>`;
+  }
+
+  function evidenceListHtml(label, files) {
+    return `
+      <div class="ev-list">
+        <p class="ev-list-title">${esc(label)} <span>${files.length}</span></p>
+        ${files.length ? `<div class="ev-tiles">${files.map(evidenceTileHtml).join('')}</div>` : '<p class="ev-empty">Belum ada file</p>'}
+      </div>`;
+  }
+
+  function receivingEvidenceCardHtml() {
+    return `
+      <div class="card">
+        <div class="task-card-head">
+          <p class="section-title">Evidence Sample <span class="en">(foto / dokumen kondisi sampel, sebelum &amp; sesudah marking)</span></p>
+        </div>
+        <input type="file" id="evFileInput" accept="image/*,application/pdf" multiple hidden>
+        <div id="woEvidence"><p class="muted">Memuat evidence...</p></div>
+        <p class="muted" style="margin-top:12px;">Format JPG / PNG / WEBP / GIF atau PDF, maksimal 10 MB per file. File langsung tersimpan saat diunggah (tidak perlu menekan Simpan).</p>
+      </div>`;
+  }
+
+  function initReceivingEvidence(t) {
+    const woId = t.work_order.id;
+    const box = document.getElementById('woEvidence');
+    const input = document.getElementById('evFileInput');
+    if (!box || !input) return;
+    let files = [];
+    let target = null;
+
+    const draw = () => {
+      const forCoupon = (rowNo, state) => files.filter(f => f.coupon_row_no === rowNo && f.marking_state === state);
+      const general = files.filter(f => f.coupon_row_no == null || !['before', 'after'].includes(f.marking_state));
+      const couponGroups = t.items.map(it => `
+        <div class="ev-group">
+          <div class="ev-group-head">
+            ${couponCellHtml(it)}
+            <div class="ev-actions">
+              <button type="button" class="btn btn-sm" data-ev-upload="${it.coupon_row_no}|before">+ Belum dimarking</button>
+              <button type="button" class="btn btn-sm" data-ev-upload="${it.coupon_row_no}|after">+ Sudah dimarking</button>
+            </div>
+          </div>
+          <div class="ev-lists">
+            ${evidenceListHtml('Belum dimarking', forCoupon(it.coupon_row_no, 'before'))}
+            ${evidenceListHtml('Sudah dimarking', forCoupon(it.coupon_row_no, 'after'))}
+          </div>
+        </div>`).join('');
+      box.innerHTML = `
+        ${couponGroups}
+        <div class="ev-group">
+          <div class="ev-group-head">
+            <div class="task-id-cell"><strong>Dokumen umum</strong><span class="muted">Surat pengantar, berita acara, dll</span></div>
+            <div class="ev-actions"><button type="button" class="btn btn-sm" data-ev-upload="|">+ Foto / Dokumen</button></div>
+          </div>
+          <div class="ev-lists">${evidenceListHtml('Dokumen umum', general)}</div>
+        </div>`;
+
+      box.querySelectorAll('[data-ev-upload]').forEach(btn => btn.addEventListener('click', () => {
+        const [coupon, marking] = btn.dataset.evUpload.split('|');
+        target = { coupon, marking };
+        input.click();
+      }));
+      box.querySelectorAll('[data-ev-del]').forEach(btn => btn.addEventListener('click', async () => {
+        if (!confirm('Hapus file ini?')) return;
+        try {
+          await api(`/api/work-order-files/${btn.dataset.evDel}`, { method: 'DELETE' });
+          files = files.filter(f => String(f.id) !== btn.dataset.evDel);
+          draw();
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      }));
+    };
+
+    const load = async () => {
+      try {
+        files = (await api(`/api/work-orders/${woId}/files?task=receiving`)).files;
+        draw();
+      } catch (err) {
+        box.innerHTML = `<p class="muted">Gagal memuat evidence: ${esc(err.message)}</p>`;
+      }
+    };
+
+    // Upload langsung dikirim; jangan ikut menandai form tahap sebagai "belum disimpan".
+    ['change', 'input'].forEach(evt => input.addEventListener(evt, e => e.stopPropagation()));
+    input.addEventListener('change', async () => {
+      const chosen = Array.from(input.files);
+      input.value = '';
+      if (!target || !chosen.length) return;
+      const { coupon, marking } = target;
+      box.classList.add('is-uploading');
+      let uploaded = 0;
+      for (const original of chosen) {
+        const file = await prepareEvidenceFile(original);
+        if (file.size > EVIDENCE_MAX_BYTES) { toast(`${original.name}: ukuran maksimal 10 MB`, 'error'); continue; }
+        const qs = new URLSearchParams({ task: 'receiving', marking });
+        if (coupon !== '') qs.set('coupon', coupon);
+        try {
+          await api(`/api/work-orders/${woId}/files?${qs}`, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+            body: file
+          });
+          uploaded += 1;
+        } catch (err) {
+          toast(`${original.name}: ${err.message}`, 'error');
+        }
+      }
+      box.classList.remove('is-uploading');
+      if (uploaded) toast(`${uploaded} file diunggah`, 'success');
+      await load();
+    });
+
+    load();
+  }
+
   function woTaskFormHtml(t) {
     const { stage, extra } = t;
     let extraFields = '';
@@ -2139,7 +2320,8 @@
         <div class="field"><label>No. Resi / Referensi</label><input type="text" name="reference" value="${esc(extra.reference)}" placeholder="No. resi, ID email, dll"></div>`;
     }
     const body = { receiving: receivingBodyHtml, testing: testingBodyHtml, reporting: reportingBodyHtml,
-      review: reviewBodyHtml, released: releasedBodyHtml }[stage.key](t);
+      review: reviewBodyHtml, released: releasedBodyHtml }[stage.key](t)
+      + (stage.key === 'receiving' ? receivingEvidenceCardHtml() : '');
     const finalLabel = stage.key === 'released' ? 'Simpan &amp; Tandai Terkirim' : 'Simpan &amp; Selesaikan Tahap';
 
     return `
@@ -2236,20 +2418,29 @@
 
     if (stage.kind === 'derived') bindWoPreparationEvents(t);
     else bindWoTaskFormEvents(t);
+    bindSheetShortcuts(t);
+    if (stage.key === 'receiving') initReceivingEvidence(t);
   }
 
-  function bindWoPreparationEvents(t) {
-    const goSpecimenList = (prefill) => {
+  // Pintasan ke modul Pengecekan Spesimen dari Preparation & Testing. "Buat Sheet" membawa
+  // Permintaan Uji + coupon + jenis pengujian ke wizard pembuat sheet.
+  function bindSheetShortcuts(t) {
+    const go = (prefill) => {
+      if (!confirmLeaveTask()) return;
       state.view = 'specimen-list';
       if (prefill) {
         state.specimenCreatorOpen = true;
-        state.specimenCreatorPrefillRequestId = t.work_order.test_request_id;
+        state.specimenCreatorPrefill = { requestId: t.work_order.test_request_id, ...prefill };
       }
       render();
     };
-    document.getElementById('btnGotoSpecimenList').addEventListener('click', () => goSpecimenList(false));
-    contentEl.querySelectorAll('[data-create-sheet]').forEach(btn => btn.addEventListener('click', () => goSpecimenList(true)));
+    const list = document.getElementById('btnGotoSpecimenList');
+    if (list) list.addEventListener('click', () => go(null));
+    contentEl.querySelectorAll('[data-create-sheet]').forEach(btn => btn.addEventListener('click', () =>
+      go({ couponRowNo: btn.dataset.coupon, testName: btn.dataset.test })));
+  }
 
+  function bindWoPreparationEvents(t) {
     document.getElementById('woPrepForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -3130,8 +3321,9 @@
         qtyWrap.style.display = 'none';
       };
 
-      document.getElementById('specCreateRequest').addEventListener('change', async (e) => {
-        const testRequestId = e.target.value;
+      const reqSelect = document.getElementById('specCreateRequest');
+
+      const loadCoupons = async (testRequestId) => {
         resetTestNameSelect('- Pilih Coupon Test dulu -');
         if (!testRequestId) {
           couponSelect.innerHTML = '<option value="">- Pilih Permintaan Uji dulu -</option>';
@@ -3150,11 +3342,9 @@
           couponSelect.innerHTML = '<option value="">Gagal memuat Coupon Test</option>';
           toast(err.message, 'error');
         }
-      });
+      };
 
-      couponSelect.addEventListener('change', async () => {
-        const testRequestId = document.getElementById('specCreateRequest').value;
-        const rowNo = couponSelect.value;
+      const loadTests = async (testRequestId, rowNo) => {
         resetTestNameSelect('Memuat...');
         if (!testRequestId || !rowNo) { resetTestNameSelect('- Pilih Coupon Test dulu -'); return; }
         try {
@@ -3172,9 +3362,9 @@
           testNameSelect.innerHTML = '<option value="">Gagal memuat Jenis Pengujian</option>';
           toast(err.message, 'error');
         }
-      });
+      };
 
-      testNameSelect.addEventListener('change', () => {
+      const applyChosenTest = () => {
         const chosen = availableTests.find(t => t.test_name === testNameSelect.value);
         if (!chosen) { shapeWrap.style.display = 'none'; qtyWrap.style.display = 'none'; return; }
         qtyWrap.style.display = '';
@@ -3185,7 +3375,11 @@
           shapeWrap.style.display = '';
           shapeSelect.value = chosen.suggested_shape || 'flat';
         }
-      });
+      };
+
+      reqSelect.addEventListener('change', (e) => loadCoupons(e.target.value));
+      couponSelect.addEventListener('change', () => loadTests(reqSelect.value, couponSelect.value));
+      testNameSelect.addEventListener('change', applyChosenTest);
 
       document.getElementById('specCreateForm').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -3211,13 +3405,19 @@
         }
       });
 
-      if (state.specimenCreatorPrefillRequestId) {
-        const prefillId = String(state.specimenCreatorPrefillRequestId);
-        state.specimenCreatorPrefillRequestId = null;
-        const reqSelect = document.getElementById('specCreateRequest');
-        if ([...reqSelect.options].some(o => o.value === prefillId)) {
-          reqSelect.value = prefillId;
-          reqSelect.dispatchEvent(new Event('change'));
+      // Dari Dashboard / Tasks: isi Permintaan Uji (+ coupon + jenis pengujian bila ada) otomatis.
+      const prefill = state.specimenCreatorPrefill;
+      state.specimenCreatorPrefill = null;
+      if (prefill && [...reqSelect.options].some(o => o.value === String(prefill.requestId))) {
+        reqSelect.value = String(prefill.requestId);
+        await loadCoupons(reqSelect.value);
+        if (prefill.couponRowNo && [...couponSelect.options].some(o => o.value === String(prefill.couponRowNo))) {
+          couponSelect.value = String(prefill.couponRowNo);
+          await loadTests(reqSelect.value, couponSelect.value);
+          if (prefill.testName && [...testNameSelect.options].some(o => o.value === prefill.testName)) {
+            testNameSelect.value = prefill.testName;
+            applyChosenTest();
+          }
         }
       }
     }

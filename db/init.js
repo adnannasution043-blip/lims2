@@ -213,6 +213,24 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_wo_tasks_wo ON work_order_tasks(work_order_id);
 
+    -- Foto / dokumen evidence (mis. kondisi sampel sebelum & sesudah marking di tahap Receiving).
+    -- Disimpan langsung di Postgres (BYTEA) karena disk server bersifat sementara. coupon_row_no
+    -- (bukan id) mengaitkan file ke coupon, sama alasannya dengan tabel lain; NULL = file umum.
+    CREATE TABLE IF NOT EXISTS work_order_files (
+      id SERIAL PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      task_key TEXT NOT NULL,
+      coupon_row_no INTEGER,
+      marking_state TEXT NOT NULL DEFAULT '',   -- 'before' (belum dimarking) | 'after' (sudah dimarking) | ''
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_wo_files_wo ON work_order_files(work_order_id, task_key);
+
     CREATE TABLE IF NOT EXISTS welding_processes (
       id SERIAL PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,

@@ -715,7 +715,9 @@ app.get('/api/work-order-steps', (req, res) => {
 
 // Rute Tasks (Receiving .. Released) + status tahap tiap Work Order.
 const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
-  pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY
+  pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY,
+  // upload evidence: body mentah (gambar/PDF), tanpa library multipart
+  rawBody: express.raw({ type: () => true, limit: '12mb' })
 });
 
 // "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
