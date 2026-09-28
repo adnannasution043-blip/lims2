@@ -2918,11 +2918,11 @@
   }
 
   // ---------- peran & antrian kerja ----------
-  // Peran belum terhubung ke login (modul Pengguna belum ada): dipilih manual di sidebar dan
-  // hanya mengatur tampilan menu/halaman. Ini BUKAN pengamanan sampai autentikasi dibuat.
+  // Peran belum terhubung ke login (modul Pengguna belum ada): dipilih manual di sidebar.
+  // Untuk saat ini semua menu/halaman dibuka untuk semua role — pembatasan per-role
+  // (mis. antrian kerja hanya untuk Teknisi/PIC terkait) menyusul setelah ada autentikasi.
 
   const ROLES = [['teknisi', 'Teknisi'], ['qaqc', 'QA/QC'], ['techmgr', 'Technical Manager'], ['admin', 'Admin']];
-  const REVIEW_ROLES = ['qaqc', 'techmgr', 'admin'];
 
   function getRole() {
     try {
@@ -2932,11 +2932,9 @@
     return 'admin';
   }
 
-  const canSeeReviewQueue = () => REVIEW_ROLES.includes(getRole());
-
   function applyRoleVisibility() {
     const item = document.querySelector('.nav-item[data-nav="q-review"]');
-    if (item) item.hidden = !canSeeReviewQueue();
+    if (item) item.hidden = false;
   }
 
   (function initRoleSwitch() {
@@ -3062,16 +3060,6 @@
     pageSubtitle.textContent = def.subtitle;
     topbarActions.innerHTML = `<button class="btn" id="btnQueueRefresh">Muat ulang</button>`;
     document.getElementById('btnQueueRefresh').addEventListener('click', () => renderQueue(name));
-
-    if (name === 'review' && !canSeeReviewQueue()) {
-      const roleLabel = (ROLES.find(r => r[0] === getRole()) || [])[1] || '';
-      contentEl.innerHTML = `
-        <div class="card empty-state">
-          <p class="card-title">Akses dibatasi</p>
-          <p class="card-desc">Halaman ini hanya untuk QA/QC atau Technical Manager. Peran aktif saat ini: <strong>${esc(roleLabel)}</strong>.</p>
-        </div>`;
-      return;
-    }
 
     contentEl.innerHTML = `<div class="card"><p class="muted">Memuat antrian...</p></div>`;
     let data;
