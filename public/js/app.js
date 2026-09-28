@@ -13,6 +13,7 @@
   let WO_PICS = [];
   let TEST_METHODS = [];
   let CUSTOMERS = [];
+  let EQUIPMENT = [];
   let state = { view: 'dashboard', editingId: null, couponRows: [], tableUI: {} };
 
   // ---------- utils ----------
@@ -2024,7 +2025,7 @@
   function testingBodyHtml(t) {
     const s = t.stats;
     return `
-      <datalist id="testEquipmentList">${TEST_EQUIPMENT.map(m => `<option value="${esc(m)}">`).join('')}</datalist>
+      <datalist id="testEquipmentList">${[...new Set([...EQUIPMENT.map(eq => eq.name), ...TEST_EQUIPMENT])].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
       <div class="task-stats">
         <div class="task-stat"><b>${s.total}</b><span>Total pengujian</span></div>
         <div class="task-stat ok"><b>${s.done}</b><span>Selesai</span></div>
@@ -4063,7 +4064,8 @@
     { key: 'wo-pics', label: 'PIC Work Order' },
     { key: 'customers', label: 'Customer' },
     { key: 'specimen-types', label: 'Tipe Spesimen' },
-    { key: 'test-type-codes', label: 'Kode Jenis Pengujian' }
+    { key: 'test-type-codes', label: 'Kode Jenis Pengujian' },
+    { key: 'equipment', label: 'Equipment' }
   ];
 
   async function loadWoPics() {
@@ -4107,6 +4109,8 @@
       await renderSpecimenTypeMaster();
     } else if (activeTab === 'test-type-codes') {
       await renderTestTypeCodeMaster();
+    } else if (activeTab === 'equipment') {
+      await renderEquipmentMaster();
     } else {
       await renderSimpleMaster(activeTab, MASTER_TABS.find(t => t.key === activeTab).label);
     }
@@ -4532,6 +4536,194 @@
     });
   }
 
+  async function loadEquipment() {
+    try {
+      EQUIPMENT = (await api('/api/equipment')).items;
+    } catch (e) {
+      EQUIPMENT = [];
+    }
+  }
+
+  const EQUIPMENT_STATUS_OPTIONS = [
+    ['active', 'Active'], ['maintenance', 'Under Maintenance'],
+    ['calibration_due', 'Calibration Due'], ['out_of_service', 'Out of Service']
+  ];
+  const EQUIPMENT_STATUS_LABELS = Object.fromEntries(EQUIPMENT_STATUS_OPTIONS);
+
+  function equipmentStatusBadge(eq) {
+    const overdue = eq.next_calibration_due && eq.next_calibration_due < todayISODate() && eq.status !== 'out_of_service';
+    const status = overdue && eq.status === 'active' ? 'calibration_due' : eq.status;
+    return `<span class="eq-status eq-status-${esc(status)}">${esc(EQUIPMENT_STATUS_LABELS[status] || status)}</span>${
+      overdue && eq.status !== 'calibration_due' ? ' <span class="eq-overdue-flag" title="Tanggal kalibrasi berikutnya sudah lewat">&#9888; Lewat jatuh tempo</span>' : ''}`;
+  }
+
+  function todayISODate() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  async function renderEquipmentMaster() {
+    const wrap = document.getElementById('masterTabContent');
+    let items = [];
+    try {
+      items = (await api('/api/equipment')).items;
+    } catch (e) {
+      items = [];
+    }
+    EQUIPMENT = items;
+
+    const editing = state.equipmentEditingId ? items.find(i => i.id === state.equipmentEditingId) : null;
+    const f = editing || {};
+
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">${editing ? `Edit Equipment — ${esc(editing.name)}` : 'Tambah Equipment'}</p>
+        <form id="eqForm">
+          <p class="subcard-title">Informasi Umum</p>
+          <div class="form-grid">
+            <div class="field"><label>Equipment ID</label><input type="text" name="equipment_id" value="${esc(f.equipment_id)}" placeholder="mis. EQ-UTM-01" ${editing ? '' : 'autocomplete="off"'}></div>
+            <div class="field"><label>Equipment Name</label><input type="text" name="name" value="${esc(f.name)}" autocomplete="off"></div>
+            <div class="field"><label>Category</label><input type="text" name="category" value="${esc(f.category)}" list="eqCategoryList" autocomplete="off" placeholder="mis. Mechanical Testing"></div>
+            <div class="field"><label>Manufacturer</label><input type="text" name="manufacturer" value="${esc(f.manufacturer)}" autocomplete="off"></div>
+            <div class="field"><label>Model</label><input type="text" name="model" value="${esc(f.model)}" autocomplete="off"></div>
+            <div class="field"><label>Serial Number</label><input type="text" name="serial_number" value="${esc(f.serial_number)}" autocomplete="off"></div>
+          </div>
+          <p class="subcard-title" style="margin-top:16px;">Status</p>
+          <div class="form-grid">
+            <div class="field"><label>Status</label>
+              <select name="status">${EQUIPMENT_STATUS_OPTIONS.map(([v, label]) => `<option value="${v}" ${(f.status || 'active') === v ? 'selected' : ''}>${esc(label)}</option>`).join('')}</select>
+            </div>
+          </div>
+          <p class="subcard-title" style="margin-top:16px;">Kalibrasi</p>
+          <div class="form-grid">
+            <div class="field"><label>Calibration Number</label><input type="text" name="calibration_number" value="${esc(f.calibration_number)}" autocomplete="off"></div>
+            <div class="field"><label>Last Calibration Date</label><input type="date" name="last_calibration_date" value="${esc(f.last_calibration_date)}"></div>
+            <div class="field"><label>Next Calibration Due</label><input type="date" name="next_calibration_due" value="${esc(f.next_calibration_due)}"></div>
+          </div>
+          <div class="form-actions">
+            <div>${editing ? `<button type="button" class="btn" id="eqCancelEdit">Batal Edit</button>` : ''}</div>
+            <div class="right"><button type="submit" class="btn btn-primary">${editing ? 'Simpan Perubahan' : '+ Tambah Equipment'}</button></div>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Equipment</p>
+          <p class="card-desc">${items.length} alat tersimpan &mdash; namanya menjadi saran di kolom Alat pada tahap Testing</p>
+        </div>
+        <div id="eqTableArea"></div>
+      </div>
+      <datalist id="eqCategoryList">${[...new Set(items.map(i => i.category).filter(Boolean))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+    `;
+
+    renderSearchablePaginatedTable({
+      key: 'equipment',
+      containerEl: document.getElementById('eqTableArea'),
+      allRows: items,
+      searchFields: ['equipment_id', 'name', 'category', 'manufacturer', 'serial_number'],
+      searchPlaceholder: 'Cari Equipment ID, Nama, Category, atau Serial Number...',
+      emptyHtml: `<p class="muted" style="padding:0 24px 16px;">Belum ada Equipment. Tambahkan lewat form di atas.</p>`,
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Equipment ID</th><th>Nama</th><th>Category</th><th>Status</th><th>Next Calibration</th><th>Sertifikat</th><th></th></tr></thead>
+          <tbody>${pageRows.map(eq => `
+            <tr>
+              <td><strong>${esc(eq.equipment_id)}</strong></td>
+              <td>${esc(eq.name)}<br><span class="muted">${esc(eq.manufacturer) || '-'}${eq.model ? ' ' + esc(eq.model) : ''}</span></td>
+              <td>${esc(eq.category) || '-'}</td>
+              <td>${equipmentStatusBadge(eq)}</td>
+              <td>${eq.next_calibration_due ? esc(formatDateOnly(eq.next_calibration_due)) : '-'}</td>
+              <td>
+                ${eq.has_certificate
+                  ? `<a href="/api/equipment/${eq.id}/certificate" target="_blank" rel="noopener" class="btn btn-sm">Lihat</a> <button type="button" class="btn btn-sm btn-danger" data-eq-cert-del="${eq.id}">&times;</button>`
+                  : `<button type="button" class="btn btn-sm" data-eq-cert-upload="${eq.id}">Unggah</button>`}
+              </td>
+              <td>
+                <button class="btn btn-sm" data-eq-edit="${eq.id}">Edit</button>
+                <button class="btn btn-sm btn-danger" data-eq-del="${eq.id}">Hapus</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-eq-edit]').forEach(btn => btn.addEventListener('click', () => {
+          state.equipmentEditingId = Number(btn.dataset.eqEdit);
+          renderEquipmentMaster();
+        }));
+        container.querySelectorAll('[data-eq-del]').forEach(btn => btn.addEventListener('click', async () => {
+          if (!confirm('Hapus Equipment ini dari master?')) return;
+          try {
+            await api(`/api/equipment/${btn.dataset.eqDel}`, { method: 'DELETE' });
+            toast('Equipment dihapus', 'success');
+            if (state.equipmentEditingId === Number(btn.dataset.eqDel)) state.equipmentEditingId = null;
+            renderEquipmentMaster();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        }));
+        container.querySelectorAll('[data-eq-cert-del]').forEach(btn => btn.addEventListener('click', async () => {
+          if (!confirm('Hapus sertifikat kalibrasi ini?')) return;
+          try {
+            await api(`/api/equipment/${btn.dataset.eqCertDel}/certificate`, { method: 'DELETE' });
+            toast('Sertifikat dihapus', 'success');
+            renderEquipmentMaster();
+          } catch (err) {
+            toast(err.message, 'error');
+          }
+        }));
+        container.querySelectorAll('[data-eq-cert-upload]').forEach(btn => btn.addEventListener('click', () => {
+          uploadEquipmentCertificate(btn.dataset.eqCertUpload);
+        }));
+      }
+    });
+
+    document.getElementById('eqForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(e.target).entries());
+      if (!payload.equipment_id.trim() || !payload.name.trim()) { toast('Equipment ID dan Equipment Name wajib diisi', 'error'); return; }
+      try {
+        if (editing) {
+          await api(`/api/equipment/${editing.id}`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          });
+          toast('Equipment diperbarui', 'success');
+          state.equipmentEditingId = null;
+        } else {
+          await api('/api/equipment', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          });
+          toast('Equipment ditambahkan', 'success');
+        }
+        renderEquipmentMaster();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+    const cancelBtn = document.getElementById('eqCancelEdit');
+    if (cancelBtn) cancelBtn.addEventListener('click', () => { state.equipmentEditingId = null; renderEquipmentMaster(); });
+  }
+
+  function uploadEquipmentCertificate(id) {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/jpeg,image/png,image/webp,application/pdf';
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { toast('Ukuran sertifikat maksimal 10 MB', 'error'); return; }
+      try {
+        await api(`/api/equipment/${id}/certificate`, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+          body: file
+        });
+        toast('Sertifikat diunggah', 'success');
+        renderEquipmentMaster();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+    input.click();
+  }
+
   async function loadWeldingProcesses() {
     try {
       const r = await api('/api/welding-processes');
@@ -4612,6 +4804,7 @@
     await loadWoPics();
     await loadTestMethods();
     await loadCustomers();
+    await loadEquipment();
     render();
   }
 

@@ -8,6 +8,7 @@ const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
 const { PROCESS_STEPS } = require('./db/workOrderSteps');
 const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
 const { registerTestReportRoutes } = require('./lib/testReports');
+const { registerEquipmentRoutes } = require('./lib/equipment');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -724,6 +725,9 @@ const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
 registerTestReportRoutes(app, {
   pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl
 });
+
+// Master Data > Equipment/Peralatan.
+registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
 // "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
 // "status" Work Order tidak lagi difinalisasi manual: Final otomatis setelah semua tahap selesai.

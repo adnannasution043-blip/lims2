@@ -273,6 +273,32 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_test_reports_request ON test_reports(test_request_id);
 
+    -- Master Data > Equipment/Peralatan (diminta klien: dipakai untuk mencatat alat uji beserta
+    -- status & masa kalibrasinya). Sertifikat kalibrasi disimpan langsung sebagai BYTEA (satu file
+    -- per alat, mewakili sertifikat yang berlaku saat ini), sama alasannya dengan work_order_files —
+    -- disk server bersifat sementara di Railway.
+    CREATE TABLE IF NOT EXISTS equipment (
+      id SERIAL PRIMARY KEY,
+      equipment_id TEXT UNIQUE NOT NULL,
+      name TEXT NOT NULL,
+      category TEXT,
+      manufacturer TEXT,
+      model TEXT,
+      serial_number TEXT,
+
+      status TEXT NOT NULL DEFAULT 'active',  -- 'active' | 'maintenance' | 'calibration_due' | 'out_of_service'
+
+      calibration_number TEXT,
+      last_calibration_date TEXT,
+      next_calibration_due TEXT,
+      certificate_filename TEXT,
+      certificate_mime_type TEXT,
+      certificate_data BYTEA,
+
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS welding_processes (
       id SERIAL PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,
