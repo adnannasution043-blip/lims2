@@ -173,6 +173,9 @@
       } else if (key === 'tasks') {
         state.view = 'wo-tasks';
         render();
+      } else if (key === 'pengaturan') {
+        state.view = 'settings';
+        render();
       } else if (key.startsWith('q-')) {
         state.view = 'queue-' + key.slice(2);
         render();
@@ -2917,41 +2920,6 @@
     });
   }
 
-  // ---------- peran & antrian kerja ----------
-  // Peran belum terhubung ke login (modul Pengguna belum ada): dipilih manual di sidebar.
-  // Untuk saat ini semua menu/halaman dibuka untuk semua role — pembatasan per-role
-  // (mis. antrian kerja hanya untuk Teknisi/PIC terkait) menyusul setelah ada autentikasi.
-
-  const ROLES = [['teknisi', 'Teknisi'], ['qaqc', 'QA/QC'], ['techmgr', 'Technical Manager'], ['admin', 'Admin']];
-
-  function getRole() {
-    try {
-      const saved = localStorage.getItem('detechRole');
-      if (ROLES.some(r => r[0] === saved)) return saved;
-    } catch (e) { /* localStorage tidak tersedia */ }
-    return 'admin';
-  }
-
-  function applyRoleVisibility() {
-    const item = document.querySelector('.nav-item[data-nav="q-review"]');
-    if (item) item.hidden = false;
-  }
-
-  (function initRoleSwitch() {
-    const select = document.getElementById('roleSelect');
-    if (!select) return;
-    select.innerHTML = ROLES.map(([key, label]) => `<option value="${key}">${label}</option>`).join('');
-    select.value = getRole();
-    applyRoleVisibility();
-    select.addEventListener('change', () => {
-      try { localStorage.setItem('detechRole', select.value); } catch (e) { /* abaikan */ }
-      applyRoleVisibility();
-      state.queueCountsAt = 0;
-      if (state.view === 'queue-review') render();
-      else refreshQueueBadges(true);
-    });
-  })();
-
   function applyQueueCounts(counts) {
     state.queueCountsAt = Date.now();
     document.querySelectorAll('.nav-badge[data-badge]').forEach(badge => {
@@ -3123,6 +3091,55 @@
     });
   }
 
+  // ---------- pengaturan ----------
+
+  async function renderSettings() {
+    pageTitle.textContent = 'Pengaturan';
+    pageSubtitle.textContent = 'Pengaturan aplikasi DETECH LIMS';
+    topbarActions.innerHTML = '';
+
+    contentEl.innerHTML = `
+      <div class="card">
+        <p class="card-title" style="color: var(--danger);">Reset Data</p>
+        <p class="card-desc">
+          Menghapus semua data transaksional — Permintaan Uji, Work Order, Tasks, Pengecekan
+          Spesimen, dan Lembar Hasil Uji beserta file/sertifikat yang menyertainya — supaya bisa
+          input data dari awal untuk pengujian end-to-end. <strong>Master Data</strong> (Customer,
+          Equipment, Tipe Spesimen, dan daftar lainnya) tidak ikut terhapus. Aksi ini
+          <strong>tidak bisa dibatalkan</strong>.
+        </p>
+        <div class="field" style="max-width:360px; margin-top:16px;">
+          <label>Ketik <strong>HAPUS</strong> untuk mengaktifkan tombol reset</label>
+          <input type="text" id="resetConfirmInput" autocomplete="off" placeholder="HAPUS">
+        </div>
+        <button type="button" id="btnResetData" class="btn btn-danger" disabled style="margin-top:8px;">
+          Hapus Semua Data Transaksional
+        </button>
+      </div>`;
+
+    const input = document.getElementById('resetConfirmInput');
+    const btn = document.getElementById('btnResetData');
+    input.addEventListener('input', () => {
+      btn.disabled = input.value.trim() !== 'HAPUS';
+    });
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Menghapus...';
+      try {
+        await api('/api/admin/reset-data', { method: 'POST' });
+        toast('Semua data transaksional berhasil dihapus', 'success');
+        input.value = '';
+        state.editingId = null;
+        state.woEditingId = null;
+        renderSettings();
+      } catch (err) {
+        toast(err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Hapus Semua Data Transaksional';
+      }
+    });
+  }
+
   // ---------- router ----------
 
   const VIEW_TO_NAV_KEY = {
@@ -3134,7 +3151,8 @@
     'queue-testing': 'q-testing', 'queue-review': 'q-review',
     'master-data': 'manajemen-data',
     timeline: 'timeline',
-    'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen'
+    'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen',
+    settings: 'pengaturan'
   };
 
   function syncNavActive() {
@@ -3158,6 +3176,7 @@
     else if (state.view === 'master-data') renderMasterData();
     else if (state.view === 'specimen-list') renderSpecimenList();
     else if (state.view === 'specimen-form') renderSpecimenForm();
+    else if (state.view === 'settings') renderSettings();
     else renderForm();
   }
 

@@ -729,6 +729,22 @@ registerTestReportRoutes(app, {
 // Master Data > Equipment/Peralatan.
 registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
+// Reset Data (halaman Pengaturan) — untuk mengosongkan data uji coba supaya bisa mulai input
+// dari awal saat pengujian end-to-end. Hanya menghapus data transaksional (Permintaan Uji dan
+// semua yang mengikutinya lewat FK CASCADE: coupon_tests, test_items, riwayat amandemen, Work
+// Order beserta sample marking/Tasks/file evidence, Pengecekan Spesimen, dan Lembar Hasil Uji).
+// Master Data (Customer, Equipment, Tipe Spesimen, Kode Jenis Pengujian, dll) sengaja TIDAK
+// disentuh karena bukan data uji coba dan biasanya perlu diisi ulang manual.
+app.post('/api/admin/reset-data', async (req, res) => {
+  try {
+    await pool.query('TRUNCATE TABLE test_requests RESTART IDENTITY CASCADE');
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Gagal mereset data' });
+  }
+});
+
 // "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
 // "status" Work Order tidak lagi difinalisasi manual: Final otomatis setelah semua tahap selesai.
 // Tanggal testing diambil dari Permintaan Uji (tanggal "Pelaksanaan pengujian").
