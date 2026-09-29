@@ -165,9 +165,14 @@ async function initSchema() {
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS checked_by_signature BYTEA;
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS approved_by_signature BYTEA;
 
-    -- PIC tahap Released (Tasks). Sengaja bukan bagian Description of Process di form/PDF
-    -- Work Order (DPI-LP-FR-25), yang tetap 6 PIC lama.
+    -- PIC tahap Report Issued (Tasks; kolomnya masih bernama released_pic peninggalan nama
+    -- tahap sebelumnya). Sengaja bukan bagian Description of Process di form/PDF Work Order
+    -- (DPI-LP-FR-25), yang tetap 6 PIC lama.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS released_pic TEXT;
+
+    -- No. LHU (Laporan Hasil Uji) — dibuat otomatis (format LHU/{No. Pekerjaan}) begitu tahap
+    -- Report Issued diselesaikan, tidak diketik manual. Tetap tersimpan walau tahap diedit lagi.
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS lhu_number TEXT;
 
     -- Sample Marking per baris coupon test, dikaitkan lewat row_no (bukan coupon_tests.id)
     -- karena PUT /api/requests/:id men-delete+insert ulang seluruh coupon_tests setiap

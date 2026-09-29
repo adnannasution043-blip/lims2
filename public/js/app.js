@@ -417,7 +417,7 @@
       if (!requestFinal) stage = 'draft';
       else if (!wo) stage = 'need-wo';
       else if (!sheets.length) stage = 'need-spec';
-      else if (wo.status === 'final' && sheets.every(s => s.status === 'final')) stage = 'done';
+      else if (wo.status === 'complete' && sheets.every(s => s.status === 'final')) stage = 'done';
       else stage = 'running';
 
       const steps = [];
@@ -533,7 +533,7 @@
       <li class="tl-step ${st.done ? 'done' : 'pending'}${st.next ? ' next' : ''}">
         <span class="tl-dot"></span>
         <div class="tl-body">
-          <div class="tl-title">${esc(st.title)}${st.status ? ` <span class="badge badge-${st.status === 'final' ? 'final' : 'draft'}">${st.status === 'final' ? 'Final' : 'Draft'}</span>` : ''}</div>
+          <div class="tl-title">${esc(st.title)}${st.status ? ` <span class="badge badge-${st.status === 'complete' ? 'complete' : st.status === 'final' ? 'final' : 'draft'}">${st.status === 'complete' ? 'Complete' : st.status === 'final' ? 'Final' : 'Draft'}</span>` : ''}</div>
           ${st.meta ? `<div class="tl-meta">${esc(st.meta)}</div>` : ''}
         </div>
         <div class="tl-when">${esc(st.when || '')}</div>
@@ -1754,7 +1754,7 @@
     }
   }
 
-  // ---------- work order: tasks (Receiving .. Released) ----------
+  // ---------- work order: tasks (Receiving .. Report Issued) ----------
   // Enam tahap per Work Order. Baris kerja (coupon, jenis pengujian, qty, sample marking)
   // datang dari server yang menurunkannya dari Permintaan Uji — form tahap hanya mengisi
   // hasil di atasnya, jadi tidak ada data yang diketik ulang. Detail Work Order hanya
@@ -1762,7 +1762,7 @@
 
   const WO_STAGE_ICONS = {
     receiving: '&#128229;', preparation: '&#9879;', testing: '&#128202;',
-    reporting: '&#128196;', review: '&#9989;', released: '&#128228;'
+    reporting: '&#128196;', review: '&#9989;', released: '&#128220;'
   };
   const STAGE_STATUS_LABELS = {
     pending: 'Belum Dimulai', draft: 'Berjalan', final: 'Selesai', rejected: 'Perlu Revisi', na: 'Tidak Berlaku'
@@ -1775,7 +1775,6 @@
     'Bend Test Machine', 'Optical Emission Spectrometer (OES)', 'PMI Analyzer', 'Metallurgical Microscope'
   ];
   const TEST_RESULT_OPTIONS = [['', 'Belum ada hasil'], ['accepted', 'Accepted'], ['rejected', 'Rejected'], ['na', 'Tanpa kriteria (N/A)']];
-  const RELEASE_METHODS = ['Email', 'Kurir', 'Portal Customer', 'Diambil Langsung'];
 
   const isStageDone = status => status === 'final' || status === 'na';
 
@@ -2138,8 +2137,9 @@
     const e = t.extra;
     return `
       <div class="card">
-        <p class="section-title">Laporan yang Dikirim <span class="en">(hanya baca, dari tahap sebelumnya)</span></p>
+        <p class="section-title">Penerbitan Laporan <span class="en">No. LHU dibuat otomatis saat tahap ini diselesaikan</span></p>
         <div class="info-facts">
+          <div class="info-fact"><span>No. LHU</span><strong>${esc(e.lhu_number) || 'Belum diterbitkan'}</strong></div>
           <div class="info-fact"><span>No. Laporan</span><strong>${esc(e.report_no) || '-'}</strong></div>
           <div class="info-fact"><span>Disetujui oleh</span><strong>${esc(e.approved_by) || '-'}</strong></div>
           <div class="info-fact"><span>Tanggal approval</span><strong>${e.approved_date ? esc(formatDateOnly(e.approved_date)) : '-'}</strong></div>
@@ -2329,17 +2329,13 @@
       extraFields = `<div class="field"><label>No. Laporan <span class="en">Report No.</span></label><input type="text" name="report_no" value="${esc(extra.report_no)}"></div>`;
     } else if (stage.key === 'released') {
       extraFields = `
-        <div class="field"><label>Cara Pengiriman</label>
-          <select name="method"><option value="">- Pilih -</option>${RELEASE_METHODS.map(m =>
-            `<option ${extra.method === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select>
-        </div>
-        <div class="field"><label>Penerima <span class="en">Recipient</span></label><input type="text" name="recipient" value="${esc(extra.recipient)}" placeholder="Nama / instansi penerima"></div>
-        <div class="field"><label>No. Resi / Referensi</label><input type="text" name="reference" value="${esc(extra.reference)}" placeholder="No. resi, ID email, dll"></div>`;
+        <div class="field"><label>No. LHU <span class="en">dibuat otomatis</span></label>
+          <input type="text" value="${esc(extra.lhu_number) || 'Belum diterbitkan'}" disabled></div>`;
     }
     const body = { receiving: receivingBodyHtml, testing: testingBodyHtml, reporting: reportingBodyHtml,
       review: reviewBodyHtml, released: releasedBodyHtml }[stage.key](t)
       + (stage.key === 'receiving' ? receivingEvidenceCardHtml() : '');
-    const finalLabel = stage.key === 'released' ? 'Simpan &amp; Tandai Terkirim' : 'Simpan &amp; Selesaikan Tahap';
+    const finalLabel = stage.key === 'released' ? 'Simpan &amp; Terbitkan Laporan' : 'Simpan &amp; Selesaikan Tahap';
 
     return `
       <form id="woTaskForm">
@@ -2825,7 +2821,7 @@
 
   async function renderWoTasks() {
     pageTitle.textContent = 'Tasks';
-    pageSubtitle.textContent = 'Pengerjaan tiap Work Order — Receiving hingga Released';
+    pageSubtitle.textContent = 'Pengerjaan tiap Work Order — Receiving hingga Report Issued';
     topbarActions.innerHTML = '';
     contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
 

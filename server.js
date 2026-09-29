@@ -745,9 +745,10 @@ app.post('/api/admin/reset-data', async (req, res) => {
   }
 });
 
-// "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Released).
-// "status" Work Order tidak lagi difinalisasi manual: Final otomatis setelah semua tahap selesai.
-// Tanggal testing diambil dari Permintaan Uji (tanggal "Pelaksanaan pengujian").
+// "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Report Issued).
+// "status" Work Order tidak difinalisasi manual: 'complete' otomatis setelah semua tahap selesai
+// (tahap terakhir, Report Issued, menerbitkan LHU-nya). Tanggal testing diambil dari Permintaan
+// Uji (tanggal "Pelaksanaan pengujian").
 app.get('/api/work-orders', async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -766,7 +767,7 @@ app.get('/api/work-orders', async (req, res) => {
       const statuses = Object.fromEntries(p.stages.map(s => [s.key, s.status]));
       return {
         ...r,
-        status: p.done_count === p.total ? 'final' : 'draft',
+        status: p.done_count === p.total ? 'complete' : 'draft',
         stage: { ...p.current, done_count: p.done_count, total: p.total, statuses }
       };
     }));

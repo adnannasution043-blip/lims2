@@ -1214,6 +1214,7 @@ table.data-table tr:hover td { background: var(--accent-light); }
 }
 .badge-draft { background: var(--danger-bg); color: var(--danger); }
 .badge-final { background: var(--success-bg); color: var(--success); }
+.badge-complete { background: var(--success-bg); color: var(--success); }
 
 .empty-state {
   text-align: center;
