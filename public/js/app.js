@@ -2135,14 +2135,75 @@
 
   function releasedBodyHtml(t) {
     const e = t.extra;
+    const fc = e.final_check || { coupons: 0, test_types: 0, total_specimens: 0, result_sheets: 0, by_test: [] };
+    const woId = t.work_order.id;
     return `
+      <div class="lhu-layout">
+        <div class="card">
+          <p class="section-title">Ringkasan Approval <span class="en">(hanya baca, dari tahap Review &amp; Approval)</span></p>
+          <div class="info-facts">
+            <div class="info-fact"><span>Disetujui oleh</span><strong>${esc(e.approved_by) || '-'}</strong></div>
+            <div class="info-fact"><span>Tanggal Approval</span><strong>${e.approved_date ? esc(formatDateOnly(e.approved_date)) : '-'}</strong></div>
+            <div class="info-fact"><span>No. Laporan</span><strong>${esc(e.report_no) || '-'}</strong></div>
+          </div>
+          ${e.approval_notes ? `<p class="muted" style="margin-top:10px;"><strong>Catatan Approval:</strong> ${esc(e.approval_notes)}</p>` : ''}
+        </div>
+        <div class="card">
+          <p class="section-title">Dokumen <span class="en">LHU</span></p>
+          <div class="lhu-doc-row">
+            <div>
+              <strong>${e.lhu_number ? esc(e.lhu_number) + '.pdf' : 'Belum diterbitkan'}</strong>
+              <span class="st-pill ${e.lhu_number ? 'st-final' : 'st-pending'}">${e.lhu_number ? 'Diterbitkan' : 'Belum Diterbitkan'}</span>
+              <p class="muted" style="margin:4px 0 0;">Standard Material Test Report</p>
+            </div>
+            <button type="button" class="btn btn-sm" data-open-wo-print="${woId}">Buka Dokumen (PDF)</button>
+          </div>
+          <p class="muted" style="margin-top:10px;">Memakai format cetak Work Order yang sudah ada (DPI-LP-FR-25) &mdash; dokumen LHU tersendiri belum dibangun.</p>
+        </div>
+      </div>
       <div class="card">
-        <p class="section-title">Penerbitan Laporan <span class="en">No. LHU dibuat otomatis saat tahap ini diselesaikan</span></p>
-        <div class="info-facts">
-          <div class="info-fact"><span>No. LHU</span><strong>${esc(e.lhu_number) || 'Belum diterbitkan'}</strong></div>
-          <div class="info-fact"><span>No. Laporan</span><strong>${esc(e.report_no) || '-'}</strong></div>
-          <div class="info-fact"><span>Disetujui oleh</span><strong>${esc(e.approved_by) || '-'}</strong></div>
-          <div class="info-fact"><span>Tanggal approval</span><strong>${e.approved_date ? esc(formatDateOnly(e.approved_date)) : '-'}</strong></div>
+        <p class="section-title">Ringkasan Hasil Pengujian <span class="en">(Final Check, hanya baca)</span></p>
+        <div class="task-stats">
+          <div class="task-stat"><b>${fc.coupons}</b><span>Coupon</span></div>
+          <div class="task-stat"><b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
+          <div class="task-stat ok"><b>${fc.total_specimens}</b><span>Total Specimen</span></div>
+          <div class="task-stat ok"><b>${fc.result_sheets}</b><span>Result Sheet Final</span></div>
+        </div>
+        <div class="task-table-wrap"><table class="task-table">
+          <thead><tr><th>No.</th><th>Jenis Pengujian</th><th>Jumlah Specimen</th></tr></thead>
+          <tbody>${fc.by_test.map((r, i) => `
+            <tr><td>${i + 1}</td><td>${esc(r.test_name)}</td><td>${r.qty}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Belum ada data.</td></tr>'}
+          </tbody>
+        </table></div>
+      </div>`;
+  }
+
+  function releasedInfoCardHtml(t) {
+    const { stage, extra } = t;
+    const checklist = [
+      'Nomor LHU akan digenerate otomatis',
+      'PDF LHU akan dibuat',
+      'Data hasil pengujian akan dikunci',
+      'Work Order berubah menjadi Complete'
+    ];
+    return `
+      <div class="lhu-layout">
+        <div class="card">
+          <p class="section-title">Informasi Penerbitan LHU</p>
+          <div class="form-grid">
+            <div class="field"><label>Nomor LHU <span class="en">dibuat otomatis</span></label>
+              <input type="text" value="${esc(extra.lhu_number) || 'Belum diterbitkan'}" disabled></div>
+            <div class="field"><label>${esc(stage.date_label)}</label><input type="date" name="task_date" value="${esc(stage.task_date)}"></div>
+            <div class="field"><label>Versi</label><input type="text" value="Rev. 0" disabled></div>
+            <div class="field"><label>PIC Issued</label>${woPicSelect(stage.pic)}</div>
+            <div class="field full"><label>Template Laporan</label>
+              <select disabled><option>Standard Material Test Report</option></select></div>
+            <div class="field full"><label>Catatan Tahap</label><textarea name="notes">${esc(stage.notes)}</textarea></div>
+          </div>
+        </div>
+        <div class="lhu-info-box">
+          <p class="lhu-info-title"><span aria-hidden="true">&#8505;&#65039;</span> Setelah LHU diterbitkan</p>
+          <ul>${checklist.map(c => `<li><span aria-hidden="true">&#10003;</span> ${esc(c)}</li>`).join('')}</ul>
         </div>
       </div>`;
   }
@@ -2322,42 +2383,66 @@
 
   function woTaskFormHtml(t) {
     const { stage, extra } = t;
+    const lockedBanner = t.locked
+      ? `<div class="locked-banner"><span aria-hidden="true">&#128274;</span> Work Order sudah <strong>Complete</strong> &mdash; data tahap ini terkunci, tidak bisa diedit lagi setelah LHU diterbitkan.</div>`
+      : '';
+    const fieldsetOpen = `<fieldset class="task-fieldset"${t.locked ? ' disabled' : ''}>`;
+
+    if (stage.key === 'released') {
+      // Report Issued: kartu Informasi Penerbitan LHU + Ringkasan Approval/Final Check/Dokumen,
+      // beda dari 4 tahap "form" lain (bukan sekadar extraFields di kartu generik).
+      return `
+        ${lockedBanner}
+        <form id="woTaskForm">
+          ${fieldsetOpen}
+            ${releasedInfoCardHtml(t)}
+            ${releasedBodyHtml(t)}
+            <div id="woTaskProblems"></div>
+            <div class="form-actions">
+              <div><span class="muted">${stage.updated_at ? 'Terakhir disimpan: ' + esc(formatDateTimeID(stage.updated_at)) : 'Belum pernah disimpan'}</span></div>
+              <div class="right">
+                <button type="submit" class="btn" data-status="draft">Simpan Draft</button>
+                <button type="submit" class="btn btn-primary" data-status="final">Terbitkan LHU</button>
+              </div>
+            </div>
+          </fieldset>
+        </form>`;
+    }
+
     let extraFields = '';
     if (stage.key === 'receiving') {
       extraFields = `<div class="field"><label>Diserahkan oleh <span class="en">Delivered by</span></label><input type="text" name="delivered_by" value="${esc(extra.delivered_by)}" placeholder="Nama pengirim / kurir"></div>`;
     } else if (stage.key === 'reporting') {
       extraFields = `<div class="field"><label>No. Laporan <span class="en">Report No.</span></label><input type="text" name="report_no" value="${esc(extra.report_no)}"></div>`;
-    } else if (stage.key === 'released') {
-      extraFields = `
-        <div class="field"><label>No. LHU <span class="en">dibuat otomatis</span></label>
-          <input type="text" value="${esc(extra.lhu_number) || 'Belum diterbitkan'}" disabled></div>`;
     }
     const body = { receiving: receivingBodyHtml, testing: testingBodyHtml, reporting: reportingBodyHtml,
-      review: reviewBodyHtml, released: releasedBodyHtml }[stage.key](t)
+      review: reviewBodyHtml }[stage.key](t)
       + (stage.key === 'receiving' ? receivingEvidenceCardHtml() : '');
-    const finalLabel = stage.key === 'released' ? 'Simpan &amp; Terbitkan Laporan' : 'Simpan &amp; Selesaikan Tahap';
 
     return `
+      ${lockedBanner}
       <form id="woTaskForm">
-        <div class="card">
-          <p class="section-title">Info Tahap ${esc(stage.label)}</p>
-          <div class="form-grid">
-            <div class="field"><label>PIC ${esc(stage.label)}</label>${woPicSelect(stage.pic)}</div>
-            <div class="field"><label>${esc(stage.date_label)}</label><input type="date" name="task_date" value="${esc(stage.task_date)}"></div>
-            ${extraFields}
-            <div class="field full"><label>Catatan Tahap</label><textarea name="notes">${esc(stage.notes)}</textarea></div>
+        ${fieldsetOpen}
+          <div class="card">
+            <p class="section-title">Info Tahap ${esc(stage.label)}</p>
+            <div class="form-grid">
+              <div class="field"><label>PIC ${esc(stage.label)}</label>${woPicSelect(stage.pic)}</div>
+              <div class="field"><label>${esc(stage.date_label)}</label><input type="date" name="task_date" value="${esc(stage.task_date)}"></div>
+              ${extraFields}
+              <div class="field full"><label>Catatan Tahap</label><textarea name="notes">${esc(stage.notes)}</textarea></div>
+            </div>
           </div>
-        </div>
-        ${body}
-        ${stage.kind === 'approval' ? approvalCardHtml(t) : ''}
-        <div id="woTaskProblems"></div>
-        <div class="form-actions">
-          <div><span class="muted">${stage.updated_at ? 'Terakhir disimpan: ' + esc(formatDateTimeID(stage.updated_at)) : 'Belum pernah disimpan'}</span></div>
-          <div class="right">
-            <button type="submit" class="btn" data-status="draft">Simpan sebagai Draft</button>
-            <button type="submit" class="btn btn-primary" data-status="final">${finalLabel}</button>
+          ${body}
+          ${stage.kind === 'approval' ? approvalCardHtml(t) : ''}
+          <div id="woTaskProblems"></div>
+          <div class="form-actions">
+            <div><span class="muted">${stage.updated_at ? 'Terakhir disimpan: ' + esc(formatDateTimeID(stage.updated_at)) : 'Belum pernah disimpan'}</span></div>
+            <div class="right">
+              <button type="submit" class="btn" data-status="draft">Simpan sebagai Draft</button>
+              <button type="submit" class="btn btn-primary" data-status="final">Simpan &amp; Selesaikan Tahap</button>
+            </div>
           </div>
-        </div>
+        </fieldset>
       </form>`;
   }
 
@@ -2767,6 +2852,10 @@
       if (!confirmLeaveTask()) return;
       openWoTask(t.work_order.id, 'testing');
     });
+
+    form.querySelectorAll('[data-open-wo-print]').forEach(btn => btn.addEventListener('click', () => {
+      window.open(`/work-orders/${btn.dataset.openWoPrint}/print`, '_blank');
+    }));
   }
 
   async function onWoTaskSubmit(e) {
