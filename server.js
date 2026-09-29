@@ -9,6 +9,7 @@ const { PROCESS_STEPS } = require('./db/workOrderSteps');
 const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
 const { registerTestReportRoutes } = require('./lib/testReports');
 const { registerEquipmentRoutes } = require('./lib/equipment');
+const { registerLhuReportRoutes } = require('./lib/lhuReports');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -728,6 +729,9 @@ registerTestReportRoutes(app, {
 
 // Master Data > Equipment/Peralatan.
 registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
+
+// Modul Hasil & Laporan (daftar LHU + status distribusi).
+registerLhuReportRoutes(app, { pool });
 
 // Reset Data (halaman Pengaturan) — untuk mengosongkan data uji coba supaya bisa mulai input
 // dari awal saat pengujian end-to-end. Hanya menghapus data transaksional (Permintaan Uji dan

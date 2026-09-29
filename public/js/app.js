@@ -167,6 +167,9 @@
       } else if (key === 'pengecekan-spesimen') {
         state.view = 'specimen-list';
         render();
+      } else if (key === 'hasil-laporan') {
+        state.view = 'lhu-list';
+        render();
       } else if (key === 'timeline') {
         state.view = 'timeline';
         render();
@@ -3176,6 +3179,167 @@
     });
   }
 
+  // ---------- hasil & laporan (daftar LHU) ----------
+  // Bukan sumber data baru: hanya membaca Work Order yang lhu_number-nya sudah terisi (dibuat
+  // otomatis di tahap Report Issued). Status distribusi disimpan/diedit di sini, bukan di tahap
+  // Report Issued lagi, sesuai permintaan klien memisahkan penerbitan dari pengiriman LHU.
+
+  const LHU_DIST_LABELS = { belum_dikirim: 'Menunggu Kirim', sent: 'Sent', delivered: 'Delivered' };
+  const LHU_DIST_PILL = { belum_dikirim: 'st-pending', sent: 'st-draft', delivered: 'st-final' };
+  const LHU_DIST_METHODS = ['Email', 'Kurir', 'Portal Customer', 'Diambil Langsung'];
+
+  async function renderLhuList() {
+    pageTitle.textContent = 'Hasil & Laporan';
+    pageSubtitle.textContent = 'Daftar Laporan Hasil Uji (LHU)';
+    topbarActions.innerHTML = '';
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+
+    let rows = [];
+    try {
+      rows = (await api('/api/lhu-reports')).items;
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      return;
+    }
+
+    if (!rows.length) {
+      contentEl.innerHTML = `
+        <div class="card empty-state">
+          <p class="card-title">Belum ada LHU</p>
+          <p class="card-desc">LHU muncul di sini otomatis setelah tahap Report Issued pada suatu Work Order diselesaikan.</p>
+        </div>`;
+      return;
+    }
+
+    const total = rows.length;
+    const sentCount = rows.filter(r => ['sent', 'delivered'].includes(r.distribution_status)).length;
+    const pendingCount = total - sentCount;
+    const pct = n => (total ? Math.round((n / total) * 1000) / 10 : 0);
+
+    contentEl.innerHTML = `
+      <div class="task-stats" style="margin-bottom:20px;">
+        <div class="task-stat"><b>${total}</b><span>Total LHU</span></div>
+        <div class="task-stat ok"><b>${sentCount}</b><span>Sudah Dikirim &middot; ${pct(sentCount)}%</span></div>
+        <div class="task-stat"><b>${pendingCount}</b><span>Menunggu Kirim &middot; ${pct(pendingCount)}%</span></div>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <p class="card-title">Daftar LHU</p>
+            <p class="card-desc">${total} LHU tersimpan</p>
+          </div>
+          <select id="lhuStatusFilter" style="max-width:220px;">
+            <option value="">Semua Status Distribusi</option>
+            ${Object.entries(LHU_DIST_LABELS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}
+          </select>
+        </div>
+        <div id="lhuTableArea"></div>
+      </div>`;
+
+    const ui = { status: '' };
+    const filterSelect = document.getElementById('lhuStatusFilter');
+    const drawTable = () => {
+      const filtered = ui.status ? rows.filter(r => r.distribution_status === ui.status) : rows;
+      renderSearchablePaginatedTable({
+        key: 'lhu-reports',
+        containerEl: document.getElementById('lhuTableArea'),
+        allRows: filtered,
+        searchFields: ['lhu_number', 'job_number', 'company', 'project_name'],
+        searchPlaceholder: 'Cari No. LHU, No. WO, Perusahaan, atau Nama Proyek...',
+        emptyHtml: '<p class="muted">Tidak ada LHU dengan status tersebut.</p>',
+        renderTableHtml: (pageRows) => `
+          <table class="data-table">
+            <thead><tr>
+              <th>No. LHU</th><th>Rev.</th><th>No. Work Order</th><th>Perusahaan</th><th>Nama Proyek</th>
+              <th>Tanggal Terbit</th><th>Status Distribusi</th><th></th>
+            </tr></thead>
+            <tbody>${pageRows.map(r => `
+              <tr>
+                <td><strong>${esc(r.lhu_number)}</strong></td>
+                <td>${r.revision}</td>
+                <td>${esc(r.job_number)}</td>
+                <td>${esc(r.company)}</td>
+                <td>${esc(r.project_name)}</td>
+                <td>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</td>
+                <td><span class="st-pill ${LHU_DIST_PILL[r.distribution_status]}">${esc(LHU_DIST_LABELS[r.distribution_status])}</span></td>
+                <td><button class="btn btn-sm" data-lhu-view="${r.id}">Lihat</button></td>
+              </tr>`).join('')}</tbody>
+          </table>`,
+        bindRowEvents: (container) => {
+          container.querySelectorAll('[data-lhu-view]').forEach(btn => btn.addEventListener('click', () => {
+            state.lhuViewId = btn.dataset.lhuView;
+            state.view = 'lhu-detail';
+            render();
+          }));
+        }
+      });
+    };
+    filterSelect.addEventListener('change', () => { ui.status = filterSelect.value; drawTable(); });
+    drawTable();
+  }
+
+  async function renderLhuDetail() {
+    pageTitle.textContent = 'Hasil & Laporan';
+    pageSubtitle.textContent = 'Detail LHU';
+    topbarActions.innerHTML = `<button class="btn" id="btnLhuBack">&larr; Kembali</button>`;
+    document.getElementById('btnLhuBack').addEventListener('click', () => { state.view = 'lhu-list'; render(); });
+
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+
+    let r;
+    try {
+      r = await api(`/api/lhu-reports/${state.lhuViewId}`);
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      return;
+    }
+
+    contentEl.innerHTML = `
+      <div class="card">
+        <p class="section-title">${esc(r.lhu_number)} <span class="en">Rev. ${r.revision}</span></p>
+        <div class="info-facts">
+          <div class="info-fact"><span>No. Work Order</span><strong>${esc(r.job_number)}</strong></div>
+          <div class="info-fact"><span>Perusahaan</span><strong>${esc(r.company)}</strong></div>
+          <div class="info-fact"><span>Nama Proyek</span><strong>${esc(r.project_name)}</strong></div>
+          <div class="info-fact"><span>Tanggal Terbit</span><strong>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</strong></div>
+        </div>
+        <button type="button" class="btn btn-sm" style="margin-top:14px;" id="btnLhuOpenPrint">Buka Dokumen (PDF)</button>
+      </div>
+      <form id="lhuDistForm">
+        <div class="card">
+          <p class="section-title">Distribusi ke Customer</p>
+          <div class="form-grid">
+            <div class="field"><label>Status Distribusi</label>
+              <select name="distribution_status">${Object.entries(LHU_DIST_LABELS).map(([k, l]) =>
+                `<option value="${k}" ${r.distribution_status === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+            <div class="field"><label>Tanggal Kirim</label><input type="date" name="distribution_date" value="${esc(r.distribution_date)}"></div>
+            <div class="field"><label>Cara Kirim</label>
+              <select name="distribution_method"><option value="">- Pilih -</option>${LHU_DIST_METHODS.map(m =>
+                `<option ${r.distribution_method === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
+            <div class="field"><label>Penerima</label><input type="text" name="distribution_recipient" value="${esc(r.distribution_recipient)}" placeholder="Nama / instansi penerima"></div>
+          </div>
+          <div class="form-actions"><div></div><div class="right"><button type="submit" class="btn btn-primary">Simpan Distribusi</button></div></div>
+        </div>
+      </form>`;
+
+    document.getElementById('btnLhuOpenPrint').addEventListener('click', () => window.open(`/work-orders/${r.id}/print`, '_blank'));
+
+    document.getElementById('lhuDistForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = Object.fromEntries(new FormData(e.target).entries());
+      try {
+        await api(`/api/lhu-reports/${r.id}/distribution`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        toast('Status distribusi disimpan', 'success');
+        render();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+  }
+
   // ---------- pengaturan ----------
 
   async function renderSettings() {
@@ -3237,6 +3401,7 @@
     'master-data': 'manajemen-data',
     timeline: 'timeline',
     'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen',
+    'lhu-list': 'hasil-laporan', 'lhu-detail': 'hasil-laporan',
     settings: 'pengaturan'
   };
 
@@ -3261,6 +3426,8 @@
     else if (state.view === 'master-data') renderMasterData();
     else if (state.view === 'specimen-list') renderSpecimenList();
     else if (state.view === 'specimen-form') renderSpecimenForm();
+    else if (state.view === 'lhu-list') renderLhuList();
+    else if (state.view === 'lhu-detail') renderLhuDetail();
     else if (state.view === 'settings') renderSettings();
     else renderForm();
   }

@@ -170,9 +170,17 @@ async function initSchema() {
     -- (DPI-LP-FR-25), yang tetap 6 PIC lama.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS released_pic TEXT;
 
-    -- No. LHU (Laporan Hasil Uji) — dibuat otomatis (format LHU/{No. Pekerjaan}) begitu tahap
+    -- No. LHU (Laporan Hasil Uji) — dibuat otomatis (format LHU-{yy}-{urutan}) begitu tahap
     -- Report Issued diselesaikan, tidak diketik manual. Tetap tersimpan walau tahap diedit lagi.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS lhu_number TEXT;
+
+    -- Distribusi LHU (modul Hasil & Laporan) — dulunya field ini ada di tahap Report Issued
+    -- (Cara Pengiriman/Penerima/No. Resi) lalu dipindah ke sini sesuai permintaan klien, supaya
+    -- pengiriman LHU ke customer dikelola terpisah dari proses penerbitannya.
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_status TEXT NOT NULL DEFAULT 'belum_dikirim'; -- 'belum_dikirim' | 'sent' | 'delivered'
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_date TEXT;
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_method TEXT;
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_recipient TEXT;
 
     -- Sample Marking per baris coupon test, dikaitkan lewat row_no (bukan coupon_tests.id)
     -- karena PUT /api/requests/:id men-delete+insert ulang seluruh coupon_tests setiap
