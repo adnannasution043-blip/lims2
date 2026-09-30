@@ -2361,6 +2361,7 @@
       <div class="card">
         <div class="task-card-head">
           <p class="section-title">Evidence Sample <span class="en">(foto / dokumen kondisi sampel, sebelum &amp; sesudah marking)</span></p>
+          <button type="button" class="btn btn-sm" id="btnEvidencePrint">Cetak Lampiran Foto</button>
         </div>
         <input type="file" id="evFileInput" accept="image/*,application/pdf" multiple hidden>
         <div id="woEvidence"><p class="muted">Memuat evidence...</p></div>
@@ -2373,6 +2374,8 @@
     const box = document.getElementById('woEvidence');
     const input = document.getElementById('evFileInput');
     if (!box || !input) return;
+    const printBtn = document.getElementById('btnEvidencePrint');
+    if (printBtn) printBtn.addEventListener('click', () => window.open(`/work-orders/${woId}/evidence/print`, '_blank'));
     let files = [];
     let target = null;
 
@@ -3488,6 +3491,7 @@
               <button type="button" class="btn btn-sm" id="btnLhuOpenPrint2">Buka Dokumen (PDF)</button>
             </div>
             <p class="muted" style="margin:8px 0 14px;">Memakai format cetak Work Order yang sudah ada (DPI-LP-FR-25) &mdash; dokumen LHU tersendiri belum dibangun.</p>
+            <p class="muted" style="margin:0 0 10px;">Foto kondisi sampel saat penerimaan: <a href="/work-orders/${r.id}/evidence/print" target="_blank" rel="noopener">Cetak Lampiran Foto Penerimaan</a></p>
             <p class="lhu-sub-title">Attachment Pendukung</p>
             <input type="file" id="lhuAttInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.zip,.xlsx,.xls,.docx,.doc" hidden>
             <div id="lhuAttList"><p class="muted">Memuat attachment...</p></div>
