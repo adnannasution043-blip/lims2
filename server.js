@@ -772,6 +772,9 @@ app.get('/api/work-orders', async (req, res) => {
       return {
         ...r,
         status: p.done_count === p.total ? 'complete' : 'draft',
+        machining_status: p.machining_status,
+        machining_started_at: p.machining_started_at,
+        machining_finished_at: p.machining_finished_at,
         stage: { ...p.current, done_count: p.done_count, total: p.total, statuses }
       };
     }));
@@ -1101,6 +1104,13 @@ app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
     if (!testRequest) return res.status(404).json({ error: 'Permintaan tidak ditemukan' });
     if (testRequest.status !== 'final') {
       return res.status(400).json({ error: 'Permintaan harus difinalisasi dulu sebelum membuat Pengecekan Spesimen' });
+    }
+
+    // Inspeksi spesimen baru boleh dimulai setelah tim machining menekan "Selesai" pada tahap
+    // Preparation. Permintaan tanpa Work Order tidak punya proses machining, jadi tidak dicegah.
+    const { rows: machRows } = await pool.query(`SELECT machining_status FROM work_orders WHERE test_request_id = $1`, [req.params.id]);
+    if (machRows.length && machRows[0].machining_status !== 'selesai') {
+      return res.status(400).json({ error: 'Machining spesimen belum selesai — tim machining perlu menekan "Selesai Machining" di tahap Preparation dulu' });
     }
 
     const { rows: couponRows } = await pool.query(

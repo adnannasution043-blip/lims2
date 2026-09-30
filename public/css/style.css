@@ -626,6 +626,7 @@ body {
 }
 .info-fact span { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
 .info-fact strong { font-size: 13px; font-weight: 600; color: var(--text); word-break: break-word; }
+.info-fact strong .st-pill { display: inline-block; text-transform: none; letter-spacing: 0; margin-top: 2px; }
 table.info-table td { font-size: 12.5px; }
 
 .wo-stage-icon {

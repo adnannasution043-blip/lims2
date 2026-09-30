@@ -213,15 +213,37 @@
 
     const draftRequests = requests.filter(r => r.status !== 'final').length;
     const finalRequests = requests.length - draftRequests;
-    const draftWO = workOrders.filter(w => w.status !== 'final').length;
+    const draftWO = workOrders.filter(w => w.status !== 'complete').length;
     const finalWO = workOrders.length - draftWO;
     const draftSpecimens = specimens.filter(s => s.status !== 'final').length;
     const finalSpecimens = specimens.length - draftSpecimens;
 
     const specimenRequestIds = new Set(specimens.map(s => s.test_request_id));
     const needsWO = requests.filter(r => r.status === 'final' && !r.work_order_id);
-    const needsSpecimen = workOrders.filter(w => w.stage && w.stage.statuses && w.stage.statuses.preparation === 'pending');
+    // Sheet Pengecekan Spesimen baru bisa dibuat setelah machining selesai.
+    const needsSpecimen = workOrders.filter(w => w.stage && w.stage.statuses && w.stage.statuses.preparation === 'draft'
+      && w.machining_status === 'selesai' && !specimenRequestIds.has(w.test_request_id));
     const actionCount = needsWO.length + needsSpecimen.length;
+
+    // Status machining tiap Work Order: menunggu (sampel sudah diterima, belum dimachining), sedang, atau selesai
+    // tetapi inspeksi spesimen belum selesai.
+    const machiningRows = workOrders.map(w => {
+      const st = (w.stage && w.stage.statuses) || {};
+      let group = null;
+      if (st.preparation === 'final' || st.preparation === 'na') group = null;
+      else if (w.machining_status === 'proses') group = 'proses';
+      else if (w.machining_status === 'selesai') group = 'selesai';
+      else if (st.receiving === 'final') group = 'menunggu';
+      return group ? { ...w, group } : null;
+    }).filter(Boolean);
+    const machiningOrder = { proses: 0, menunggu: 1, selesai: 2 };
+    machiningRows.sort((a, b) => machiningOrder[a.group] - machiningOrder[b.group]);
+    const machiningCount = g => machiningRows.filter(r => r.group === g).length;
+    const machiningGroupHtml = {
+      proses: '<span class="st-pill st-draft">Sedang machining</span>',
+      menunggu: '<span class="st-pill st-pending">Menunggu machining</span>',
+      selesai: '<span class="st-pill st-final">Machining selesai &middot; siap inspeksi</span>'
+    };
 
     const totalRequests = requests.length;
     const funnelStages = [
@@ -294,6 +316,28 @@
         </div>
       </div>
 
+      <div class="card" style="margin-bottom:20px;">
+        <p class="card-title">Status Machining Spesimen</p>
+        <p class="card-desc">${machiningCount('menunggu')} menunggu &middot; ${machiningCount('proses')} sedang machining &middot; ${machiningCount('selesai')} selesai machining (siap diinspeksi)</p>
+        ${machiningRows.length === 0 ? `<p class="dash-empty">Tidak ada spesimen yang sedang menunggu atau dalam proses machining.</p>` : `
+          <div class="dash-action-list">
+            ${machiningRows.slice(0, 8).map(w => `
+              <div class="dash-action-item">
+                <div>
+                  <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
+                  <p class="dash-action-hint">${machiningGroupHtml[w.group]}
+                    ${w.group === 'proses' && w.machining_started_at ? ' &middot; dimulai ' + esc(formatDateTimeID(w.machining_started_at)) : ''}
+                    ${w.group === 'selesai' && w.machining_finished_at ? ' &middot; selesai ' + esc(formatDateTimeID(w.machining_finished_at)) : ''}</p>
+                </div>
+                <div>
+                  <button class="btn btn-sm" data-machining-open="${w.id}">Buka Preparation</button>
+                  ${w.group === 'selesai' ? `<button class="btn btn-sm btn-primary" data-action-spec="${w.test_request_id}">Inspeksi</button>` : ''}
+                </div>
+              </div>`).join('')}
+            ${machiningRows.length > 8 ? `<p class="muted" style="margin:6px 0 0;">+ ${machiningRows.length - 8} Work Order lainnya &mdash; lihat Preparation Queue.</p>` : ''}
+          </div>`}
+      </div>
+
       <div class="dash-grid">
         <div class="card">
           <p class="card-title">Alur Kerja</p>
@@ -341,7 +385,7 @@
                 <div class="dash-action-item">
                   <div>
                     <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
-                    <p class="dash-action-hint">Work Order dibuat, belum ada Pengecekan Spesimen</p>
+                    <p class="dash-action-hint">Machining selesai, belum ada Pengecekan Spesimen</p>
                   </div>
                   <button class="btn btn-sm" data-action-spec="${w.test_request_id}">Buat Sheet</button>
                 </div>`).join('')}
@@ -371,6 +415,8 @@
 
     contentEl.querySelectorAll('[data-action-wo]').forEach(btn =>
       btn.addEventListener('click', () => createWorkOrder(btn.dataset.actionWo)));
+    contentEl.querySelectorAll('[data-machining-open]').forEach(btn =>
+      btn.addEventListener('click', () => openWoTask(btn.dataset.machiningOpen, 'preparation')));
     contentEl.querySelectorAll('[data-action-spec]').forEach(btn =>
       btn.addEventListener('click', () => {
         state.view = 'specimen-list';
@@ -1976,9 +2022,17 @@
       : '<span class="muted">-</span>';
   }
 
+  const MACHINING_LABELS = { belum: 'Belum machining', proses: 'Sedang machining', selesai: 'Machining selesai' };
+  const MACHINING_PILL = { belum: 'st-pending', proses: 'st-draft', selesai: 'st-final' };
+  const machiningPillHtml = status => `<span class="st-pill ${MACHINING_PILL[status] || 'st-pending'}">${esc(MACHINING_LABELS[status] || status)}</span>`;
+
   // Tombol menuju sheet untuk satu baris: Buka (sudah ada) / Buat Sheet (punya template) / -.
+  // Sheet baru hanya bisa dibuat setelah machining selesai (item.machining_done === false = belum).
   function sheetActionHtml(it) {
     if (it.sheet_id) return `<button type="button" class="btn btn-sm" data-open-sheet="${it.sheet_id}">Buka Sheet</button>`;
+    if (it.has_template && it.machining_done === false) {
+      return '<button type="button" class="btn btn-sm" disabled title="Tim machining perlu menekan Selesai Machining dulu">Menunggu machining</button>';
+    }
     if (it.has_template) {
       return `<button type="button" class="btn btn-sm btn-primary" data-create-sheet data-coupon="${esc(it.coupon_row_no)}" data-test="${esc(it.test_name)}">+ Buat Sheet</button>`;
     }
@@ -1990,7 +2044,31 @@
   // tidak punya template sheet (tetap di-marking, dipotong, dan di-machining).
   function preparationBodyHtml(t) {
     const { stage, items, stats } = t;
+    const mc = t.extra.machining;
+    const mcButtons = mc.status === 'belum'
+      ? '<button type="button" class="btn btn-primary" data-machining="start">Mulai Machining</button>'
+      : mc.status === 'proses'
+        ? '<button type="button" class="btn btn-primary" data-machining="finish">Selesai Machining</button>'
+        : (stats.created ? '' : '<button type="button" class="btn btn-sm" data-machining="reopen">Buka Kembali</button>');
+    const mcHint = {
+      belum: 'Tim machining menekan &ldquo;Mulai Machining&rdquo; saat pembuatan spesimen dimulai. Receiving harus sudah selesai.',
+      proses: 'Pembuatan spesimen sedang dikerjakan. Tekan &ldquo;Selesai Machining&rdquo; bila semua spesimen sudah jadi.',
+      selesai: 'Machining selesai — tim inspeksi sekarang dapat membuat dan mengisi sheet Pengecekan Spesimen.'
+    }[mc.status];
     return `
+      <div class="card">
+        <div class="task-card-head">
+          <p class="section-title">Machining Spesimen <span class="en">(pembuatan spesimen oleh tim machining)</span></p>
+          <div>${mcButtons}</div>
+        </div>
+        <div class="info-facts">
+          <div class="info-fact"><span>Status</span><strong>${machiningPillHtml(mc.status)}</strong></div>
+          <div class="info-fact"><span>Dimulai</span><strong>${mc.started_at ? esc(formatDateTimeID(mc.started_at)) : '-'}</strong></div>
+          <div class="info-fact"><span>Selesai</span><strong>${mc.finished_at ? esc(formatDateTimeID(mc.finished_at)) : '-'}</strong></div>
+          <div class="info-fact"><span>PIC Machining</span><strong>${esc(stage.pic) || '-'}</strong></div>
+        </div>
+        <p class="muted" style="margin:10px 0 0;">${mcHint}</p>
+      </div>
       <div class="task-stats">
         <div class="task-stat"><b>${stats.coupons}</b><span>Coupon</span></div>
         <div class="task-stat"><b>${stats.specimens}</b><span>Total spesimen</span></div>
@@ -2023,7 +2101,7 @@
           <div class="field"><label>PIC Preparation</label>${woPicSelect(stage.pic)}</div>
           <div class="field" style="justify-content:flex-end; align-items:flex-start;"><button type="submit" class="btn">Simpan PIC</button></div>
         </form>
-        <p class="muted" style="margin-top:12px;">Status tahap ini mengikuti sheet Pengecekan Spesimen secara otomatis: Selesai bila semua sheet yang dibutuhkan sudah dibuat dan berstatus Final.</p>
+        <p class="muted" style="margin-top:12px;">Status tahap ini otomatis: Berjalan begitu machining dimulai, dan Selesai bila semua sheet Pengecekan Spesimen yang dibutuhkan sudah dibuat dan berstatus Final.</p>
       </div>`;
   }
 
@@ -2802,6 +2880,25 @@
   }
 
   function bindWoPreparationEvents(t) {
+    document.querySelectorAll('[data-machining]').forEach(btn => btn.addEventListener('click', async () => {
+      const action = btn.dataset.machining;
+      if (action === 'reopen' && !confirm('Buka kembali machining? Status kembali menjadi "Sedang machining".')) return;
+      btn.disabled = true;
+      try {
+        state.woTask = await api(`/api/work-orders/${t.work_order.id}/machining`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action })
+        });
+        toast({ start: 'Machining dimulai', finish: 'Machining selesai — spesimen siap diinspeksi', reopen: 'Machining dibuka kembali' }[action], 'success');
+        state.queueCountsAt = 0;
+        render();
+      } catch (err) {
+        toast(err.message, 'error');
+        btn.disabled = false;
+      }
+    }));
+
     document.getElementById('woPrepForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
@@ -3060,6 +3157,9 @@
 
   function queueSheetButtonHtml(r) {
     if (r.sheet_id) return `<button type="button" class="btn btn-sm" data-open-sheet="${r.sheet_id}">Buka Sheet</button>`;
+    if (r.machining_status !== 'selesai') {
+      return '<button type="button" class="btn btn-sm" disabled title="Tim machining perlu menekan Selesai Machining dulu">Menunggu machining</button>';
+    }
     return `<button type="button" class="btn btn-sm" data-q-create data-req="${r.test_request_id}" data-coupon="${esc(r.coupon_row_no)}" data-test="${esc(r.test_name)}">+ Buat Sheet</button>`;
   }
 
@@ -3075,12 +3175,13 @@
         <td class="q-actions"><button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:receiving">Terima &rarr;</button></td>`
     },
     preparation: {
-      head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Specimen Marking', 'Status Sheet', ''],
+      head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Specimen Marking', 'Machining', 'Status Sheet', ''],
       row: r => `
         <td>${queueWoCellHtml(r)}</td>
         <td>${couponCellHtml(r)}</td>
         <td><strong>${esc(r.test_name)}</strong><br><span class="muted">Qty ${esc(r.qty) || '-'}${r.method ? ' &middot; ' + esc(r.method) : ''}</span></td>
         <td>${markingChipsHtml(r)}</td>
+        <td>${machiningPillHtml(r.machining_status)}</td>
         <td>${r.sheet_status
           ? `<span class="badge badge-${r.sheet_status === 'final' ? 'final' : 'draft'}">${r.sheet_status === 'final' ? 'Final' : 'Draft'}</span>`
           : '<span class="st-pill st-pending">Belum dibuat</span>'}</td>
@@ -4320,13 +4421,45 @@
 
     let rows = [];
     let requests = [];
+    let workOrders = [];
     try {
       rows = await api('/api/specimen-inspections');
       requests = (await api('/api/requests')).filter(r => r.status === 'final');
+      workOrders = await api('/api/work-orders');
     } catch (e) {
       contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
       return;
     }
+
+    // Antrian kerja tim inspeksi: spesimen yang sudah selesai di-machining (siap diinspeksi) dan yang
+    // masih menunggu/berjalan di machining. Sheet inspeksi hanya bisa dibuat setelah machining selesai.
+    const activeWo = workOrders.filter(w => w.stage && w.stage.statuses
+      && !['final', 'na'].includes(w.stage.statuses.preparation) && w.stage.statuses.receiving === 'final');
+    const readyWo = activeWo.filter(w => w.machining_status === 'selesai');
+    const inMachiningWo = activeWo.filter(w => w.machining_status !== 'selesai');
+    const readyHtml = (readyWo.length || inMachiningWo.length) ? `
+      <div class="card">
+        <p class="card-title">Siap Diinspeksi</p>
+        <p class="card-desc">${readyWo.length} Work Order selesai machining &middot; ${inMachiningWo.length} masih menunggu / sedang machining</p>
+        <div class="dash-action-list">
+          ${readyWo.map(w => `
+            <div class="dash-action-item">
+              <div>
+                <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
+                <p class="dash-action-hint"><span class="st-pill st-final">Machining selesai</span>${w.machining_finished_at ? ' &middot; ' + esc(formatDateTimeID(w.machining_finished_at)) : ''}</p>
+              </div>
+              <button class="btn btn-sm btn-primary" data-ready-spec="${w.test_request_id}">Buat Pengecekan</button>
+            </div>`).join('')}
+          ${inMachiningWo.map(w => `
+            <div class="dash-action-item">
+              <div>
+                <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
+                <p class="dash-action-hint">${machiningPillHtml(w.machining_status)}</p>
+              </div>
+              <button class="btn btn-sm" data-machining-open="${w.id}">Lihat Machining</button>
+            </div>`).join('')}
+        </div>
+      </div>` : '';
 
     const creatorHtml = state.specimenCreatorOpen ? `
       <div class="card">
@@ -4372,13 +4505,13 @@
     ` : '';
 
     if (!rows.length) {
-      contentEl.innerHTML = creatorHtml + `
+      contentEl.innerHTML = creatorHtml + readyHtml + `
         <div class="card empty-state">
           <p class="card-title">Belum ada Pengecekan Spesimen</p>
           <p class="card-desc">Klik &ldquo;+ Buat Pengecekan Baru&rdquo; untuk mulai membuat sheet Tensile/Bending/Charpy Impact.</p>
         </div>`;
     } else {
-      contentEl.innerHTML = creatorHtml + `
+      contentEl.innerHTML = creatorHtml + readyHtml + `
         <div class="card" style="padding:0;">
           <div style="padding:22px 24px 8px;">
             <p class="card-title">Daftar Pengecekan Spesimen</p>
@@ -4422,6 +4555,14 @@
         }
       });
     }
+
+    contentEl.querySelectorAll('[data-ready-spec]').forEach(btn => btn.addEventListener('click', () => {
+      state.specimenCreatorOpen = true;
+      state.specimenCreatorPrefill = { requestId: btn.dataset.readySpec };
+      render();
+    }));
+    contentEl.querySelectorAll('[data-machining-open]').forEach(btn =>
+      btn.addEventListener('click', () => openWoTask(btn.dataset.machiningOpen, 'preparation')));
 
     if (state.specimenCreatorOpen) {
       const couponSelect = document.getElementById('specCreateCoupon');

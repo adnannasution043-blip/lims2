@@ -170,6 +170,12 @@ async function initSchema() {
     -- (DPI-LP-FR-25), yang tetap 6 PIC lama.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS released_pic TEXT;
 
+    -- Machining spesimen (tahap Preparation): tim machining menekan "Mulai" lalu "Selesai". Pengecekan
+    -- Spesimen (inspeksi) baru bisa dibuat setelah machining selesai. Status: 'belum' | 'proses' | 'selesai'.
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS machining_status TEXT NOT NULL DEFAULT 'belum';
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS machining_started_at TIMESTAMPTZ;
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS machining_finished_at TIMESTAMPTZ;
+
     -- No. LHU (Laporan Hasil Uji) — dibuat otomatis (format LHU-{yy}-{urutan}) begitu tahap
     -- Report Issued diselesaikan, tidak diketik manual. Tetap tersimpan walau tahap diedit lagi.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS lhu_number TEXT;
