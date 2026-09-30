@@ -962,8 +962,8 @@
           <label class="confirm-checkbox">
             <input type="checkbox" id="confirmationAgreed" ${f.confirmation_agreed ? 'checked' : ''}>
             <span>
-              Saya menyatakan bahwa seluruh data pada formulir Tinjauan Permintaan Pengujian ini telah saya periksa dengan benar dan saya <strong>menyetujui</strong> pengajuan permintaan pengujian ini sesuai dengan persyaratan yang berlaku.
-              <span class="en">I confirm that all information on this Testing Requirements Review form has been checked and is correct, and I agree to submit this testing request in accordance with the applicable requirements.</span>
+              Saya menyatakan bahwa seluruh data pada formulir Tinjauan Permintaan Pengujian ini telah saya periksa dengan benar dan saya <strong>menyetujui</strong> pengajuan permintaan pengujian ini sesuai dengan persyaratan yang berlaku. Saya juga memahami bahwa laboratorium <strong>hanya menyimpan sampel/benda uji selama 14 (empat belas) hari</strong> setelah pengujian selesai, dan tidak bertanggung jawab atas sampel yang tidak diambil setelah periode tersebut.
+              <span class="en">I confirm that all information on this Testing Requirements Review form has been checked and is correct, and I agree to submit this testing request in accordance with the applicable requirements. I also understand that the laboratory only retains samples/test specimens for 14 (fourteen) days after testing is completed, and is not responsible for samples not collected after that period.</span>
             </span>
           </label>
         </div>
