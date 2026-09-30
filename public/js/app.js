@@ -3279,10 +3279,18 @@
     drawTable();
   }
 
+  const LHU_EVENT_STATUS_LABELS = { sent: 'Sent', delivered: 'Delivered' };
+
+  function fmtFileSizeLhu(bytes) {
+    return bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
   async function renderLhuDetail() {
     pageTitle.textContent = 'Hasil & Laporan';
     pageSubtitle.textContent = 'Detail LHU';
-    topbarActions.innerHTML = `<button class="btn" id="btnLhuBack">&larr; Kembali</button>`;
+    topbarActions.innerHTML = `
+      <button class="btn" id="btnLhuBack">&larr; Kembali ke Daftar</button>
+      <button class="btn btn-primary" id="btnLhuDownload">Download PDF</button>`;
     document.getElementById('btnLhuBack').addEventListener('click', () => { state.view = 'lhu-list'; render(); });
 
     contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
@@ -3295,49 +3303,279 @@
       return;
     }
 
+    document.getElementById('btnLhuDownload').addEventListener('click', () => window.open(`/work-orders/${r.id}/print`, '_blank'));
+
+    const wo = r.work_order;
+    const a = r.approval;
+    const fc = r.final_check;
+
     contentEl.innerHTML = `
-      <div class="card">
-        <p class="section-title">${esc(r.lhu_number)} <span class="en">Rev. ${r.revision}</span></p>
-        <div class="info-facts">
-          <div class="info-fact"><span>No. Work Order</span><strong>${esc(r.job_number)}</strong></div>
-          <div class="info-fact"><span>Perusahaan</span><strong>${esc(r.company)}</strong></div>
-          <div class="info-fact"><span>Nama Proyek</span><strong>${esc(r.project_name)}</strong></div>
-          <div class="info-fact"><span>Tanggal Terbit</span><strong>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</strong></div>
+      <div class="lhu-hero">
+        <div class="lhu-hero-main">
+          <span class="lhu-hero-icon" aria-hidden="true">&#128220;</span>
+          <div>
+            <p class="lhu-hero-label">Laporan Hasil Uji (LHU)</p>
+            <p class="lhu-hero-title">${esc(r.lhu_number)} <span class="lhu-hero-rev">Rev. ${r.revision}</span></p>
+            <p class="lhu-hero-sub">
+              <span aria-hidden="true">&#128295;</span> Work Order: ${esc(wo.job_number)} &nbsp;
+              <span aria-hidden="true">&#127970;</span> ${esc(wo.project_name)} &nbsp;
+              <span aria-hidden="true">&#128100;</span> ${esc(wo.company)}
+            </p>
+          </div>
         </div>
-        <button type="button" class="btn btn-sm" style="margin-top:14px;" id="btnLhuOpenPrint">Buka Dokumen (PDF)</button>
+        <div class="lhu-hero-stats">
+          <div><span>Status LHU</span><span class="st-pill st-final">Issued</span></div>
+          <div><span>Status Distribusi</span><span class="st-pill ${LHU_DIST_PILL[r.distribution_status]}">${esc(LHU_DIST_LABELS[r.distribution_status])}</span></div>
+          <div><span>Tanggal Terbit</span><strong>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</strong></div>
+        </div>
       </div>
-      <form id="lhuDistForm">
-        <div class="card">
-          <p class="section-title">Distribusi ke Customer</p>
+
+      <div class="lhu-layout">
+        <div>
+          <div class="card">
+            <p class="section-title">Informasi LHU</p>
+            <div class="info-facts">
+              <div class="info-fact"><span>No. LHU</span><strong>${esc(r.lhu_number)}</strong></div>
+              <div class="info-fact"><span>Versi</span><strong>Rev. ${r.revision}</strong></div>
+              <div class="info-fact"><span>Tanggal Terbit</span><strong>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</strong></div>
+              <div class="info-fact"><span>Template Laporan</span><strong>${esc(r.template)}</strong></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="task-card-head">
+              <p class="section-title">Informasi Work Order</p>
+              <button type="button" class="btn btn-sm" id="btnLhuOpenWo">Lihat Work Order &#8599;</button>
+            </div>
+            <div class="info-facts">
+              <div class="info-fact"><span>No. Work Order</span><strong>${esc(wo.job_number)}</strong></div>
+              <div class="info-fact"><span>Nama Proyek</span><strong>${esc(wo.project_name)}</strong></div>
+              <div class="info-fact"><span>Perusahaan</span><strong>${esc(wo.company)}</strong></div>
+              <div class="info-fact"><span>Tgl. Request</span><strong>${wo.received_date ? esc(formatDateOnly(wo.received_date)) : '-'}</strong></div>
+              <div class="info-fact"><span>Target Penyelesaian</span><strong>${wo.lhu_target_date ? esc(formatDateOnly(wo.lhu_target_date)) : '-'}</strong></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <p class="section-title">Persetujuan</p>
+            <div class="info-facts">
+              <div class="info-fact"><span>Disetujui Oleh</span><strong>${esc(a.approved_by) || '-'}</strong></div>
+              <div class="info-fact"><span>Tanggal Approval</span><strong>${a.approved_date ? esc(formatDateOnly(a.approved_date)) : '-'}</strong></div>
+            </div>
+            ${a.approval_notes ? `<p class="muted" style="margin-top:10px;"><strong>Catatan Approval:</strong> ${esc(a.approval_notes)}</p>` : ''}
+          </div>
+
+          <div class="card">
+            <p class="section-title">Ringkasan Pengujian</p>
+            <div class="task-stats">
+              <div class="task-stat"><b>${fc.coupons}</b><span>Coupon</span></div>
+              <div class="task-stat"><b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
+              <div class="task-stat ok"><b>${fc.total_specimens}</b><span>Total Specimen</span></div>
+              <div class="task-stat ok"><b>${fc.result_sheets}</b><span>Result Sheet</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <p class="section-title">Dokumen LHU</p>
+            <div class="lhu-doc-row">
+              <div>
+                <strong>${esc(r.lhu_number)}.pdf</strong>
+                <p class="muted" style="margin:4px 0 0;">${esc(r.template)}</p>
+              </div>
+              <button type="button" class="btn btn-sm" id="btnLhuOpenPrint2">Buka Dokumen (PDF)</button>
+            </div>
+            <p class="muted" style="margin:8px 0 14px;">Memakai format cetak Work Order yang sudah ada (DPI-LP-FR-25) &mdash; dokumen LHU tersendiri belum dibangun.</p>
+            <p class="lhu-sub-title">Attachment Pendukung</p>
+            <input type="file" id="lhuAttInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.zip,.xlsx,.xls,.docx,.doc" hidden>
+            <div id="lhuAttList"><p class="muted">Memuat attachment...</p></div>
+            <button type="button" class="btn btn-sm" id="btnLhuAttUpload" style="margin-top:10px;">+ Tambah Attachment</button>
+          </div>
+
+          <div class="card">
+            <div class="task-card-head">
+              <p class="section-title">Informasi Distribusi</p>
+              <button type="button" class="btn btn-sm" id="btnLhuDistAdd">+ Tambah Distribusi</button>
+            </div>
+            <div id="lhuDistForm"></div>
+            <div id="lhuDistList"><p class="muted">Memuat riwayat distribusi...</p></div>
+          </div>
+
+          <div class="card">
+            <p class="section-title">Riwayat Status</p>
+            <div id="lhuTimeline">
+              ${r.timeline.map(t => `
+                <div class="lhu-timeline-row">
+                  <span class="lhu-timeline-dot"></span>
+                  <div>
+                    <div class="lhu-timeline-head"><strong>${esc(t.label)}</strong><span class="muted">${esc(formatDateTimeID(t.date))}</span></div>
+                    <div class="muted">${esc(t.note)}</div>
+                  </div>
+                </div>`).join('') || '<p class="muted">Belum ada riwayat.</p>'}
+            </div>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('btnLhuOpenPrint2').addEventListener('click', () => window.open(`/work-orders/${r.id}/print`, '_blank'));
+    document.getElementById('btnLhuOpenWo').addEventListener('click', () => openWorkOrderForm(r.id));
+
+    initLhuAttachments(r.id);
+    initLhuDistributions(r.id);
+  }
+
+  function initLhuAttachments(woId) {
+    const listEl = document.getElementById('lhuAttList');
+    const input = document.getElementById('lhuAttInput');
+    const uploadBtn = document.getElementById('btnLhuAttUpload');
+
+    const draw = (items) => {
+      listEl.innerHTML = items.length
+        ? `<ul class="lhu-att-list">${items.map(a => `
+            <li>
+              <span class="lhu-att-icon" aria-hidden="true">&#128196;</span>
+              <div class="lhu-att-meta"><strong>${esc(a.filename)}</strong><span class="muted">${fmtFileSizeLhu(a.size_bytes)} &middot; ${esc(formatDateOnly(String(a.created_at).slice(0, 10)))}</span></div>
+              <a href="/api/lhu-attachments/${a.id}" class="btn btn-sm" download>Download</a>
+              <button type="button" class="btn btn-sm btn-danger" data-att-del="${a.id}">Hapus</button>
+            </li>`).join('')}</ul>`
+        : '<p class="muted">Belum ada attachment.</p>';
+      listEl.querySelectorAll('[data-att-del]').forEach(btn => btn.addEventListener('click', async () => {
+        if (!confirm('Hapus attachment ini?')) return;
+        try {
+          await api(`/api/lhu-attachments/${btn.dataset.attDel}`, { method: 'DELETE' });
+          load();
+        } catch (err) { toast(err.message, 'error'); }
+      }));
+    };
+
+    const load = async () => {
+      try {
+        const { items } = await api(`/api/lhu-reports/${woId}/attachments`);
+        draw(items);
+      } catch (err) {
+        listEl.innerHTML = `<p class="muted">Gagal memuat: ${esc(err.message)}</p>`;
+      }
+    };
+
+    uploadBtn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const file = input.files[0];
+      input.value = '';
+      if (!file) return;
+      if (file.size > 10 * 1024 * 1024) { toast('Ukuran file maksimal 10 MB', 'error'); return; }
+      try {
+        await api(`/api/lhu-reports/${woId}/attachments`, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
+          body: file
+        });
+        toast('Attachment diunggah', 'success');
+        load();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+
+    load();
+  }
+
+  function initLhuDistributions(woId) {
+    const listEl = document.getElementById('lhuDistList');
+    const formArea = document.getElementById('lhuDistForm');
+    const addBtn = document.getElementById('btnLhuDistAdd');
+
+    const proofInput = document.createElement('input');
+    proofInput.type = 'file';
+    proofInput.accept = 'image/jpeg,image/png,image/webp,application/pdf';
+    proofInput.hidden = true;
+    listEl.parentElement.appendChild(proofInput);
+    let proofTargetId = null;
+    proofInput.addEventListener('change', async () => {
+      const file = proofInput.files[0];
+      proofInput.value = '';
+      if (!file || !proofTargetId) return;
+      if (file.size > 10 * 1024 * 1024) { toast('Ukuran file maksimal 10 MB', 'error'); return; }
+      try {
+        await api(`/api/lhu-distributions/${proofTargetId}/proof`, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+          body: file
+        });
+        toast('Bukti kirim diunggah', 'success');
+        loadList();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+
+    const drawList = (items) => {
+      listEl.innerHTML = items.length
+        ? `<div class="task-table-wrap"><table class="task-table">
+            <thead><tr><th>No.</th><th>Tanggal Kirim</th><th>Metode</th><th>Penerima</th><th>Status</th><th>Bukti Kirim</th><th></th></tr></thead>
+            <tbody>${items.map((d, i) => `
+              <tr>
+                <td>${i + 1}</td>
+                <td>${d.sent_date ? esc(formatDateOnly(d.sent_date)) : '-'}</td>
+                <td>${esc(d.method) || '-'}</td>
+                <td>${esc(d.recipient) || '-'}</td>
+                <td><span class="st-pill ${LHU_DIST_PILL[d.status]}">${esc(LHU_DIST_LABELS[d.status])}</span></td>
+                <td>${d.has_proof
+                  ? `<a href="/api/lhu-distributions/${d.id}/proof" target="_blank" rel="noopener" class="btn btn-sm">Lihat</a>`
+                  : `<button type="button" class="btn btn-sm" data-dist-proof="${d.id}">Unggah</button>`}</td>
+                <td><button type="button" class="btn btn-sm btn-danger" data-dist-del="${d.id}">Hapus</button></td>
+              </tr>`).join('')}</tbody>
+          </table></div>`
+        : '<p class="muted">Belum ada riwayat distribusi.</p>';
+
+      listEl.querySelectorAll('[data-dist-proof]').forEach(btn => btn.addEventListener('click', () => {
+        proofTargetId = btn.dataset.distProof;
+        proofInput.click();
+      }));
+      listEl.querySelectorAll('[data-dist-del]').forEach(btn => btn.addEventListener('click', async () => {
+        if (!confirm('Hapus riwayat distribusi ini?')) return;
+        try {
+          await api(`/api/lhu-distributions/${btn.dataset.distDel}`, { method: 'DELETE' });
+          loadList();
+        } catch (err) { toast(err.message, 'error'); }
+      }));
+    };
+
+    const loadList = async () => {
+      try {
+        const { items } = await api(`/api/lhu-reports/${woId}/distributions`);
+        drawList(items);
+      } catch (err) {
+        listEl.innerHTML = `<p class="muted">Gagal memuat: ${esc(err.message)}</p>`;
+      }
+    };
+
+    addBtn.addEventListener('click', () => {
+      if (formArea.innerHTML) { formArea.innerHTML = ''; return; }
+      formArea.innerHTML = `
+        <form id="lhuDistAddForm" class="lhu-dist-add">
           <div class="form-grid">
-            <div class="field"><label>Status Distribusi</label>
-              <select name="distribution_status">${Object.entries(LHU_DIST_LABELS).map(([k, l]) =>
-                `<option value="${k}" ${r.distribution_status === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
-            <div class="field"><label>Tanggal Kirim</label><input type="date" name="distribution_date" value="${esc(r.distribution_date)}"></div>
+            <div class="field"><label>Tanggal Kirim</label><input type="date" name="sent_date" required></div>
             <div class="field"><label>Cara Kirim</label>
-              <select name="distribution_method"><option value="">- Pilih -</option>${LHU_DIST_METHODS.map(m =>
-                `<option ${r.distribution_method === m ? 'selected' : ''}>${esc(m)}</option>`).join('')}</select></div>
-            <div class="field"><label>Penerima</label><input type="text" name="distribution_recipient" value="${esc(r.distribution_recipient)}" placeholder="Nama / instansi penerima"></div>
+              <select name="method"><option value="">- Pilih -</option>${LHU_DIST_METHODS.map(m => `<option>${esc(m)}</option>`).join('')}</select></div>
+            <div class="field"><label>Penerima</label><input type="text" name="recipient" placeholder="Nama / instansi / email penerima" required></div>
+            <div class="field"><label>Status</label>
+              <select name="status">${Object.entries(LHU_EVENT_STATUS_LABELS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></div>
           </div>
           <div class="form-actions"><div></div><div class="right"><button type="submit" class="btn btn-primary">Simpan Distribusi</button></div></div>
-        </div>
-      </form>`;
-
-    document.getElementById('btnLhuOpenPrint').addEventListener('click', () => window.open(`/work-orders/${r.id}/print`, '_blank'));
-
-    document.getElementById('lhuDistForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = Object.fromEntries(new FormData(e.target).entries());
-      try {
-        await api(`/api/lhu-reports/${r.id}/distribution`, {
-          method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        });
-        toast('Status distribusi disimpan', 'success');
-        render();
-      } catch (err) {
-        toast(err.message, 'error');
-      }
+        </form>`;
+      document.getElementById('lhuDistAddForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = Object.fromEntries(new FormData(e.target).entries());
+        try {
+          await api(`/api/lhu-reports/${woId}/distributions`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          });
+          toast('Distribusi ditambahkan', 'success');
+          render();   // muat ulang seluruh halaman: hero + riwayat + status distribusi terkini
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
     });
+
+    loadList();
   }
 
   // ---------- pengaturan ----------

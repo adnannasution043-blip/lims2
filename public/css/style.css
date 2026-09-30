@@ -806,6 +806,43 @@ table.task-table input:focus, table.task-table select:focus {
 .lhu-info-box li { font-size: 13px; color: #1F4E96; display: flex; gap: 8px; align-items: flex-start; }
 .lhu-doc-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
 
+/* Hasil & Laporan: halaman detail LHU */
+.lhu-hero {
+  background: linear-gradient(135deg, var(--navy), #163E85);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 24px 26px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+.lhu-hero-main { display: flex; gap: 16px; align-items: flex-start; }
+.lhu-hero-icon { font-size: 26px; background: rgba(255,255,255,0.15); border-radius: 10px; padding: 10px 12px; }
+.lhu-hero-label { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.8; }
+.lhu-hero-title { margin: 2px 0 8px; font-size: 24px; font-weight: 800; }
+.lhu-hero-rev { font-size: 13px; font-weight: 600; background: rgba(255,255,255,0.18); border-radius: 20px; padding: 3px 10px; margin-left: 8px; vertical-align: 2px; }
+.lhu-hero-sub { margin: 0; font-size: 13px; opacity: 0.9; }
+.lhu-hero-stats { display: flex; gap: 26px; flex-wrap: wrap; }
+.lhu-hero-stats > div { display: flex; flex-direction: column; gap: 4px; }
+.lhu-hero-stats span:first-child { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; opacity: 0.75; }
+.lhu-hero-stats strong { font-size: 15px; }
+
+.lhu-sub-title { font-weight: 700; font-size: 13px; color: var(--navy); margin: 16px 0 10px; }
+.lhu-att-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lhu-att-list li { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }
+.lhu-att-icon { font-size: 18px; }
+.lhu-att-meta { flex: 1; display: flex; flex-direction: column; }
+
+.lhu-dist-add { border-top: 1px solid var(--border); padding-top: 14px; margin-bottom: 14px; }
+
+.lhu-timeline-row { display: flex; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.lhu-timeline-row:last-child { border-bottom: 0; }
+.lhu-timeline-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-top: 6px; flex-shrink: 0; }
+.lhu-timeline-head { display: flex; justify-content: space-between; gap: 10px; }
+
 .locked-banner {
   background: var(--danger-bg);
   color: var(--danger);
@@ -1557,4 +1594,6 @@ table.test-items-table input[type="text"] {
   .ev-lists { grid-template-columns: 1fr; }
   .ev-list + .ev-list { border-left: none; border-top: 1px solid var(--border); }
   .lhu-layout { grid-template-columns: 1fr; }
+  .lhu-hero { flex-direction: column; }
+  .lhu-hero-stats { gap: 18px; }
 }

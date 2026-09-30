@@ -731,7 +731,7 @@ registerTestReportRoutes(app, {
 registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
 // Modul Hasil & Laporan (daftar LHU + status distribusi).
-registerLhuReportRoutes(app, { pool });
+registerLhuReportRoutes(app, { pool, getFullWorkOrder, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
 // Reset Data (halaman Pengaturan) — untuk mengosongkan data uji coba supaya bisa mulai input
 // dari awal saat pengujian end-to-end. Hanya menghapus data transaksional (Permintaan Uji dan

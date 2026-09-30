@@ -174,13 +174,45 @@ async function initSchema() {
     -- Report Issued diselesaikan, tidak diketik manual. Tetap tersimpan walau tahap diedit lagi.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS lhu_number TEXT;
 
-    -- Distribusi LHU (modul Hasil & Laporan) — dulunya field ini ada di tahap Report Issued
-    -- (Cara Pengiriman/Penerima/No. Resi) lalu dipindah ke sini sesuai permintaan klien, supaya
-    -- pengiriman LHU ke customer dikelola terpisah dari proses penerbitannya.
-    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_status TEXT NOT NULL DEFAULT 'belum_dikirim'; -- 'belum_dikirim' | 'sent' | 'delivered'
+    -- Kolom distribusi lama (satu status per Work Order) — sudah digantikan tabel
+    -- lhu_distributions di bawah (riwayat, bisa kirim berkali-kali). Dibiarkan ada (tidak dipakai
+    -- lagi oleh kode) daripada di-drop, konsisten dengan kolom peninggalan lain di tabel ini.
+    ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_status TEXT NOT NULL DEFAULT 'belum_dikirim';
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_date TEXT;
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_method TEXT;
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS distribution_recipient TEXT;
+
+    -- Riwayat pengiriman LHU ke customer (modul Hasil & Laporan) — satu Work Order bisa dikirim
+    -- lebih dari sekali (mis. dikirim ulang), jadi disimpan sebagai riwayat, bukan satu status.
+    -- Status LHU terkini = baris dengan id terbesar. Bukti kirim (foto/PDF resi, screenshot, dll)
+    -- disimpan langsung sebagai BYTEA, sama alasannya dengan work_order_files: disk server
+    -- bersifat sementara di Railway.
+    CREATE TABLE IF NOT EXISTS lhu_distributions (
+      id SERIAL PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      sent_date TEXT,
+      method TEXT,
+      recipient TEXT,
+      status TEXT NOT NULL DEFAULT 'sent',  -- 'sent' | 'delivered'
+      proof_filename TEXT,
+      proof_mime_type TEXT,
+      proof_data BYTEA,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_lhu_distributions_wo ON lhu_distributions(work_order_id);
+
+    -- Attachment pendukung LHU (modul Hasil & Laporan) — mis. Calculation Sheet, dokumentasi
+    -- foto, data tambahan — terpisah dari dokumen utama (yang masih memakai print Work Order).
+    CREATE TABLE IF NOT EXISTS lhu_attachments (
+      id SERIAL PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_lhu_attachments_wo ON lhu_attachments(work_order_id);
 
     -- Sample Marking per baris coupon test, dikaitkan lewat row_no (bukan coupon_tests.id)
     -- karena PUT /api/requests/:id men-delete+insert ulang seluruh coupon_tests setiap
