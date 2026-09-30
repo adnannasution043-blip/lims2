@@ -326,8 +326,8 @@
                 <div>
                   <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
                   <p class="dash-action-hint">${machiningGroupHtml[w.group]}
-                    ${w.group === 'proses' && w.machining_started_at ? ' &middot; dimulai ' + esc(formatDateTimeID(w.machining_started_at)) : ''}
-                    ${w.group === 'selesai' && w.machining_finished_at ? ' &middot; selesai ' + esc(formatDateTimeID(w.machining_finished_at)) : ''}</p>
+                    ${w.group === 'proses' && w.machining_started_at ? ' &middot; dimulai ' + esc(formatDateTimeID(w.machining_started_at)) + ' &middot; berjalan ' + esc(fmtDurationID(w.machining_started_at)) : ''}
+                    ${w.group === 'selesai' && w.machining_finished_at ? ' &middot; selesai ' + esc(formatDateTimeID(w.machining_finished_at)) + ' &middot; durasi ' + esc(fmtDurationID(w.machining_started_at, w.machining_finished_at)) : ''}</p>
                 </div>
                 <div>
                   <button class="btn btn-sm" data-machining-open="${w.id}">Buka Preparation</button>
@@ -2022,6 +2022,20 @@
       : '<span class="muted">-</span>';
   }
 
+  // Durasi antara dua waktu ("2 hari 3 jam 15 menit"); tanpa waktu selesai dihitung sampai sekarang.
+  function fmtDurationID(startedAt, finishedAt) {
+    if (!startedAt) return '-';
+    const start = new Date(startedAt).getTime();
+    const end = finishedAt ? new Date(finishedAt).getTime() : Date.now();
+    if (Number.isNaN(start) || Number.isNaN(end) || end < start) return '-';
+    const min = Math.floor((end - start) / 60000);
+    const parts = [];
+    if (Math.floor(min / 1440)) parts.push(`${Math.floor(min / 1440)} hari`);
+    if (Math.floor((min % 1440) / 60)) parts.push(`${Math.floor((min % 1440) / 60)} jam`);
+    if (min % 60 || !parts.length) parts.push(`${min % 60} menit`);
+    return parts.join(' ');
+  }
+
   const MACHINING_LABELS = { belum: 'Belum machining', proses: 'Sedang machining', selesai: 'Machining selesai' };
   const MACHINING_PILL = { belum: 'st-pending', proses: 'st-draft', selesai: 'st-final' };
   const machiningPillHtml = status => `<span class="st-pill ${MACHINING_PILL[status] || 'st-pending'}">${esc(MACHINING_LABELS[status] || status)}</span>`;
@@ -2065,6 +2079,7 @@
           <div class="info-fact"><span>Status</span><strong>${machiningPillHtml(mc.status)}</strong></div>
           <div class="info-fact"><span>Dimulai</span><strong>${mc.started_at ? esc(formatDateTimeID(mc.started_at)) : '-'}</strong></div>
           <div class="info-fact"><span>Selesai</span><strong>${mc.finished_at ? esc(formatDateTimeID(mc.finished_at)) : '-'}</strong></div>
+          <div class="info-fact"><span>${mc.status === 'proses' ? 'Berjalan selama' : 'Durasi pengerjaan'}</span><strong>${mc.started_at ? esc(fmtDurationID(mc.started_at, mc.finished_at)) : '-'}</strong></div>
           <div class="info-fact"><span>PIC Machining</span><strong>${esc(stage.pic) || '-'}</strong></div>
         </div>
         <p class="muted" style="margin:10px 0 0;">${mcHint}</p>
@@ -4450,7 +4465,7 @@
             <div class="dash-action-item">
               <div>
                 <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
-                <p class="dash-action-hint"><span class="st-pill st-final">Machining selesai</span>${w.machining_finished_at ? ' &middot; ' + esc(formatDateTimeID(w.machining_finished_at)) : ''}</p>
+                <p class="dash-action-hint"><span class="st-pill st-final">Machining selesai</span>${w.machining_finished_at ? ' &middot; ' + esc(formatDateTimeID(w.machining_finished_at)) + ' &middot; durasi ' + esc(fmtDurationID(w.machining_started_at, w.machining_finished_at)) : ''}</p>
               </div>
               <button class="btn btn-sm btn-primary" data-ready-spec="${w.test_request_id}">Buat Pengecekan</button>
             </div>`).join('')}
