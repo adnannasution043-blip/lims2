@@ -324,6 +324,12 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_test_reports_request ON test_reports(test_request_id);
 
+    -- Form resmi yang dipakai untuk mencetak (kunci template di lib/reportTemplates, mis. 'bend-sec' = Weld,
+    -- 'bend-mat' = Material). NULL = layout lama/umum. pqr_no & heat_no dipakai form Weld (PQR No / Heat No).
+    ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS template TEXT;
+    ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS pqr_no TEXT;
+    ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS heat_no TEXT;
+
     -- Master Data > Equipment/Peralatan (diminta klien: dipakai untuk mencatat alat uji beserta
     -- status & masa kalibrasinya). Sertifikat kalibrasi disimpan langsung sebagai BYTEA (satu file
     -- per alat, mewakili sertifikat yang berlaku saat ini), sama alasannya dengan work_order_files —

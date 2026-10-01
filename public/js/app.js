@@ -2791,6 +2791,16 @@
           </div>
         </div>
 
+        ${(r.template_options || []).length ? `
+        <div class="card">
+          <p class="section-title">Form Laporan <span class="en">format cetak mengikuti form resmi Detech</span></p>
+          <div class="form-grid">
+            <div class="field full"><label>Jenis Form</label>
+              <select name="template" id="testReportTemplate">${r.template_options.map(o => `<option value="${esc(o.key)}" ${o.key === r.template ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>
+              <small class="muted">Default dipilih dari data coupon: ada WPS / proses las &rarr; Weld, selain itu Material.</small></div>
+          </div>
+        </div>` : ''}
+
         <div class="card">
           <p class="section-title">Info Laporan</p>
           <div class="form-grid">
@@ -2800,6 +2810,9 @@
             <div class="field"><label>Test Method</label><input type="text" name="test_method" value="${esc(r.test_method) || esc(r.method)}"></div>
             <div class="field"><label>Reference Code</label><input type="text" name="reference_code" value="${esc(r.reference_code)}"></div>
             <div class="field"><label>Testing Purpose</label><input type="text" name="testing_purpose" value="${esc(r.testing_purpose)}"></div>
+            ${(r.template_options || []).length ? `
+            <div class="field"><label>PQR No <span class="en">form Weld</span></label><input type="text" name="pqr_no" value="${esc(r.pqr_no)}"></div>
+            <div class="field"><label>Heat No</label><input type="text" name="heat_no" value="${esc(r.heat_no)}"></div>` : ''}
           </div>
         </div>
 
@@ -2861,6 +2874,21 @@
       rerenderTestReportRows();
     });
     bindTestReportRowEvents();
+
+    // Ganti varian form (Weld <-> Material): observasi bawaan ikut berganti selama belum diubah manual.
+    const tplSel = document.getElementById('testReportTemplate');
+    if (tplSel) {
+      const DEFAULT_OBS = { 'bend-sec': 'No Open Discontinuity was Observed', 'bend-mat': 'No Crack was Observed' };
+      let prev = tplSel.value;
+      tplSel.addEventListener('change', () => {
+        const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
+        if (oldObs && newObs) {
+          state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
+          rerenderTestReportRows();
+        }
+        prev = tplSel.value;
+      });
+    }
 
     document.getElementById('btnReportDelete').addEventListener('click', () => deleteTestReport(state.testReport.id));
   }
