@@ -2693,10 +2693,32 @@
   }
 
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.category === 'charpy') {
+      const last = state.testReportRows[state.testReportRows.length - 1];
+      return { marking_specimen: '', notch_position: last ? last.notch_position : '', impact: '', lateral: '', remarks: '' };
+    }
     return { marking_specimen: '', observation: '', result: '' };
   }
 
+  const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
+
   function testReportRowsHtml() {
+    if (state.testReport && state.testReport.category === 'charpy') {
+      return `<datalist id="charpyNotchList">${CHARPY_NOTCH_POSITIONS.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
+      <table class="task-table">
+        <thead><tr><th>Specimen No.</th><th>V-Notch Position</th><th>Impact Value (J)</th><th>Lateral Expansion (mm)</th><th>Remarks</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            <td><input type="text" list="charpyNotchList" data-tfield="notch_position" value="${esc(r.notch_position)}"></td>
+            <td><input type="text" inputmode="decimal" data-tfield="impact" value="${esc(r.impact)}"></td>
+            <td><input type="text" inputmode="decimal" data-tfield="lateral" value="${esc(r.lateral)}"></td>
+            <td><input type="text" data-tfield="remarks" value="${esc(r.remarks)}" placeholder="-"></td>
+            <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
+          </tr>`).join('')}</tbody>
+      </table>
+      <p class="muted" style="margin:6px 0 0;">Baris dengan V-Notch Position yang sama berurutan dicetak sebagai satu blok; Average dihitung otomatis per blok. Form EQT: dari 5 spesimen, nilai tertinggi &amp; terendah dibuang untuk Average.</p>`;
+    }
     return `<table class="task-table">
       <thead><tr><th>Specimen No.</th><th>Observation</th><th>Result</th><th></th></tr></thead>
       <tbody>${state.testReportRows.map((r, idx) => `
@@ -2747,6 +2769,20 @@
           ${pair('Former Diameter (mm)', 'former_diameter_code', 'former_diameter_actual', r.former_diameter_code, r.former_diameter_actual)}
           ${pair('Bend Angle (Degree)', 'bend_angle_code', 'bend_angle_actual', r.bend_angle_code, r.bend_angle_actual, '180')}
           ${pair('Shoulder Distance (mm)', 'shoulder_distance_code', 'shoulder_distance_actual', r.shoulder_distance_code, r.shoulder_distance_actual)}
+        </div>
+      </div>`;
+  }
+
+  function testReportCharpyFieldsHtml(r) {
+    const f = r.fields || {};
+    return `
+      <div class="card">
+        <p class="section-title">Spesimen Charpy <span class="en">sesuai form DE.1/TR/05 &amp; 06 CHARPY</span></p>
+        <div class="form-grid">
+          <div class="field"><label>Specimen Size (mm)</label><input type="text" name="field_specimen_size" value="${esc(f.specimen_size)}"></div>
+          <div class="field"><label>Test Temp (&deg;C)</label><input type="text" name="field_test_temp" value="${esc(f.test_temp)}" placeholder="mis. -20"></div>
+          <div class="field"><label>Sample Orientation</label><input type="text" name="field_orientation" list="charpyOrientList" value="${esc(f.orientation)}">
+            <datalist id="charpyOrientList"><option value="Transversal"><option value="Longitudinal"></datalist></div>
         </div>
       </div>`;
   }
@@ -2817,6 +2853,7 @@
         </div>
 
         ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
+        ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
         <div class="card">
           <p class="section-title">Hasil per Spesimen</p>
@@ -2896,6 +2933,8 @@
   async function onTestReportSubmit(e) {
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
+    payload.fields = {};
+    Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
     try {

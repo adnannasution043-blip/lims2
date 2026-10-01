@@ -329,6 +329,8 @@ async function initSchema() {
     ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS template TEXT;
     ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS pqr_no TEXT;
     ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS heat_no TEXT;
+    -- Isian khusus per jenis form (mis. Charpy: test_temp, specimen_size, orientation) tanpa kolom baru per form.
+    ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS fields JSONB NOT NULL DEFAULT '{}';
 
     -- Master Data > Equipment/Peralatan (diminta klien: dipakai untuk mencatat alat uji beserta
     -- status & masa kalibrasinya). Sertifikat kalibrasi disimpan langsung sebagai BYTEA (satu file
