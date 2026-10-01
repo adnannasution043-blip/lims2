@@ -3834,7 +3834,13 @@
 
   // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
 
-  const SPECIMEN_CATEGORY_LABELS = { tensile: 'Tensile', bending: 'Bending', charpy: 'Charpy Impact', general: 'Umum' };
+  const SPECIMEN_CATEGORY_LABELS = { tensile: 'Tensile', bending: 'Bending', charpy: 'Charpy Impact', nickbreak: 'Nick Break', hic: 'HIC / SSCC / SCC', general: 'Umum' };
+  const SPECIMEN_NO_SHAPE = ['charpy', 'nickbreak', 'hic', 'general'];
+  // Form resmi sederhana: tiap dimensi = pasangan kolom Code/Actual, lalu Accepted Y/N.
+  const SIMPLE_SPECIMEN_DIMS = {
+    nickbreak: [['width', 'Width'], ['thickness', 'Thickness'], ['notch_depth', 'Notch Depth'], ['length', 'Length']],
+    hic: [['width', 'Width'], ['thickness', 'Thickness'], ['length', 'Length']]
+  };
   const SPECIMEN_SHAPE_LABELS = { flat: 'Flat', round: 'Round' };
   const SPECIMEN_LOCATIONS = ['Base Metal', 'Weld Metal', 'HAZ', 'Fusion Line', 'Fusion Line +2', 'Fusion Line +5'];
 
@@ -3871,6 +3877,11 @@
             width_code: '', width_actual: '', thickness_code: '', thickness_actual: '',
             radius_code: '', radius_actual: '', length_code: '', length_actual: ''
           };
+      return { marking_specimen: defaultMarking, type_lt: 'T', accepted: 'Y', measurements };
+    }
+    if (category === 'nickbreak' || category === 'hic') {
+      const measurements = {};
+      SIMPLE_SPECIMEN_DIMS[category].forEach(([key]) => { measurements[key + '_code'] = ''; measurements[key + '_actual'] = ''; });
       return { marking_specimen: defaultMarking, type_lt: 'T', accepted: 'Y', measurements };
     }
     if (category === 'general') {
@@ -4008,7 +4019,34 @@
     </tr>`;
   }
 
+  function simpleDimsRowHtml(row, idx, category) {
+    const m = row.measurements;
+    const input = field => `<td><input type="text" data-srow="${idx}" data-mfield="${field}" value="${esc(m[field])}" style="width:52px;"></td>`;
+    return `<tr>
+      <td><input type="text" data-srow="${idx}" data-sfield="marking_specimen" value="${esc(row.marking_specimen)}" style="width:100px;" placeholder="Marking Specimen"></td>
+      <td>${ltSelectHtml(idx, row.type_lt)}</td>
+      ${SIMPLE_SPECIMEN_DIMS[category].map(([key]) => input(key + '_code') + input(key + '_actual')).join('')}
+      <td>${ynSelectHtml(idx, row.accepted)}</td>
+      <td><button type="button" class="btn btn-sm btn-danger" data-sremove="${idx}">&#128465;</button></td>
+    </tr>`;
+  }
+
   function specimenTableHtml(category, shape, rows) {
+    if (category === 'nickbreak' || category === 'hic') {
+      const dims = SIMPLE_SPECIMEN_DIMS[category];
+      return `
+        <table class="test-items-table specimen-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Marking Specimen</th><th rowspan="2">Type<br>L/T</th>
+              ${dims.map(([, label]) => `<th colspan="2">${label}</th>`).join('')}
+              <th rowspan="2">Accepted<br>Y/N</th><th rowspan="2"></th>
+            </tr>
+            <tr>${dims.map(() => '<th>Code</th><th>Actual</th>').join('')}</tr>
+          </thead>
+          <tbody>${rows.map((r, i) => simpleDimsRowHtml(r, i, category)).join('')}</tbody>
+        </table>`;
+    }
     if (category === 'general') {
       return `
         <table class="test-items-table specimen-table">
@@ -4125,8 +4163,10 @@
       `<option value="${i}">${esc(r.marking_specimen || 'Spesimen ' + (i + 1))}</option>`).join('');
     sel.value = String(Math.min(previous, state.specimenRows.length - 1));
     const row = state.specimenRows[Number(sel.value)];
+    const typeInput = document.getElementById('specTypeOfSpecimenInput');
     box.innerHTML = SpecimenDiagrams.render(insp.category, insp.shape, {
       idPrefix: 'sdf',
+      variant: SpecimenDiagrams.variantOf(typeInput ? typeInput.value : insp.type_of_specimen),
       values: SpecimenDiagrams.rowValues(insp.category, insp.shape, row)
     });
     applySpecDiagramHighlight();
@@ -4372,6 +4412,7 @@
     document.getElementById('specimenRowsWrap').addEventListener('change', handleSpecimenInput);
 
     document.getElementById('specTypeOfSpecimenInput').addEventListener('input', (e) => {
+      refreshSpecDiagram();   // gambar mengikuti Tipe Spesimen (mis. Full Section / BjTS memakai gambar spesimen utuh)
       const match = (state.specimenTypes || []).find(t => t.name === e.target.value);
       if (!match) return;
       state.specimenRows.forEach(row => applySelectedSpecimenTypeToRow(row));
@@ -4656,7 +4697,7 @@
         if (!chosen) { shapeWrap.style.display = 'none'; qtyWrap.style.display = 'none'; return; }
         qtyWrap.style.display = '';
         qtyInput.value = chosen.qty;
-        if (chosen.category === 'charpy' || chosen.category === 'general') {
+        if (SPECIMEN_NO_SHAPE.includes(chosen.category)) {
           shapeWrap.style.display = 'none';
         } else {
           shapeWrap.style.display = '';
@@ -4677,7 +4718,7 @@
         const testName = testNameSelect.value;
         if (!testName) { toast('Pilih Jenis Pengujian dulu', 'error'); return; }
         const chosen = availableTests.find(t => t.test_name === testName);
-        const shape = chosen && chosen.category !== 'charpy' && chosen.category !== 'general' ? shapeSelect.value : null;
+        const shape = chosen && !SPECIMEN_NO_SHAPE.includes(chosen.category) ? shapeSelect.value : null;
         try {
           const created = await api(`/api/requests/${testRequestId}/specimen-inspections`, {
             method: 'POST',
@@ -4956,6 +4997,15 @@
         { key: 'radius_code', label: 'Radius' }, { key: 'length_code', label: 'Length' }
       ];
     }
+    if (category === 'nickbreak') {
+      return [
+        { key: 'width_code', label: 'Width' }, { key: 'thickness_code', label: 'Thickness' },
+        { key: 'notch_depth_code', label: 'Notch Depth' }, { key: 'length_code', label: 'Length' }
+      ];
+    }
+    if (category === 'hic') {
+      return [{ key: 'width_code', label: 'Width' }, { key: 'thickness_code', label: 'Thickness' }, { key: 'length_code', label: 'Length' }];
+    }
     return [
       { key: 'length_code', label: 'Length' }, { key: 'width_code', label: 'Width' }, { key: 'thickness_code', label: 'Thickness' }
     ];
@@ -4966,7 +5016,8 @@
     state.specimenTypeCategory = state.specimenTypeCategory || 'tensile';
     state.specimenTypeShape = state.specimenTypeShape || 'flat';
     const category = state.specimenTypeCategory;
-    const shape = category === 'charpy' ? '' : state.specimenTypeShape;
+    const noShape = SPECIMEN_NO_SHAPE.includes(category);
+    const shape = noShape ? '' : state.specimenTypeShape;
     const fields = specimenCodeFields(category, shape);
 
     let types = [];
@@ -4986,9 +5037,11 @@
               <option value="tensile" ${category === 'tensile' ? 'selected' : ''}>Tensile</option>
               <option value="bending" ${category === 'bending' ? 'selected' : ''}>Bending</option>
               <option value="charpy" ${category === 'charpy' ? 'selected' : ''}>Charpy Impact</option>
+              <option value="nickbreak" ${category === 'nickbreak' ? 'selected' : ''}>Nick Break</option>
+              <option value="hic" ${category === 'hic' ? 'selected' : ''}>HIC / SSCC / SCC</option>
             </select>
           </div>
-          <div class="field" id="stypeShapeWrap" style="${category === 'charpy' ? 'display:none;' : ''}">
+          <div class="field" id="stypeShapeWrap" style="${noShape ? 'display:none;' : ''}">
             <label>Bentuk</label>
             <select id="stypeShape">
               <option value="flat" ${shape === 'flat' ? 'selected' : ''}>Flat</option>

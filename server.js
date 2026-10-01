@@ -145,6 +145,19 @@ Object.entries(CATEGORY_TEST_NAMES).forEach(([cat, names]) => {
   names.forEach(name => { TEST_NAME_TO_CATEGORY[name] = cat; });
 });
 
+// Kategori form Pengecekan Spesimen untuk satu Jenis Pengujian. Hampir sama dengan TEST_NAME_TO_CATEGORY
+// (yang juga dipakai Lembar Hasil Uji & antrian, jadi tidak diubah), kecuali dua form resmi sendiri:
+// Nick Break (DPI-LP-FR-26-5, kolom Notch Depth — bukan layout Bending) dan HIC/SSCC/SCC (DPI-LP-FR-26-6;
+// belum ada di daftar tetap Jenis Pengujian, jadi dikenali dari namanya).
+const NO_SHAPE_CATEGORIES = ['charpy', 'nickbreak', 'hic', 'general'];
+function specimenCategoryOf(testName) {
+  const name = String(testName || '');
+  if (name === 'Nick Break Test') return 'nickbreak';
+  if (TEST_NAME_TO_CATEGORY[name]) return TEST_NAME_TO_CATEGORY[name];
+  if (/\b(HIC|SSCC|SCC)\b/i.test(name)) return 'hic';
+  return 'general';
+}
+
 // Returns the bare Sample Marking (e.g. "ADK.9.1", same value shown on the
 // Work Order) for the sheet's linked coupon row, plus — when testName is
 // given — the Jenis Pengujian's code, its checked Qty, and the full list of
@@ -909,7 +922,7 @@ app.get('/work-orders/:id/print', async (req, res) => {
 
 // ---------- Pengecekan Spesimen (DPI-LP-FR-26-1..4) ----------
 
-const SPECIMEN_CATEGORIES = ['tensile', 'bending', 'charpy'];
+const SPECIMEN_CATEGORIES = ['tensile', 'bending', 'charpy', 'nickbreak', 'hic'];
 
 app.get('/api/test-type-codes', async (req, res) => {
   try {
@@ -973,7 +986,7 @@ app.post('/api/specimen-types', async (req, res) => {
   const name = (b.name || '').trim();
   if (!SPECIMEN_CATEGORIES.includes(b.category)) return res.status(400).json({ error: 'Kategori tidak valid' });
   if (!name) return res.status(400).json({ error: 'Nama tipe spesimen tidak boleh kosong' });
-  const shape = b.category === 'charpy' ? '' : (b.shape === 'round' ? 'round' : 'flat');
+  const shape = NO_SHAPE_CATEGORIES.includes(b.category) ? '' : (b.shape === 'round' ? 'round' : 'flat');
   try {
     await pool.query(
       `INSERT INTO specimen_types (category, shape, name, code_values) VALUES ($1,$2,$3,$4)
@@ -1062,13 +1075,13 @@ app.get('/api/requests/:id/coupon-tests/:rowNo/available-tests', async (req, res
     const available = items
       .filter(it => !used.has(it.test_name))
       .map(it => {
-        const category = TEST_NAME_TO_CATEGORY[it.test_name] || 'general';
+        const category = specimenCategoryOf(it.test_name);
         return {
           test_name: it.test_name,
           qty: it.qty,
           category,
           code: codeByName[it.test_name] || '',
-          suggested_shape: (category === 'charpy' || category === 'general') ? null : suggestedShape
+          suggested_shape: NO_SHAPE_CATEGORIES.includes(category) ? null : suggestedShape
         };
       });
 
@@ -1096,8 +1109,8 @@ app.post('/api/requests/:id/specimen-inspections', async (req, res) => {
   if (!testName) {
     return res.status(400).json({ error: 'Jenis Pengujian tidak valid' });
   }
-  const category = TEST_NAME_TO_CATEGORY[testName] || 'general';
-  const shape = (category === 'charpy' || category === 'general') ? null : (b.shape === 'round' ? 'round' : 'flat');
+  const category = specimenCategoryOf(testName);
+  const shape = NO_SHAPE_CATEGORIES.includes(category) ? null : (b.shape === 'round' ? 'round' : 'flat');
   try {
     const { rows: reqRows } = await pool.query(`SELECT * FROM test_requests WHERE id = $1`, [req.params.id]);
     const testRequest = reqRows[0];

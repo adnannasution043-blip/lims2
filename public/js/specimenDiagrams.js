@@ -183,18 +183,100 @@
     };
   }
 
+  // ---------- Tensile Flat "Full Section" (spesimen utuh tanpa reduced section, mis. API 1104 full section) ----------
+  function tensileFlatFull(c) {
+    const { dim, arrow, line, val } = c;
+    return {
+      viewBox: '0 0 1250 330',
+      label: 'Diagram spesimen tensile flat full section',
+      body: `
+      <path class="sd-top" d="M20,90 L35,60 L1230,60 L1215,90 Z"/>
+      <path class="sd-side" d="M1215,90 L1230,60 L1230,230 L1215,260 Z"/>
+      <path class="sd-front" d="M20,90 L1215,90 L1215,260 L20,260 Z"/>
+      <path class="sd-groove" d="M600,62 C580,90 640,112 604,140 C574,170 640,200 612,258 L752,258 C728,200 790,170 752,140 C722,112 782,90 742,62 Z" opacity="0.75"/>
+      ${['A', 'B', 'C'].map((p, i) => {
+        const x = [480, 665, 850][i];
+        return dim('T' + p, `${arrow(x, 90, x + 15, 60)}<text transform="translate(${x - 10},87) rotate(-65)">T${p}</text>`, [x - 25, 52, 50, 42]);
+      }).join('')}
+      ${['A', 'B', 'C'].map((p, i) => {
+        const x = [480, 665, 850][i];
+        return dim('W' + p, `${arrow(x, 96, x, 254)}<text transform="translate(${x - 10},175) rotate(-90)" text-anchor="middle">W${p} ${val('W' + p)}</text>`, [x - 35, 95, 45, 160]);
+      }).join('')}
+      ${dim('TL', `${line(20, 264, 20, 312)}${line(1215, 264, 1215, 312)}${arrow(24, 306, 1211, 306)}<text x="617" y="296" text-anchor="middle">Total Length ${val('TL')}</text>`, [15, 270, 1205, 44])}`
+    };
+  }
+
+  // ---------- Tensile Round "Full" (batang utuh, mis. BjTP/BjTS: tanpa leher/radius) ----------
+  function tensileRoundFull(c) {
+    const { dim, arrow, line, val, id } = c;
+    return {
+      viewBox: '0 0 1270 430',
+      label: 'Diagram spesimen tensile round full section',
+      body: `
+      <rect class="sd-front" style="fill:url(#${id}-cyl)" x="20" y="115" width="1210" height="150"/>
+      <ellipse class="sd-side" cx="1230" cy="190" rx="18" ry="75"/>
+      <path class="sd-edge" d="M20,115 A18 75 0 0 0 20,265"/>
+      <line class="sd-center" x1="0" y1="190" x2="1270" y2="190"/>
+      ${['A', 'B', 'C'].map((p, i) => {
+        const x = [480, 665, 850][i];
+        return dim('D' + p, `${arrow(x, 118, x, 262)}<text transform="translate(${x - 10},190) rotate(-90)" text-anchor="middle">D${p} ${val('D' + p)}</text>`, [x - 40, 112, 50, 156]);
+      }).join('')}
+      ${dim('GL', `<circle class="sd-dot" cx="420" cy="190" r="5"/><circle class="sd-dot" cx="910" cy="190" r="5"/>${line(420, 196, 420, 312)}${line(910, 196, 910, 312)}${arrow(424, 305, 906, 305)}<text x="665" y="295" text-anchor="middle">Gauge Length ${val('GL')}</text>`, [415, 278, 500, 36])}
+      ${dim('RS', `${line(390, 268, 390, 355)}${line(940, 268, 940, 355)}${arrow(394, 348, 936, 348)}<text x="665" y="338" text-anchor="middle">Reduced Section ${val('RS')}</text>`, [385, 320, 560, 36])}
+      ${dim('TL', `${line(20, 269, 20, 398)}${line(1230, 269, 1230, 398)}${arrow(24, 392, 1226, 392)}<text x="625" y="382" text-anchor="middle">Total Length ${val('TL')}</text>`, [15, 364, 1220, 36])}`
+    };
+  }
+
+  // ---------- Nick Break (DPI-LP-FR-26-5): strip bertakik (tampak atas) + tampak samping dengan las ----------
+  function nickBreak(c) {
+    const { dim, arrow, line, val } = c;
+    return {
+      viewBox: '0 0 1230 320',
+      label: 'Diagram spesimen nick break',
+      body: `
+      <rect class="sd-front" x="40" y="100" width="460" height="80"/>
+      <rect class="sd-groove" x="302" y="100" width="16" height="12"/>
+      <rect class="sd-groove" x="302" y="168" width="16" height="12"/>
+      <line class="sd-hl-dash" x1="310" y1="100" x2="236" y2="52"/>
+      <text class="sd-note" x="150" y="48">Notched (takik di kedua sisi)</text>
+      ${dim('ND', `${line(318, 168, 372, 168)}${line(318, 180, 372, 180)}${arrow(358, 168, 358, 180)}<text x="378" y="170">Notch Depth ${val('ND')}</text>`, [316, 160, 230, 28])}
+      ${dim('W', `${line(505, 100, 560, 100)}${line(505, 180, 560, 180)}${arrow(548, 104, 548, 176)}<text x="548" y="90" text-anchor="middle">Width ${val('W')}</text>`, [500, 70, 100, 120])}
+      ${dim('L', `${line(40, 186, 40, 262)}${line(500, 186, 500, 262)}${arrow(44, 254, 496, 254)}<text x="270" y="244" text-anchor="middle">Length ${val('L')}</text>`, [40, 226, 460, 40])}
+      <path class="sd-top" d="M870,126 C890,92 930,92 950,126 Z"/>
+      <path class="sd-top" d="M870,146 C890,180 930,180 950,146 Z"/>
+      <rect class="sd-front" x="800" y="126" width="360" height="20"/>
+      ${dim('T', `${line(780, 126, 826, 126)}${line(780, 146, 826, 146)}${arrow(792, 130, 792, 142)}<text x="786" y="122" text-anchor="end">Thickness ${val('T')}</text>`, [690, 100, 140, 60])}
+      <text class="sd-note" x="800" y="206">Weld reinforcement tidak dihilangkan</text>
+      <text class="sd-note" x="800" y="226">pada kedua sisi spesimen</text>`
+    };
+  }
+
+  // ---------- HIC / SSCC / SCC (DPI-LP-FR-26-6): balok polos ----------
+  const hic = c => block(c, { label: 'Diagram spesimen HIC/SSCC/SCC' });
+
   const DIAGRAMS = {
     'tensile:flat': tensileFlat,
     'tensile:round': tensileRound,
+    'tensile:flat:full': tensileFlatFull,
+    'tensile:round:full': tensileRoundFull,
     'bending:flat': bendingFlat,
     'bending:round': bendingRound,
+    nickbreak: nickBreak,
+    hic,
     charpy,
     general
   };
 
-  function keyOf(category, shape) {
-    if (category === 'tensile' || category === 'bending') return `${category}:${shape === 'round' ? 'round' : 'flat'}`;
-    return category === 'charpy' ? 'charpy' : 'general';
+  // Tipe Spesimen "Full Section" / "BjTP/BjTS" memakai gambar spesimen utuh (tanpa reduced section).
+  function variantOf(typeOfSpecimen) {
+    return /full\s*section|bjt[ps]/i.test(String(typeOfSpecimen || '')) ? 'full' : '';
+  }
+
+  function keyOf(category, shape, variant) {
+    if (category === 'tensile') return `tensile:${shape === 'round' ? 'round' : 'flat'}${variant === 'full' ? ':full' : ''}`;
+    if (category === 'bending') return `bending:${shape === 'round' ? 'round' : 'flat'}`;
+    if (category === 'charpy' || category === 'nickbreak' || category === 'hic') return category;
+    return 'general';
   }
 
   function defs(id) {
@@ -204,10 +286,10 @@
     </defs>`;
   }
 
-  // opts: { values: {KEY: 'nilai'}, unit: 'mm', idPrefix: 'sd1' }
+  // opts: { values: {KEY: 'nilai'}, unit: 'mm', idPrefix: 'sd1', variant: 'full' }
   function render(category, shape, opts) {
     const c = makeCtx(opts);
-    const d = DIAGRAMS[keyOf(category, shape)](c);
+    const d = DIAGRAMS[keyOf(category, shape, opts && opts.variant)](c);
     return `<svg class="sd-svg" viewBox="${d.viewBox}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${esc(d.label)}" style="width:100%;height:auto;display:block;">${STYLE}${defs(c.id)}${d.body}</svg>`;
   }
 
@@ -227,6 +309,10 @@
     } else if (category === 'bending') {
       if (shape === 'round') { put('D', m.diameter_actual); put('L', m.length_actual); }
       else { put('W', m.width_actual); put('T', m.thickness_actual); put('R', m.radius_actual); put('L', m.length_actual); }
+    } else if (category === 'nickbreak') {
+      put('W', m.width_actual); put('T', m.thickness_actual); put('ND', m.notch_depth_actual); put('L', m.length_actual);
+    } else if (category === 'hic') {
+      put('W', m.width_actual); put('T', m.thickness_actual); put('L', m.length_actual);
     } else if (category === 'charpy') {
       put('L', m.length_actual); put('W', m.width_actual); put('T', m.thickness_actual);
       put('NL', m.v_notch_l); put('NR', m.v_notch_r);
@@ -258,11 +344,17 @@
     if (category === 'bending') {
       return ({ width: ['W'], thickness: ['T'], radius: ['R'], length: ['L'], diameter: ['D'] })[base] || [];
     }
+    if (category === 'nickbreak') {
+      return ({ width: ['W'], thickness: ['T'], notch_depth: ['ND'], length: ['L'] })[base] || [];
+    }
+    if (category === 'hic') {
+      return ({ width: ['W'], thickness: ['T'], length: ['L'] })[base] || [];
+    }
     if (category === 'charpy') {
       return ({ length: ['L'], width: ['W'], thickness: ['T'], v_notch_l: ['NL'], v_notch_r: ['NR'], profile_radius: ['PR'], profile_depth: ['PD'], profile_width: ['PW'] })[base] || [];
     }
     return ({ length: ['L'], width: ['W'], thickness: ['T'] })[base] || [];
   }
 
-  return { render, rowValues, keysForInput, keyOf };
+  return { render, rowValues, keysForInput, keyOf, variantOf };
 }));
