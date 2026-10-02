@@ -207,7 +207,11 @@ function convert(xlsxPath, sheetName) {
 
   // area cetak (nama terdefinisi Print_Area) membatasi kolom/baris
   let lastCol = maxCol, lastRow = maxRow, firstRow = 0;
-  const pa = new RegExp(`<definedName[^>]*name="_xlnm.Print_Area"[^>]*>([^<]*)</definedName>`).exec(wb);
+  // Print_Area bisa ada per sheet (localSheetId = urutan sheet di workbook); ambil milik sheet terpilih.
+  const chosenIdx = sheets.indexOf(chosen);
+  const paAll = [...wb.matchAll(/<definedName([^>]*name="_xlnm.Print_Area"[^>]*)>([^<]*)<\/definedName>/g)];
+  const paHit = paAll.find(m => Number(attr(m[1], 'localSheetId')) === chosenIdx) || (paAll.length === 1 ? paAll[0] : null);
+  const pa = paHit ? [null, paHit[2]] : null;
   if (pa) {
     const m = /\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)/.exec(pa[1]);
     if (m) { lastCol = colLetterToIdx(m[3]); lastRow = Number(m[4]) - 1; firstRow = Number(m[2]) - 1; }

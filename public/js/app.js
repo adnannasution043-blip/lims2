@@ -2682,6 +2682,7 @@
   function openTestReportLoaded(data, woId, stageKey) {
     state.view = 'test-report-form';
     state.testReport = data;
+    state.testReportElements = { ...((data.fields || {}).elements || {}) };
     state.testReportRows = (data.rows && data.rows.length) ? data.rows.map(r => ({ ...r })) : [{ marking_specimen: '', observation: '', result: '' }];
     state.testReportDirty = false;
     state.testReportReturn = { woId, stageKey };
@@ -2787,6 +2788,23 @@
       </div>`;
   }
 
+  // Form Chemical: satu isian per elemen (daftar elemen mengikuti varian form yang dipilih).
+  function testReportElementsHtml(templateKey) {
+    const labels = ((state.testReport || {}).template_elements || {})[templateKey] || [];
+    return `<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${labels.map(l => `
+      <div class="field"><label>${esc(l)}</label><input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`).join('')}</div>`;
+  }
+
+  function bindTestReportElementEvents() {
+    const wrap = document.getElementById('testReportElementsWrap');
+    if (!wrap) return;
+    wrap.addEventListener('input', e => {
+      if (!e.target.dataset.element) return;
+      state.testReportElements[e.target.dataset.element] = e.target.value;
+      state.testReportDirty = true;
+    });
+  }
+
   function renderTestReportForm() {
     const r = state.testReport || {};
     const tr = r.test_request || {};
@@ -2855,11 +2873,16 @@
         ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
         ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
+        ${r.template_elements ? `
+        <div class="card">
+          <p class="section-title">Elements Analyzed (%) <span class="en">isi hanya elemen yang terukur; kolom kosong tercetak kosong</span></p>
+          <div id="testReportElementsWrap">${testReportElementsHtml(r.template)}</div>
+        </div>` : `
         <div class="card">
           <p class="section-title">Hasil per Spesimen</p>
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
           <button type="button" class="btn btn-sm" id="btnAddReportRow" style="margin-top:10px;">+ Tambah Baris</button>
-        </div>
+        </div>`}
 
         <div class="card">
           <p class="section-title">Info Tambahan</p>
@@ -2905,12 +2928,16 @@
     });
     form.addEventListener('submit', onTestReportSubmit);
 
-    document.getElementById('btnAddReportRow').addEventListener('click', () => {
-      state.testReportRows.push(blankTestReportRow());
-      state.testReportDirty = true;
-      rerenderTestReportRows();
-    });
-    bindTestReportRowEvents();
+    const addRowBtn = document.getElementById('btnAddReportRow');
+    if (addRowBtn) {
+      addRowBtn.addEventListener('click', () => {
+        state.testReportRows.push(blankTestReportRow());
+        state.testReportDirty = true;
+        rerenderTestReportRows();
+      });
+      bindTestReportRowEvents();
+    }
+    bindTestReportElementEvents();
 
     // Ganti varian form (Weld <-> Material): observasi bawaan ikut berganti selama belum diubah manual.
     const tplSel = document.getElementById('testReportTemplate');
@@ -2918,6 +2945,8 @@
       const DEFAULT_OBS = { 'bend-sec': 'No Open Discontinuity was Observed', 'bend-mat': 'No Crack was Observed' };
       let prev = tplSel.value;
       tplSel.addEventListener('change', () => {
+        const elWrap = document.getElementById('testReportElementsWrap');
+        if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);   // nilai tersimpan per label elemen, jadi ikut terbawa
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
@@ -2933,7 +2962,7 @@
   async function onTestReportSubmit(e) {
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
-    payload.fields = {};
+    payload.fields = state.testReport && state.testReport.template_elements ? { elements: state.testReportElements } : {};
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
@@ -2944,6 +2973,7 @@
         body: JSON.stringify(payload)
       });
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
+      state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
       state.testReportDirty = false;
       toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
       render();
