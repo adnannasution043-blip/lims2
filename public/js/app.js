@@ -2695,6 +2695,7 @@
   }
 
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.template === 'flat') return { marking_specimen: '', length: '', od: '', wt: '', e: '', h: '', first: '', second: '' };
     if (state.testReport && state.testReport.template_fwb) return { marking_specimen: '', remarks: [], result: '' };
     if (state.testReport && state.testReport.category === 'charpy') {
       const last = state.testReportRows[state.testReportRows.length - 1];
@@ -2706,6 +2707,19 @@
   const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
 
   function testReportRowsHtml() {
+    if (state.testReport && state.testReport.template === 'flat') {
+      const cols = [['length', 'Length of Pipe (mm)'], ['od', 'Outside Diameter D (mm)'], ['wt', 'Wall Thickness t (mm)'], ['e', 'Deformation e'], ['h', 'H (mm) — kosong = dihitung'], ['first', 'First Step Test Result'], ['second', 'Second Step Test Result']];
+      return `<table class="task-table">
+        <thead><tr><th>Specimen No.</th>${cols.map(c => `<th>${c[1]}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            ${cols.map(c => `<td><input type="text" ${['first', 'second'].includes(c[0]) ? '' : 'inputmode="decimal"'} data-tfield="${c[0]}" value="${esc(r[c[0]] || '')}"></td>`).join('')}
+            <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
+          </tr>`).join('')}</tbody>
+      </table>
+      <p class="muted" style="margin:6px 0 0;">H dihitung otomatis dari D, t dan e (H = (1+e)t / (e + t/D)); isi kolom H hanya bila ingin menimpa. Satu halaman cetak memuat 2 spesimen; spesimen berikutnya dicetak di halaman lanjutan.</p>`;
+    }
     if (state.testReport && state.testReport.template_fwb) {
       const sel = document.getElementById('testReportTemplate');
       const key = (sel && sel.value) || state.testReport.template;

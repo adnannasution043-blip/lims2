@@ -221,7 +221,10 @@ function convert(xlsxPath, sheetName) {
   const styleCss = [];
   const styleIdx = {};
   const cssFor = s => {
-    const css = xfToCss(st.xfs[s] || st.xfs[0], st);
+    let css = xfToCss(st.xfs[s] || st.xfs[0], st);
+    // Teks putih tanpa latar tak terbaca di kertas putih (mis. "Approved Signatory" pada beberapa form klien: font tema 0 =
+    // putih) -> dicetak hitam.
+    if (/color:#FFFFFF/i.test(css) && !/background:/.test(css)) css = css.replace(/color:#FFFFFF/i, 'color:#000000');
     if (!(css in styleIdx)) { styleIdx[css] = styleCss.length; styleCss.push(css); }
     return styleIdx[css];
   };
@@ -244,15 +247,19 @@ function convert(xlsxPath, sheetName) {
       if (mg) { if (mg.rs > 1) out.rs = Math.min(mg.rs, lastRow - r + 1); if (mg.cs > 1) out.cs = Math.min(mg.cs, lastCol - c + 1); }
       cells.push(out);
     }
+    const fillOf = c => ((/background:([^;]+)/.exec(styleCss[c.s] || '') || [])[1] || '');
+    const sameFill = (x, y) => fillOf(x) !== '' && fillOf(x) === fillOf(y);
     // Seperti Excel: teks yang tidak di-wrap meluber ke sel kosong di kanannya. Di tabel HTML luberan itu
     // terpotong, jadi sel berteks digabung (colspan) dengan sel kosong berikutnya sampai bertemu sel berisi.
     for (let i = 0; i < cells.length; i++) {
       const cur = cells[i];
       const css = styleCss[cur.s] || '';
-      if (cur.v === undefined || cur.rs || /white-space:pre-wrap|text-align:(center|right)/.test(css)) continue;
+      // sel gabungan (merge) tidak meluber di Excel; sel tetangga yang berbingkai adalah kotak isian, bukan ruang luber
+      if (cur.v === undefined || cur.rs || cur.cs > 1 || /white-space:pre-wrap|text-align:(center|right)/.test(css)) continue;
       while (i + 1 < cells.length) {
         const nxt = cells[i + 1];
-        if (nxt.v !== undefined || nxt.rs) break;
+        // tetangga berbingkai hanya ikut diserap bila warna latarnya sama dengan sel teks (bagian dari area label yang sama)
+        if (nxt.v !== undefined || nxt.rs || (!sameFill(cur, nxt) && /border-(top|bottom|left|right):/.test(styleCss[nxt.s] || ''))) break;
         cur.cs = (cur.cs || 1) + (nxt.cs || 1);
         cells.splice(i + 1, 1);
       }
