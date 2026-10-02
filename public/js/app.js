@@ -2683,6 +2683,7 @@
     state.view = 'test-report-form';
     state.testReport = data;
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
+    state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
     state.testReportRows = (data.rows && data.rows.length) ? data.rows.map(r => ({ ...r })) : [{ marking_specimen: '', observation: '', result: '' }];
     state.testReportDirty = false;
     state.testReportReturn = { woId, stageKey };
@@ -2795,6 +2796,39 @@
       <div class="field"><label>${esc(l)}</label><input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`).join('')}</div>`;
   }
 
+  // Form Ferrite: tiap lokasi (Base Metal / HAZ / Weld Metal) punya n, PT dan hitungan titik Pi per medan.
+  function testReportFerriteHtml(templateKey) {
+    const locs = ((state.testReport || {}).template_locations || {})[templateKey] || [];
+    return locs.map(name => {
+      const d = state.testReportFerrite[name] || {};
+      const pi = d.pi || [];
+      return `<div class="ferrite-loc" data-floc="${esc(name)}" style="margin-bottom:16px;">
+        <p class="section-title" style="margin-top:0;">${esc(name)}</p>
+        <div class="form-grid">
+          <div class="field"><label>n <span class="en">jumlah medan (maks. 30)</span></label><input type="text" inputmode="numeric" data-ffield="n" value="${esc(d.n || '30')}"></div>
+          <div class="field"><label>PT <span class="en">jumlah titik pada grid</span></label><input type="text" inputmode="numeric" data-ffield="pt" value="${esc(d.pt || '16')}"></div>
+        </div>
+        <label style="display:block;margin:8px 0 4px;">Pi per medan <span class="en">(hitungan titik yang kena ferrit, medan 1&ndash;30)</span></label>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;">${Array.from({ length: 30 }, (_, i) => `
+          <div class="field" style="margin:0;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-fpi="${i}" value="${esc(pi[i] || '')}"></div>`).join('')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  function bindTestReportFerriteEvents() {
+    const wrap = document.getElementById('testReportFerriteWrap');
+    if (!wrap) return;
+    wrap.addEventListener('input', e => {
+      const loc = e.target.closest('[data-floc]');
+      if (!loc) return;
+      const name = loc.dataset.floc;
+      const d = state.testReportFerrite[name] || (state.testReportFerrite[name] = { n: '30', pt: '16', pi: [] });
+      if (e.target.dataset.ffield) d[e.target.dataset.ffield] = e.target.value;
+      else if (e.target.dataset.fpi !== undefined) { d.pi = d.pi || []; d.pi[Number(e.target.dataset.fpi)] = e.target.value; }
+      state.testReportDirty = true;
+    });
+  }
+
   function bindTestReportElementEvents() {
     const wrap = document.getElementById('testReportElementsWrap');
     if (!wrap) return;
@@ -2873,16 +2907,22 @@
         ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
         ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
+        ${r.template_locations ? `
+        <div class="card">
+          <p class="section-title">Ferrite Content <span class="en">dicetak sebagai halaman utama + Lampiran #16 per lokasi; rata-rata, s, 95% CI &amp; % RA dihitung otomatis</span></p>
+          <div class="form-grid"><div class="field"><label>Sample Identification</label><input type="text" name="field_sample_id" value="${esc((r.fields || {}).sample_id)}"></div></div>
+          <div id="testReportFerriteWrap" style="margin-top:12px;">${testReportFerriteHtml(r.template)}</div>
+        </div>` : ''}
         ${r.template_elements ? `
         <div class="card">
           <p class="section-title">Elements Analyzed (%) <span class="en">isi hanya elemen yang terukur; kolom kosong tercetak kosong</span></p>
           <div id="testReportElementsWrap">${testReportElementsHtml(r.template)}</div>
-        </div>` : `
+        </div>` : (r.template_locations ? '' : `
         <div class="card">
           <p class="section-title">Hasil per Spesimen</p>
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
           <button type="button" class="btn btn-sm" id="btnAddReportRow" style="margin-top:10px;">+ Tambah Baris</button>
-        </div>`}
+        </div>`)}
 
         <div class="card">
           <p class="section-title">Info Tambahan</p>
@@ -2938,6 +2978,7 @@
       bindTestReportRowEvents();
     }
     bindTestReportElementEvents();
+    bindTestReportFerriteEvents();
 
     // Ganti varian form (Weld <-> Material): observasi bawaan ikut berganti selama belum diubah manual.
     const tplSel = document.getElementById('testReportTemplate');
@@ -2946,7 +2987,9 @@
       let prev = tplSel.value;
       tplSel.addEventListener('change', () => {
         const elWrap = document.getElementById('testReportElementsWrap');
-        if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);   // nilai tersimpan per label elemen, jadi ikut terbawa
+        if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);
+        const ferWrap = document.getElementById('testReportFerriteWrap');
+        if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi   // nilai tersimpan per label elemen, jadi ikut terbawa
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
@@ -2962,7 +3005,8 @@
   async function onTestReportSubmit(e) {
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
-    payload.fields = state.testReport && state.testReport.template_elements ? { elements: state.testReportElements } : {};
+    payload.fields = state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
+      : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite } : {});
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
@@ -2974,6 +3018,7 @@
       });
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
+      state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
       state.testReportDirty = false;
       toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
       render();

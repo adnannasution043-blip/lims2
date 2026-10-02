@@ -262,6 +262,7 @@ function convert(xlsxPath, sheetName) {
 
   // gambar (logo, dll.)
   const images = [];
+  const shapes = [];   // kotak teks (mis. rumus) dan garis lurus dari drawing
   const drawRel = (new RegExp(`<Relationship [^>]*Type="[^"]*drawing"[^>]*>`).exec(text(files[sheetPath.replace('worksheets/', 'worksheets/_rels/') + '.rels'])) || [''])[0];
   if (drawRel) {
     const dTarget = attr(drawRel, 'Target').replace('../', 'xl/');
@@ -272,6 +273,27 @@ function convert(xlsxPath, sheetName) {
       const from = /<xdr:from><xdr:col>(\d+)<\/xdr:col><xdr:colOff>(-?\d+)<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row><xdr:rowOff>(-?\d+)<\/xdr:rowOff><\/xdr:from>/.exec(body);
       const to = /<xdr:to><xdr:col>(\d+)<\/xdr:col><xdr:colOff>(-?\d+)<\/xdr:colOff><xdr:row>(\d+)<\/xdr:row><xdr:rowOff>(-?\d+)<\/xdr:rowOff><\/xdr:to>/.exec(body);
       const emb = /r:embed="([^"]+)"/.exec(body);
+      if (from && !emb) {
+        const EMU0 = 9525;
+        const colX0 = c => cols.slice(0, c).reduce((a, b) => a + b, 0);
+        const rowY0 = r => gridRows.slice(0, Math.max(0, r - firstRow)).reduce((a, b) => a + b.h, 0);
+        const x0 = colX0(Number(from[1])) + Number(from[2]) / EMU0;
+        const y0 = rowY0(Number(from[3])) + Number(from[4]) / EMU0;
+        const ext0 = /<xdr:ext cx="([0-9]+)" cy="([0-9]+)"/.exec(body);
+        const x1 = to ? colX0(Number(to[1])) + Number(to[2]) / EMU0 : x0 + (ext0 ? Number(ext0[1]) / EMU0 : 0);
+        const y1 = to ? rowY0(Number(to[3])) + Number(to[4]) / EMU0 : y0 + (ext0 ? Number(ext0[2]) / EMU0 : 0);
+        if (/<xdr:cxnSp/.test(body)) {
+          const col = /<a:ln[^>]*>\s*<a:solidFill>\s*<a:srgbClr val="([0-9A-Fa-f]{6})"/.exec(body);
+          shapes.push({ type: 'line', x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), color: col ? '#' + col[1] : '#000000' });
+        } else if (/<xdr:sp[ >]/.test(body)) {
+          // mc:Fallback memuat teks biasa (rumus Office Math tidak bisa dirender), pakai itu bila ada
+          const src = /<mc:Fallback[\s\S]*?<\/mc:Fallback>/.exec(body);
+          const txt = [...(src ? src[0] : body).matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m => decode(m[1])).join('');
+          const sz = /sz="([0-9]+)"/.exec(src ? src[0] : body);
+          if (txt.trim()) shapes.push({ type: 'text', x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), text: txt, size: sz ? Number(sz[1]) / 100 : 9, math: body.includes('<a14:m>') });
+        }
+        continue;
+      }
       if (!from || !emb) continue;
       const rel = new RegExp(`<Relationship [^>]*Id="${emb[1]}"[^>]*>`).exec(dRels);
       if (!rel) continue;
@@ -303,7 +325,7 @@ function convert(xlsxPath, sheetName) {
   return {
     source: path.basename(xlsxPath), sheet: chosen.name,
     orientation: attr(ps, 'orientation') || 'portrait', paper: attr(ps, 'paperSize') || '9',
-    cols, rows: gridRows, styles: styleCss, images
+    cols, rows: gridRows, styles: styleCss, images, shapes
   };
 }
 
