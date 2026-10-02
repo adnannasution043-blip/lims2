@@ -2695,6 +2695,7 @@
   }
 
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.template_fwb) return { marking_specimen: '', remarks: [], result: '' };
     if (state.testReport && state.testReport.category === 'charpy') {
       const last = state.testReportRows[state.testReportRows.length - 1];
       return { marking_specimen: '', notch_position: last ? last.notch_position : '', impact: '', lateral: '', remarks: '' };
@@ -2705,6 +2706,22 @@
   const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
 
   function testReportRowsHtml() {
+    if (state.testReport && state.testReport.template_fwb) {
+      const sel = document.getElementById('testReportTemplate');
+      const key = (sel && sel.value) || state.testReport.template;
+      const crit = state.testReport.template_fwb[key] || [];
+      return `<table class="task-table">
+        <thead><tr><th>Specimen No.</th>${crit.map((c, i) => `<th>Remarks ${i + 1}</th>`).join('')}<th>Test Result</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            ${crit.map((c, i) => `<td><input type="text" data-tremark="${i}" value="${esc((r.remarks || [])[i] || '')}" placeholder="${esc(c)}"></td>`).join('')}
+            <td><select data-tfield="result">${woSelectOptions(RESULT_OPTIONS, r.result)}</select></td>
+            <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
+          </tr>`).join('')}</tbody>
+      </table>
+      <p class="muted" style="margin:6px 0 0;">Kriteria penerimaan sudah tercetak dari form standar. Remarks yang dikosongkan memakai teks bawaan form (abu-abu).</p>`;
+    }
     if (state.testReport && state.testReport.category === 'charpy') {
       return `<datalist id="charpyNotchList">${CHARPY_NOTCH_POSITIONS.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
       <table class="task-table">
@@ -2754,6 +2771,12 @@
     const idx = e.target.dataset.trow !== undefined ? e.target.dataset.trow : e.target.closest('[data-trow]')?.dataset.trow;
     if (idx === undefined) return;
     const row = state.testReportRows[Number(idx)];
+    if (row && e.target.dataset.tremark !== undefined) {
+      row.remarks = row.remarks || [];
+      row.remarks[Number(e.target.dataset.tremark)] = e.target.value;
+      state.testReportDirty = true;
+      return;
+    }
     if (!row || !e.target.dataset.tfield) return;
     row[e.target.dataset.tfield] = e.target.value;
     state.testReportDirty = true;
@@ -2990,6 +3013,7 @@
         if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);
         const ferWrap = document.getElementById('testReportFerriteWrap');
         if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi   // nilai tersimpan per label elemen, jadi ikut terbawa
+        if (state.testReport.template_fwb) rerenderTestReportRows();
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
