@@ -2684,6 +2684,7 @@
     state.testReport = data;
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
     state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
+    state.testReportHard = { lines: JSON.parse(JSON.stringify(((data.fields || {}).hardness || {}).lines || [[], []])), sketch: (data.fields || {}).sketch || '' };
     state.testReportRows = (data.rows && data.rows.length) ? data.rows.map(r => ({ ...r })) : [{ marking_specimen: '', observation: '', result: '' }];
     state.testReportDirty = false;
     state.testReportReturn = { woId, stageKey };
@@ -2833,6 +2834,87 @@
       <div class="field"><label>${esc(l)}</label><input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`).join('')}</div>`;
   }
 
+  // Form Hardness: hasil HV per titik (Weld: Line 1 & 2 x 9 titik; Material: 5 titik + sketsa unggahan).
+  const HARD_GROUPS = [['Base Metal', 3], ['HAZ', 3], ['Weld Metal', 3]];
+  function testReportHardHtml(templateKey) {
+    const info = ((state.testReport || {}).template_hard || {})[templateKey];
+    if (!info) return '';
+    const lines = [];
+    for (let li = 0; li < info.lines; li++) {
+      const vals = state.testReportHard.lines[li] || [];
+      let n = 0;
+      const cells = (info.points === 9 ? HARD_GROUPS : [['Titik uji', 5]]).map(([g, c]) => `
+        <div><p class="muted" style="margin:0 0 4px;">${esc(g)}</p><div style="display:flex;gap:6px;">${Array.from({ length: c }, () => {
+          const i = n++;
+          return `<div class="field" style="margin:0;width:78px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-hline="${li}" data-hpt="${i}" value="${esc(vals[i] || '')}"></div>`;
+        }).join('')}</div></div>`).join('');
+      lines.push(`<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;">${info.lines > 1 ? 'Line ' + (li + 1) : 'Result (HV)'}</label><div style="display:flex;gap:18px;flex-wrap:wrap;">${cells}</div></div>`);
+    }
+    const sketch = info.points === 5 ? `
+      <div style="margin-top:8px;">
+        <label style="display:block;margin-bottom:4px;">Sketch Hardness <span class="en">gambar posisi titik uji (dicetak di halaman 1)</span></label>
+        <input type="file" id="hardSketchFile" accept="image/*">
+        ${state.testReportHard.sketch ? `<div style="margin-top:8px;"><img src="${state.testReportHard.sketch}" alt="Sketsa" style="max-width:360px;max-height:200px;border:1px solid #ccc;"><br><button type="button" class="btn btn-sm btn-danger" id="btnHardSketchRemove" style="margin-top:6px;">Hapus sketsa</button></div>` : '<p class="muted" style="margin:6px 0 0;">Belum ada sketsa; area sketsa tercetak kosong.</p>'}
+      </div>` : '<p class="muted" style="margin:0;">Sketsa posisi titik Weld sudah tercetak dari form.</p>';
+    return `<div class="form-grid"><div class="field full"><label>Material Specification</label><input type="text" name="field_spec" value="${esc((state.testReport.fields || {}).spec)}"></div></div>${lines.join('')}${sketch}`;
+  }
+
+  // Perkecil gambar sketsa di sisi klien (maks. 1400 px, JPEG) agar muat di batas ukuran simpan.
+  function readSketchFile(file) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('Gagal membaca gambar'));
+      fr.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('File bukan gambar yang valid'));
+        img.onload = () => {
+          const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+          const ctx = cv.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+          ctx.drawImage(img, 0, 0, cv.width, cv.height);
+          resolve(cv.toDataURL('image/jpeg', 0.85));
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function rerenderTestReportHard() {
+    const sel = document.getElementById('testReportTemplate');
+    document.getElementById('testReportHardWrap').innerHTML = testReportHardHtml((sel && sel.value) || state.testReport.template);
+    bindTestReportHardSketch();
+  }
+
+  function bindTestReportHardSketch() {
+    const file = document.getElementById('hardSketchFile');
+    if (file) file.addEventListener('change', async () => {
+      if (!file.files[0]) return;
+      try {
+        state.testReportHard.sketch = await readSketchFile(file.files[0]);
+        state.testReportDirty = true;
+        rerenderTestReportHard();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    const rm = document.getElementById('btnHardSketchRemove');
+    if (rm) rm.addEventListener('click', () => { state.testReportHard.sketch = ''; state.testReportDirty = true; rerenderTestReportHard(); });
+  }
+
+  function bindTestReportHardEvents() {
+    const wrap = document.getElementById('testReportHardWrap');
+    if (!wrap) return;
+    wrap.addEventListener('input', e => {
+      if (e.target.dataset.hline === undefined) return;
+      const li = Number(e.target.dataset.hline);
+      state.testReportHard.lines[li] = state.testReportHard.lines[li] || [];
+      state.testReportHard.lines[li][Number(e.target.dataset.hpt)] = e.target.value;
+      state.testReportDirty = true;
+    });
+    bindTestReportHardSketch();
+  }
+
   // Form Ferrite: tiap lokasi (Base Metal / HAZ / Weld Metal) punya n, PT dan hitungan titik Pi per medan.
   function testReportFerriteHtml(templateKey) {
     const locs = ((state.testReport || {}).template_locations || {})[templateKey] || [];
@@ -2944,6 +3026,11 @@
         ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
         ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
+        ${r.template_hard ? `
+        <div class="card">
+          <p class="section-title">Hasil Hardness (HV) <span class="en">dicetak sebagai halaman Sketch Hardness + halaman hasil</span></p>
+          <div id="testReportHardWrap">${testReportHardHtml(r.template)}</div>
+        </div>` : ''}
         ${r.template_locations ? `
         <div class="card">
           <p class="section-title">Ferrite Content <span class="en">dicetak sebagai halaman utama + Lampiran #16 per lokasi; rata-rata, s, 95% CI &amp; % RA dihitung otomatis</span></p>
@@ -2954,7 +3041,7 @@
         <div class="card">
           <p class="section-title">Elements Analyzed (%) <span class="en">isi hanya elemen yang terukur; kolom kosong tercetak kosong</span></p>
           <div id="testReportElementsWrap">${testReportElementsHtml(r.template)}</div>
-        </div>` : (r.template_locations ? '' : `
+        </div>` : ((r.template_locations || r.template_hard) ? '' : `
         <div class="card">
           <p class="section-title">Hasil per Spesimen</p>
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
@@ -3016,6 +3103,7 @@
     }
     bindTestReportElementEvents();
     bindTestReportFerriteEvents();
+    bindTestReportHardEvents();
 
     // Ganti varian form (Weld <-> Material): observasi bawaan ikut berganti selama belum diubah manual.
     const tplSel = document.getElementById('testReportTemplate');
@@ -3026,7 +3114,8 @@
         const elWrap = document.getElementById('testReportElementsWrap');
         if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);
         const ferWrap = document.getElementById('testReportFerriteWrap');
-        if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi   // nilai tersimpan per label elemen, jadi ikut terbawa
+        if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi
+        if (document.getElementById('testReportHardWrap')) rerenderTestReportHard();   // nilai tersimpan per label elemen, jadi ikut terbawa
         if (state.testReport.template_fwb) rerenderTestReportRows();
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
@@ -3044,7 +3133,8 @@
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
     payload.fields = state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
-      : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite } : {});
+      : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite }
+        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch } : {}));
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
@@ -3057,6 +3147,7 @@
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
       state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
+      state.testReportHard = { lines: JSON.parse(JSON.stringify((((state.testReport.fields || {}).hardness) || {}).lines || [[], []])), sketch: (state.testReport.fields || {}).sketch || '' };
       state.testReportDirty = false;
       toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
       render();
