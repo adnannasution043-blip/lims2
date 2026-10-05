@@ -5439,6 +5439,56 @@
     }
   }
 
+  // Tampilan Master Data: kartu kategori berikon + jumlah data, banner judul kategori yang aktif.
+  const MASTER_META = {
+    'welding-processes': { icon: 'flame', desc: 'Proses pengelasan (SMAW, GTAW, dst.) untuk dipilih di Coupon Test.' },
+    'welding-positions': { icon: 'compass', desc: 'Posisi pengelasan (1G, 2G, 3G, dst.) untuk Coupon Test.' },
+    'ref-codes': { icon: 'tag', desc: 'Kode standar/referensi pengujian (mis. AWS D1.1, ASME IX).' },
+    'coupon-types': { icon: 'layers', desc: 'Jenis coupon / benda uji (Plate, Pipe, Round Bar, dst.).' },
+    'test-methods': { icon: 'flask', desc: 'Metode dan standar uji yang bisa dipilih untuk tiap Jenis Pengujian.' },
+    'wo-pics': { icon: 'user', desc: 'Nama PIC yang bisa dipilih pada tahap-tahap Work Order.' },
+    'customers': { icon: 'building', desc: 'Data customer beserta ID-nya untuk Job No.' },
+    'specimen-types': { icon: 'ruler', desc: 'Tipe spesimen dan nilai Code untuk auto-isi form Pengecekan Spesimen.' },
+    'test-type-codes': { icon: 'hash', desc: 'Kode singkat tiap Jenis Pengujian untuk membentuk Marking Specimen.' },
+    'equipment': { icon: 'gauge', desc: 'Alat uji beserta status dan masa kalibrasinya.' }
+  };
+  const MASTER_ICONS = {
+    flame: '<path d="M12 3c1 3.5 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .3 1.2 1 2 2 2-.5-3 .5-5 1-8z"/>',
+    compass: '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2 5-5 2 2-5z"/>',
+    tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
+    layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/>',
+    flask: '<path d="M9 3h6"/><path d="M10 3v6.2L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9.2V3"/><path d="M7.5 15h9"/>',
+    user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    building: '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>',
+    ruler: '<path d="m3 17 14-14 4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/>',
+    hash: '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>',
+    gauge: '<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 13 4-5"/><circle cx="12" cy="13" r="1.3"/>'
+  };
+  function masterIcon(key, size = 22) {
+    return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MASTER_ICONS[(MASTER_META[key] || {}).icon] || ''}</svg>`;
+  }
+
+  // Jumlah data tiap master, dimuat sekali di latar belakang (gagal = kartu tampil tanpa angka).
+  async function loadMasterCounts() {
+    const simple = ['welding-processes', 'welding-positions', 'ref-codes', 'coupon-types', 'test-methods', 'wo-pics'];
+    const jobs = [
+      ...simple.map(k => api(`/api/master/${k}`).then(r => [k, (r.items || []).length])),
+      api('/api/customers').then(r => ['customers', (r.customers || []).length]),
+      api('/api/specimen-types').then(r => ['specimen-types', (r.types || []).length]),
+      api('/api/test-type-codes').then(r => ['test-type-codes', (r.codes || []).length]),
+      api('/api/equipment').then(r => ['equipment', (r.items || []).length])
+    ];
+    const done = await Promise.allSettled(jobs);
+    done.forEach(d => { if (d.status === 'fulfilled') state.masterCounts[d.value[0]] = d.value[1]; });
+  }
+  function paintMasterCounts() {
+    document.querySelectorAll('[data-master-count]').forEach(el => {
+      const n = state.masterCounts[el.dataset.masterCount];
+      el.textContent = n === undefined ? '' : n;
+      el.classList.toggle('is-empty', n === undefined);
+    });
+  }
+
   async function renderMasterData() {
     pageTitle.textContent = 'Master Data';
     pageSubtitle.textContent = 'Kelola daftar master yang dipakai sebagai pilihan di form';
@@ -5447,16 +5497,29 @@
     const activeTab = state.masterTab || MASTER_TABS[0].key;
     state.masterTab = activeTab;
 
-    const tabsHtml = MASTER_TABS.map(t => `
-      <button type="button" class="btn btn-sm ${t.key === activeTab ? 'btn-primary' : ''}" data-master-tab="${t.key}">${esc(t.label)}</button>
-    `).join('');
+    state.masterCounts = state.masterCounts || {};
+    const activeMeta = MASTER_TABS.find(t => t.key === activeTab);
+    const tilesHtml = MASTER_TABS.map(t => `
+      <button type="button" class="mk-tile ${t.key === activeTab ? 'is-active' : ''}" data-master-tab="${t.key}" aria-pressed="${t.key === activeTab}">
+        <span class="mk-tile-ico">${masterIcon(t.key)}</span>
+        <span class="mk-tile-label">${esc(t.label)}</span>
+        <span class="mk-tile-count" data-master-count="${t.key}"></span>
+      </button>`).join('');
 
     contentEl.innerHTML = `
-      <div class="card" style="padding:16px 24px;">
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">${tabsHtml}</div>
+      <div class="mk-tiles">${tilesHtml}</div>
+      <div class="mk-hero">
+        <span class="mk-hero-ico">${masterIcon(activeTab, 30)}</span>
+        <div class="mk-hero-text">
+          <h2>${esc(activeMeta.label)}</h2>
+          <p>${esc((MASTER_META[activeTab] || {}).desc || '')}</p>
+        </div>
+        <div class="mk-hero-count"><b data-master-count="${activeTab}"></b><span>data tersimpan</span></div>
       </div>
       <div id="masterTabContent"><div class="card"><p class="muted">Memuat data...</p></div></div>
     `;
+    paintMasterCounts();
+    loadMasterCounts().then(paintMasterCounts);
 
     contentEl.querySelectorAll('[data-master-tab]').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -5489,18 +5552,11 @@
     const wrap = document.getElementById('masterTabContent');
 
     wrap.innerHTML = `
-      <div class="card">
-        <p class="section-title">Tambah ${esc(label)}</p>
-        <form id="masterAddForm" class="form-grid" style="grid-template-columns: 1fr auto;">
-          <div class="field">
-            <label>Nama</label>
-            <input type="text" id="masterNameInput" placeholder="${esc(label)}" autocomplete="off">
-          </div>
-          <div class="field" style="justify-content: flex-end;">
-            <button type="submit" class="btn btn-primary">+ Tambah</button>
-          </div>
-        </form>
-      </div>
+      <form id="masterAddForm" class="mk-add">
+        <span class="mk-add-ico" aria-hidden="true">+</span>
+        <input type="text" id="masterNameInput" placeholder="Tambah ${esc(label)} baru, lalu tekan Enter..." autocomplete="off" aria-label="Nama ${esc(label)} baru">
+        <button type="submit" class="btn btn-primary">Tambah</button>
+      </form>
       <div class="card" style="padding:0;">
         <div style="padding:22px 24px 8px;">
           <p class="card-title">Daftar ${esc(label)}</p>
@@ -5518,12 +5574,13 @@
       searchPlaceholder: `Cari ${label}...`,
       emptyHtml: `<p class="muted" style="padding:0 24px 16px;">Belum ada data. Tambahkan lewat form di atas.</p>`,
       renderTableHtml: (pageRows) => `
-        <table class="data-table">
-          <thead><tr><th>Nama</th><th></th></tr></thead>
-          <tbody>${pageRows.map(it => `
+        <table class="data-table master-table">
+          <thead><tr><th class="mt-no">#</th><th>Nama</th><th class="mt-act"></th></tr></thead>
+          <tbody>${pageRows.map((it, i) => `
             <tr>
-              <td>${esc(it.name)}</td>
-              <td><button class="btn btn-sm btn-danger" data-master-del="${it.id}">Hapus</button></td>
+              <td class="mt-no">${(((state.tableUI[`master-${key}`] || {}).page || 1) - 1) * 10 + i + 1}</td>
+              <td><span class="mt-name">${esc(it.name)}</span></td>
+              <td class="mt-act"><div class="row-icons">${iconBtn('del', 'Hapus', `data-master-del="${it.id}"`, { danger: true })}</div></td>
             </tr>`).join('')}</tbody>
         </table>`,
       bindRowEvents: (container) => {
