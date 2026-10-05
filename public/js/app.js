@@ -84,6 +84,23 @@
       ${pagerHtml}
     `;
 
+    // Kotak pencarian dipindah ke baris judul kartu, rata kanan sejajar dengan judul tabelnya (kartu yang header-nya
+    // tidak dikenali dibiarkan seperti semula: pencarian di atas tabel).
+    const headEl = containerEl.previousElementSibling;
+    const searchEl = containerEl.querySelector(':scope > .table-search');
+    if (headEl && searchEl) {
+      headEl.querySelectorAll(':scope > .table-search').forEach(n => n.remove());   // sisa render sebelumnya
+      const directTitle = headEl.querySelector(':scope > .card-title');
+      const wrappedTitle = !directTitle && headEl.querySelector(':scope > * > .card-title');
+      if (directTitle) {
+        headEl.classList.add('ts-grid');
+        headEl.appendChild(searchEl);
+      } else if (wrappedTitle) {   // header flex berisi judul + kontrol lain (mis. filter status): semuanya rata kanan
+        headEl.classList.add('ts-flex');
+        headEl.appendChild(searchEl);
+      }
+    }
+
     const searchInput = document.getElementById(`${key}-search`);
     searchInput.addEventListener('input', (e) => {
       ui.search = e.target.value;
@@ -1593,9 +1610,9 @@
 
     return `
       <div class="task-stats">
-        <div class="task-stat"><b>${couponRows.length}</b><span>Coupon</span></div>
-        <div class="task-stat"><b>${names.length}</b><span>Jenis pengujian</span></div>
-        <div class="task-stat ok"><b>${grandTotal}</b><span>Total qty spesimen</span></div>
+        <div class="task-stat">${statIcon('layers')}<b>${couponRows.length}</b><span>Coupon</span></div>
+        <div class="task-stat">${statIcon('flask')}<b>${names.length}</b><span>Jenis pengujian</span></div>
+        <div class="task-stat ok">${statIcon('beaker')}<b>${grandTotal}</b><span>Total qty spesimen</span></div>
       </div>
       <p class="matrix-title">Ringkasan Jenis Pengujian &times; Coupon <span class="en">(angka = qty)</span></p>
       <div class="task-table-wrap matrix-wrap"><table class="task-table info-table matrix-table">
@@ -2015,6 +2032,27 @@
       </div>`;
   }
 
+  // ---------- ikon kartu ringkasan (task-stat) ----------
+  const STAT_ICONS = {
+    layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5" opacity=".55"/>',
+    flask: '<path d="M9 3h6"/><path d="M10 3v6.2L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9.2V3"/><path d="M7.5 15h9"/>',
+    beaker: '<path d="M6 3h12"/><path d="M8 3v5l-3 9.5A3 3 0 0 0 7.9 21h8.2a3 3 0 0 0 2.9-3.5L16 8V3"/><path d="M6.2 14h11.6" /><circle cx="10.5" cy="17.2" r=".8"/><circle cx="14" cy="16.2" r=".8"/>',
+    clipboard: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 11h6M9 15h4"/>',
+    clipboardData: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 17v-3M12 17v-6M15 17v-4"/>',
+    file: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+    fileCheck: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="m9 14.5 2 2 4-4"/>',
+    doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 12h6M9 15h6M9 18h3"/>',
+    checkCircle: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 9.8"/>',
+    xCircle: '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+    play: '<circle cx="12" cy="12" r="9"/><path d="m10.2 8.6 5 3.4-5 3.4z"/>',
+    hourglass: '<path d="M7 3h10M7 21h10"/><path d="M8 3v3.5L12 12l-4 5.5V21M16 3v3.5L12 12l4 5.5V21"/>',
+    send: '<path d="m21 3-9.5 18-2.5-7.5L1.5 11z"/><path d="m21 3-12 10.5"/>',
+    inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5 5h14l2 8v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/>'
+  };
+  function statIcon(key) {
+    return `<i class="stat-ico" aria-hidden="true"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${STAT_ICONS[key] || STAT_ICONS.layers}</svg></i>`;
+  }
+
   // ---------- tombol aksi berupa ikon ----------
   // Tombol di kolom aksi tabel hanya ikon (tooltip + aria-label berisi nama aksinya), supaya satu baris tidak
   // membengkak jadi dua-tiga baris tombol bertulisan. Atribut data-* tetap sama, jadi penangan klik tidak berubah.
@@ -2166,10 +2204,10 @@
         <p class="muted" style="margin:10px 0 0;">${mcHint}</p>
       </div>
       <div class="task-stats">
-        <div class="task-stat"><b>${stats.coupons}</b><span>Coupon</span></div>
-        <div class="task-stat"><b>${stats.specimens}</b><span>Total spesimen</span></div>
-        <div class="task-stat"><b>${stats.required}</b><span>Sheet dibutuhkan</span></div>
-        <div class="task-stat ok"><b>${stats.finals}</b><span>Sheet Final</span></div>
+        <div class="task-stat">${statIcon('layers')}<b>${stats.coupons}</b><span>Coupon</span></div>
+        <div class="task-stat">${statIcon('beaker')}<b>${stats.specimens}</b><span>Total spesimen</span></div>
+        <div class="task-stat">${statIcon('file')}<b>${stats.required}</b><span>Sheet dibutuhkan</span></div>
+        <div class="task-stat ok">${statIcon('fileCheck')}<b>${stats.finals}</b><span>Sheet Final</span></div>
       </div>
       <div class="card">
         <div class="task-card-head">
@@ -2206,10 +2244,10 @@
     return `
       <datalist id="testEquipmentList">${[...new Set([...EQUIPMENT.map(eq => eq.name), ...TEST_EQUIPMENT])].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
       <div class="task-stats">
-        <div class="task-stat"><b>${s.total}</b><span>Total pengujian</span></div>
-        <div class="task-stat ok"><b>${s.done}</b><span>Selesai</span></div>
-        <div class="task-stat"><b>${s.running}</b><span>Sedang diuji</span></div>
-        <div class="task-stat"><b>${s.total - s.done - s.running}</b><span>Belum dimulai</span></div>
+        <div class="task-stat">${statIcon('flask')}<b>${s.total}</b><span>Total pengujian</span></div>
+        <div class="task-stat ok">${statIcon('checkCircle')}<b>${s.done}</b><span>Selesai</span></div>
+        <div class="task-stat">${statIcon('play')}<b>${s.running}</b><span>Sedang diuji</span></div>
+        <div class="task-stat">${statIcon('hourglass')}<b>${s.total - s.done - s.running}</b><span>Belum dimulai</span></div>
       </div>
       <div class="card">
         <div class="task-card-head">
@@ -2244,10 +2282,10 @@
     const s = t.stats;
     return `
       <div class="task-stats">
-        <div class="task-stat"><b>${s.total}</b><span>Total pengujian</span></div>
-        <div class="task-stat"><b>${s.with_result}</b><span>Hasil terisi</span></div>
-        <div class="task-stat ok"><b>${s.accepted}</b><span>Accepted</span></div>
-        <div class="task-stat bad"><b>${s.rejected}</b><span>Rejected</span></div>
+        <div class="task-stat">${statIcon('flask')}<b>${s.total}</b><span>Total pengujian</span></div>
+        <div class="task-stat">${statIcon('clipboardData')}<b>${s.with_result}</b><span>Hasil terisi</span></div>
+        <div class="task-stat ok">${statIcon('checkCircle')}<b>${s.accepted}</b><span>Accepted</span></div>
+        <div class="task-stat bad">${statIcon('xCircle')}<b>${s.rejected}</b><span>Rejected</span></div>
       </div>
       <div class="card">
         <div class="task-card-head">
@@ -2341,10 +2379,10 @@
       <div class="card">
         <p class="section-title">Ringkasan Hasil Pengujian <span class="en">(Final Check, hanya baca)</span></p>
         <div class="task-stats">
-          <div class="task-stat"><b>${fc.coupons}</b><span>Coupon</span></div>
-          <div class="task-stat"><b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
-          <div class="task-stat ok"><b>${fc.total_specimens}</b><span>Total Specimen</span></div>
-          <div class="task-stat ok"><b>${fc.result_sheets}</b><span>Result Sheet Final</span></div>
+          <div class="task-stat">${statIcon('layers')}<b>${fc.coupons}</b><span>Coupon</span></div>
+          <div class="task-stat">${statIcon('flask')}<b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
+          <div class="task-stat ok">${statIcon('beaker')}<b>${fc.total_specimens}</b><span>Total Specimen</span></div>
+          <div class="task-stat ok">${statIcon('fileCheck')}<b>${fc.result_sheets}</b><span>Result Sheet Final</span></div>
         </div>
         <div class="task-table-wrap"><table class="task-table">
           <thead><tr><th>No.</th><th>Jenis Pengujian</th><th>Jumlah Specimen</th></tr></thead>
@@ -3875,13 +3913,13 @@
     const woCount = new Set(rows.map(r => r.work_order_id)).size;
     const specimenTotal = rows.reduce((sum, r) => sum + (r.specimens != null ? r.specimens : (parseInt(r.qty, 10) || 0)), 0);
     const thirdTile = name === 'review'
-      ? `<div class="task-stat bad"><b>${rows.filter(r => r.review_status === 'rejected').length}</b><span>Perlu revisi</span></div>`
-      : `<div class="task-stat"><b>${specimenTotal}</b><span>Total spesimen</span></div>`;
+      ? `<div class="task-stat bad">${statIcon('xCircle')}<b>${rows.filter(r => r.review_status === 'rejected').length}</b><span>Perlu revisi</span></div>`
+      : `<div class="task-stat">${statIcon('beaker')}<b>${specimenTotal}</b><span>Total spesimen</span></div>`;
 
     contentEl.innerHTML = `
       <div class="task-stats">
-        <div class="task-stat ${rows.length ? '' : 'ok'}"><b>${rows.length}</b><span>${esc(def.unit)}</span></div>
-        <div class="task-stat"><b>${woCount}</b><span>Work Order terkait</span></div>
+        <div class="task-stat ${rows.length ? '' : 'ok'}">${statIcon('inbox')}<b>${rows.length}</b><span>${esc(def.unit)}</span></div>
+        <div class="task-stat">${statIcon('clipboard')}<b>${woCount}</b><span>Work Order terkait</span></div>
         ${thirdTile}
       </div>
       <div class="card" style="padding:0;">
@@ -3962,9 +4000,9 @@
 
     contentEl.innerHTML = `
       <div class="task-stats" style="margin-bottom:20px;">
-        <div class="task-stat"><b>${total}</b><span>Total LHU</span></div>
-        <div class="task-stat ok"><b>${sentCount}</b><span>Sudah Dikirim &middot; ${pct(sentCount)}%</span></div>
-        <div class="task-stat"><b>${pendingCount}</b><span>Menunggu Kirim &middot; ${pct(pendingCount)}%</span></div>
+        <div class="task-stat">${statIcon('doc')}<b>${total}</b><span>Total LHU</span></div>
+        <div class="task-stat ok">${statIcon('send')}<b>${sentCount}</b><span>Sudah Dikirim &middot; ${pct(sentCount)}%</span></div>
+        <div class="task-stat">${statIcon('hourglass')}<b>${pendingCount}</b><span>Menunggu Kirim &middot; ${pct(pendingCount)}%</span></div>
       </div>
       <div class="card" style="padding:0;">
         <div style="padding:22px 24px 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -4111,10 +4149,10 @@
           <div class="card">
             <p class="section-title">Ringkasan Pengujian</p>
             <div class="task-stats">
-              <div class="task-stat"><b>${fc.coupons}</b><span>Coupon</span></div>
-              <div class="task-stat"><b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
-              <div class="task-stat ok"><b>${fc.total_specimens}</b><span>Total Specimen</span></div>
-              <div class="task-stat ok"><b>${fc.result_sheets}</b><span>Result Sheet</span></div>
+              <div class="task-stat">${statIcon('layers')}<b>${fc.coupons}</b><span>Coupon</span></div>
+              <div class="task-stat">${statIcon('flask')}<b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
+              <div class="task-stat ok">${statIcon('beaker')}<b>${fc.total_specimens}</b><span>Total Specimen</span></div>
+              <div class="task-stat ok">${statIcon('fileCheck')}<b>${fc.result_sheets}</b><span>Result Sheet</span></div>
             </div>
           </div>
         </div>
