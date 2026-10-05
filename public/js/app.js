@@ -3719,29 +3719,41 @@
     rows.forEach(r => { const k = currentKey(r); counts[k] = (counts[k] || 0) + 1; });
     const inProgress = rows.filter(r => currentKey(r) !== 'done').length;
 
+    const PIPE_ICONS = {
+      receiving: ICON_PATHS.receive, preparation: STAT_ICONS.beaker, testing: STAT_ICONS.flask,
+      reporting: STAT_ICONS.doc, review: ICON_PATHS.review, released: STAT_ICONS.send, done: STAT_ICONS.checkCircle
+    };
+    const pipeSvg = key => `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${PIPE_ICONS[key] || STAT_ICONS.layers}</svg>`;
+    const stageFilter = () => state.woTaskStage || '';
+
     contentEl.innerHTML = `
       <div class="card" style="padding-bottom:8px;">
-        <p class="card-title">Posisi Work Order saat ini</p>
-        <p class="card-desc" style="margin-bottom:14px;">${inProgress} Work Order sedang berjalan &middot; ${counts.done || 0} sudah selesai semua tahap</p>
+        <div class="pipe-head">
+          <div>
+            <p class="card-title">Posisi Work Order saat ini</p>
+            <p class="card-desc" style="margin-bottom:0;">${inProgress} Work Order sedang berjalan &middot; ${counts.done || 0} sudah selesai semua tahap</p>
+          </div>
+          <span class="pipe-hint">Klik salah satu tahap untuk menyaring daftar</span>
+        </div>
         <div class="pipe-strip">
-          ${stages.map(s => `
-            <div class="pipe-cell" title="${esc(s.hint)}">
-              <span class="pipe-icon">${WO_STAGE_ICONS[s.key]}</span>
+          ${stages.map((s, i) => `
+            <button type="button" class="pipe-cell st-${s.key}" data-pipe="${s.key}" title="${esc(s.hint)}" aria-pressed="false">
+              <span class="pipe-icon">${pipeSvg(s.key)}</span>
               <span class="pipe-count">${counts[s.key] || 0}</span>
               <span class="pipe-label">${esc(s.label)}</span>
-            </div>`).join('')}
-          <div class="pipe-cell done">
-            <span class="pipe-icon">&#127937;</span>
+            </button>`).join('')}
+          <button type="button" class="pipe-cell done" data-pipe="done" aria-pressed="false">
+            <span class="pipe-icon">${pipeSvg('done')}</span>
             <span class="pipe-count">${counts.done || 0}</span>
             <span class="pipe-label">Selesai</span>
-          </div>
+          </button>
         </div>
       </div>
 
       <div class="card" style="padding:0;">
         <div style="padding:22px 24px 8px;">
           <p class="card-title">Daftar Progress Work Order</p>
-          <p class="card-desc">Klik kotak status untuk langsung membuka form tahapnya</p>
+          <p class="card-desc" id="woTasksDesc"></p>
         </div>
         <div id="woTasksTableArea"></div>
         <div class="tk-legend">
@@ -3750,41 +3762,75 @@
         </div>
       </div>`;
 
-    renderSearchablePaginatedTable({
-      key: 'wo-tasks',
-      containerEl: document.getElementById('woTasksTableArea'),
-      allRows: rows,
-      searchFields: ['job_number', 'company', 'project_name'],
-      searchPlaceholder: 'Cari No. Pekerjaan, Perusahaan, atau Nama Projek...',
-      renderTableHtml: (pageRows) => `
-        <table class="data-table">
+    const paintTasksTable = () => {
+      const f = stageFilter();
+      const shown = f ? rows.filter(r => currentKey(r) === f) : rows;
+      const fLabel = f === 'done' ? 'Selesai' : ((stages.find(x => x.key === f) || {}).label || '');
+      document.querySelectorAll('.pipe-cell').forEach(c => {
+        const on = c.dataset.pipe === f;
+        c.classList.toggle('is-active', on);
+        c.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      const desc = document.getElementById('woTasksDesc');
+      if (desc) {
+        desc.innerHTML = f
+          ? `Menampilkan <strong>${shown.length}</strong> Work Order di tahap <strong>${esc(fLabel)}</strong> &middot; <a href="#" data-pipe-reset>tampilkan semua</a>`
+          : 'Klik lingkaran status untuk langsung membuka form tahapnya';
+        const reset = desc.querySelector('[data-pipe-reset]');
+        if (reset) reset.addEventListener('click', e => {
+          e.preventDefault();
+          state.woTaskStage = '';
+          state.tableUI['wo-tasks'] = Object.assign(state.tableUI['wo-tasks'] || { search: '' }, { page: 1 });
+          paintTasksTable();
+        });
+      }
+      renderSearchablePaginatedTable({
+        key: 'wo-tasks',
+        containerEl: document.getElementById('woTasksTableArea'),
+        allRows: shown,
+        searchFields: ['job_number', 'company', 'project_name'],
+        searchPlaceholder: 'Cari No. Pekerjaan, Perusahaan, atau Nama Projek...',
+        emptyHtml: '<p class="muted" style="padding:24px;">Tidak ada Work Order di tahap ini.</p>',
+        renderTableHtml: (pageRows) => `
+        <table class="data-table tk-table">
           <thead><tr>
             <th>Work Order</th>
             ${stages.map(s => `<th class="tk-th">${esc(s.label)}</th>`).join('')}
             <th>Progress</th><th></th>
           </tr></thead>
-          <tbody>${pageRows.map(r => `
-            <tr>
+          <tbody>${pageRows.map(r => {
+            const cur = currentKey(r);
+            return `
+            <tr class="tk-row ${cur === 'done' ? 'is-done' : ''}">
               <td><strong>${esc(r.job_number)}</strong><br><span class="muted">${esc(r.company)}${r.project_name ? ' &middot; ' + esc(r.project_name) : ''}</span></td>
-              ${r.stages.map(s => `
-                <td class="tk-td"><button type="button" class="tk-chip st-${s.status}" data-open-task="${r.work_order_id}:${s.key}"
+              ${r.stages.map((s, i) => `
+                <td class="tk-td ${i === 0 ? 'first' : ''} ${i === r.stages.length - 1 ? 'last' : ''} ${isStageDone(s.status) ? 'passed' : ''}"><button type="button" class="tk-chip st-${s.status}${s.key === cur ? ' is-current' : ''}" data-open-task="${r.work_order_id}:${s.key}"
                   title="${esc(s.label)} — ${esc(STAGE_STATUS_LABELS[s.status])}${s.pic ? ' · PIC ' + esc(s.pic) : ''}">${STAGE_STATUS_GLYPH[s.status]}</button></td>`).join('')}
-              <td><span class="mini-bar"><div style="width:${r.percent}%"></div></span><strong>${r.percent}%</strong></td>
+              <td class="tk-prog"><span class="mini-bar${r.percent >= 100 ? ' full' : ''}"><div style="width:${r.percent}%"></div></span><strong>${r.percent}%</strong></td>
               <td class="tk-actions">
-                <button type="button" class="btn btn-sm btn-primary" data-open-task="${r.work_order_id}:${firstOpenStageKey(r.stages)}">Kerjakan</button>
-                <button type="button" class="btn btn-sm" data-open-wo="${r.work_order_id}">Detail WO</button>
+                ${iconBtn('test', 'Kerjakan tahap berikutnya', `data-open-task="${r.work_order_id}:${firstOpenStageKey(r.stages)}"`, { primary: true })}
+                ${iconBtn('detail', 'Detail Work Order', `data-open-wo="${r.work_order_id}"`)}
               </td>
-            </tr>`).join('')}</tbody>
+            </tr>`; }).join('')}</tbody>
         </table>`,
-      bindRowEvents: (container) => {
-        container.querySelectorAll('[data-open-task]').forEach(btn => btn.addEventListener('click', () => {
-          const [woId, key] = btn.dataset.openTask.split(':');
-          openWoTask(woId, key);
-        }));
-        container.querySelectorAll('[data-open-wo]').forEach(btn =>
-          btn.addEventListener('click', () => openWorkOrderForm(btn.dataset.openWo)));
-      }
-    });
+        bindRowEvents: (container) => {
+          container.querySelectorAll('[data-open-task]').forEach(btn => btn.addEventListener('click', () => {
+            const [woId, key] = btn.dataset.openTask.split(':');
+            openWoTask(woId, key);
+          }));
+          container.querySelectorAll('[data-open-wo]').forEach(btn =>
+            btn.addEventListener('click', () => openWorkOrderForm(btn.dataset.openWo)));
+        }
+      });
+    };
+
+    contentEl.querySelectorAll('.pipe-cell').forEach(c => c.addEventListener('click', () => {
+      state.woTaskStage = stageFilter() === c.dataset.pipe ? '' : c.dataset.pipe;   // klik lagi = lepas filter
+      state.tableUI['wo-tasks'] = Object.assign(state.tableUI['wo-tasks'] || { search: '' }, { page: 1 });
+      paintTasksTable();
+    }));
+    state.woTaskStage = '';
+    paintTasksTable();
   }
 
   function applyQueueCounts(counts) {
