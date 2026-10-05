@@ -2699,6 +2699,7 @@
   }
 
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
     if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
     if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '' };
     if (state.testReport && state.testReport.template_macro) return { marking_specimen: '', thickness: '', width: '', mag: '', result: '' };
@@ -2714,6 +2715,25 @@
   const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
 
   function testReportRowsHtml() {
+    if (state.testReport && state.testReport.template_tn) {
+      const sel = document.getElementById('testReportTemplate');
+      const key = (sel && sel.value) || state.testReport.template;
+      const info = state.testReport.template_tn[key] || { cols: [], bolt: false };
+      const listFor = k => (k === 'location' ? 'tnLocList' : (k === 'failure' ? 'tnFailList' : ''));
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr>${info.bolt ? '<th>Jenis</th>' : ''}<th>Specimen No.</th>${info.cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            ${info.bolt ? `<td><select data-tfield="kind"><option value="Tensile" ${r.kind !== 'Proof Load' ? 'selected' : ''}>Tensile</option><option value="Proof Load" ${r.kind === 'Proof Load' ? 'selected' : ''}>Proof Load</option></select></td>` : ''}
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            ${info.cols.map(c => `<td><input type="text" ${['location', 'failure'].includes(c.key) ? '' : 'inputmode="decimal"'} ${listFor(c.key) ? 'list="' + listFor(c.key) + '"' : ''} data-tfield="${c.key}" value="${esc(r[c.key] || '')}" style="width:${['location', 'failure'].includes(c.key) ? 130 : 85}px"></td>`).join('')}
+            <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <datalist id="tnLocList"><option value="Base Metal"><option value="Weld Metal"><option value="HAZ"><option value="Base Metal/Weld Interface"><option value="BBGM"><option value="BOGM"><option value="Thread"></datalist>
+      <datalist id="tnFailList"><option value="Ductile"><option value="Brittle"><option value="Fracture"></datalist>
+      <p class="muted" style="margin:6px 0 0;">Kolom Area dan Tensile strength yang dikosongkan dihitung otomatis saat cetak (Area dari diameter atau tebal &times; lebar; strength = beban / area, dibulatkan ke bilangan bulat); Elongation dihitung dari L0 dan L1 bila diisi. Kolom lain kosong tercetak "-".</p>`;
+    }
     if (state.testReport && state.testReport.template === 'nickbreak') {
       return `<table class="task-table">
         <thead><tr><th>Specimen No.</th><th>Kind of Discontinuities/Defect</th><th>Depth (mm)</th><th>Length (mm)</th><th>Distance between slag inclusions</th><th>Result</th><th></th></tr></thead>
@@ -3262,6 +3282,14 @@
         ${r.category === 'bending' && r.template !== 'nickbreak' ? testReportBendFieldsHtml(r) : ''}
         ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
+        ${r.template_tn ? `
+        <div class="card">
+          <p class="section-title">Test Parameter <span class="en">dicetak pada form bila ada kolomnya</span></p>
+          <div class="form-grid">
+            <div class="field"><label>Type Specimen</label><input type="text" name="field_type_specimen" value="${esc((r.fields || {}).type_specimen)}" placeholder="mis. Round / Flat"></div>
+            <div class="field"><label>Test Speed</label><input type="text" name="field_test_speed" value="${esc((r.fields || {}).test_speed)}" placeholder="mis. 12 MPa/s"></div>
+          </div>
+        </div>` : ''}
         ${r.template_corr ? `
         <div class="card">
           <p class="section-title">Hasil Uji Korosi <span class="en">tabel berat + foto sampel; rata-rata, weight loss dan rate dihitung otomatis saat cetak</span></p>
@@ -3359,7 +3387,7 @@
         if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi
         if (document.getElementById('testReportHardWrap')) rerenderTestReportHard();
         if (document.getElementById('testReportCorrWrap')) rerenderTestReportCorr();   // nilai tersimpan per label elemen, jadi ikut terbawa
-        if (state.testReport.template_fwb || state.testReport.template_macro || state.testReport.template_micro) rerenderTestReportRows();
+        if (state.testReport.template_fwb || state.testReport.template_macro || state.testReport.template_micro || state.testReport.template_tn) rerenderTestReportRows();
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
