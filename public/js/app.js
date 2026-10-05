@@ -703,14 +703,16 @@
               <td>${esc(r.received_date)}</td>
               <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
               <td>
-                <button class="btn btn-sm" data-edit="${r.id}">Buka</button>
-                <button class="btn btn-sm" data-pdf="${r.id}">Export PDF</button>
+                <div class="row-icons">
+                ${iconBtn('open', 'Buka', `data-edit="${r.id}"`)}
+                ${iconBtn('pdf', 'Export PDF', `data-pdf="${r.id}"`)}
                 ${r.status === 'final' ? (
                   r.work_order_id
-                    ? `<button class="btn btn-sm" data-open-wo="${r.work_order_id}">Work Order</button>`
-                    : `<button class="btn btn-sm" data-create-wo="${r.id}">+ Work Order</button>`
+                    ? iconBtn('wo', 'Buka Work Order', `data-open-wo="${r.work_order_id}"`)
+                    : iconBtn('woNew', 'Buat Work Order', `data-create-wo="${r.id}"`)
                 ) : ''}
-                <button class="btn btn-sm btn-danger" data-del="${r.id}">Hapus</button>
+                ${iconBtn('del', 'Hapus', `data-del="${r.id}"`, { danger: true })}
+                </div>
               </td>
             </tr>`).join('')}</tbody>
         </table>`,
@@ -1467,9 +1469,11 @@
               <td>${r.testing_date ? esc(r.testing_date) : '-'}</td>
               <td>${r.stage ? `${stageBadgeHtml(r.stage.label, r.stage.status)}<span class="muted stage-count">${r.stage.done_count}/${r.stage.total}</span>` : '<span class="muted">-</span>'}</td>
               <td>
-                <button class="btn btn-sm" data-wo-edit="${r.id}">Buka</button>
-                <button class="btn btn-sm" data-wo-pdf="${r.id}">Export PDF</button>
-                <button class="btn btn-sm btn-danger" data-wo-del="${r.id}">Hapus</button>
+                <div class="row-icons">
+                ${iconBtn('open', 'Buka', `data-wo-edit="${r.id}"`)}
+                ${iconBtn('pdf', 'Export PDF', `data-wo-pdf="${r.id}"`)}
+                ${iconBtn('del', 'Hapus', `data-wo-del="${r.id}"`, { danger: true })}
+                </div>
               </td>
             </tr>`).join('')}</tbody>
         </table>`,
@@ -2011,11 +2015,88 @@
       </div>`;
   }
 
+  // ---------- tombol aksi berupa ikon ----------
+  // Tombol di kolom aksi tabel hanya ikon (tooltip + aria-label berisi nama aksinya), supaya satu baris tidak
+  // membengkak jadi dua-tiga baris tombol bertulisan. Atribut data-* tetap sama, jadi penangan klik tidak berubah.
+  const ICON_PATHS = {
+    open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H3z"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1.5H5A2 2 0 0 1 3 18z"/>',
+    pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="m9.5 14.5 2.5 2.5 2.5-2.5"/>',
+    wo: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/>',
+    woNew: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M12 10v7M8.5 13.5h7"/>',
+    del: '<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/>',
+    sheet: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>',
+    sheetNew: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6M9 14h6"/>',
+    wait: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    detail: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    receive: '<path d="M4 13h4l1.5 3h5L16 13h4"/><path d="M4 13V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7"/><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="m9.5 9 2 2 3.5-3.5"/>',
+    test: '<circle cx="12" cy="12" r="9"/><path d="m10 8.5 5 3.5-5 3.5z"/>',
+    review: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="m8.5 12 2.5 2.5 4.5-5"/>'
+  };
+
+  // kind: kunci ikon; label: nama aksi (tooltip); attrs: atribut tambahan mentah (mis. data-edit="5");
+  // opts: { primary, danger, disabled }
+  function iconBtn(kind, label, attrs, opts = {}) {
+    const cls = ['icon-btn', opts.primary ? 'is-primary' : '', opts.danger ? 'is-danger' : ''].filter(Boolean).join(' ');
+    return `<button type="button" class="${cls}" ${attrs || ''} title="${esc(label)}" aria-label="${esc(label)}"${opts.disabled ? ' disabled' : ''}><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[kind] || ''}</svg></button>`;
+  }
+
+  // ---------- modal daftar lengkap ----------
+  function openListModal(title, subtitle, items) {
+    closeListModal();
+    const wrap = document.createElement('div');
+    wrap.className = 'list-modal-backdrop';
+    wrap.id = 'listModal';
+    wrap.innerHTML = `<div class="list-modal" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+        <div class="list-modal-head"><div><strong>${esc(title)}</strong>${subtitle ? `<div class="muted" style="font-size:12px;">${esc(subtitle)}</div>` : ''}</div>
+          <button type="button" class="list-modal-x" aria-label="Tutup" data-lm-close>&times;</button></div>
+        <div class="list-modal-body"><div class="mk-list mk-list-full">${items.map(m => `<span class="mk-chip">${esc(m)}</span>`).join('')}</div></div>
+        <div class="list-modal-foot"><span class="muted">${items.length} item</span>
+          <span><button type="button" class="btn btn-sm" data-lm-copy>Salin semua</button> <button type="button" class="btn btn-sm btn-primary" data-lm-close>Tutup</button></span></div>
+      </div>`;
+    wrap.addEventListener('click', e => {
+      if (e.target === wrap || e.target.closest('[data-lm-close]')) closeListModal();
+      else if (e.target.closest('[data-lm-copy]')) {
+        const btn = e.target.closest('[data-lm-copy]');
+        const text = items.join('\n');
+        const done = () => { btn.textContent = 'Tersalin'; setTimeout(() => { btn.textContent = 'Salin semua'; }, 1500); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, () => toast('Gagal menyalin', 'error'));
+        else toast('Browser tidak mendukung salin otomatis', 'error');
+      }
+    });
+    document.body.appendChild(wrap);
+    document.addEventListener('keydown', listModalKey);
+    const first = wrap.querySelector('[data-lm-close]');
+    if (first) first.focus();
+  }
+  function listModalKey(e) { if (e.key === 'Escape') closeListModal(); }
+  function closeListModal() {
+    const el = document.getElementById('listModal');
+    if (el) el.remove();
+    document.removeEventListener('keydown', listModalKey);
+  }
+
+  // satu pendengar untuk semua chip "+N lagi" (tabel dirender ulang sesering halaman berpindah)
+  document.addEventListener('click', e => {
+    const more = e.target.closest('[data-mk-more]');
+    if (!more) return;
+    let items = [];
+    try { items = JSON.parse(more.getAttribute('data-mk-more')); } catch (err) { items = []; }
+    openListModal(more.getAttribute('data-mk-title') || 'Specimen Marking', more.getAttribute('data-mk-sub') || '', items);
+  });
+
   // Specimen Marking = Sample Marking + kode jenis pengujian + nomor urut (sama dengan Marking
   // Specimen di sheet Pengecekan Spesimen, jadi otomatis diteruskan ke sana).
+  // Lebih dari MK_INLINE_MAX spesimen: tampil beberapa chip + tombol "+N lagi" yang membuka modal berisi semuanya,
+  // supaya kolom tidak memanjang puluhan baris (mis. Qty 23).
+  const MK_INLINE_MAX = 3;
   function markingChipsHtml(it) {
     if (it.markings && it.markings.length) {
-      return `<div class="mk-list">${it.markings.map(m => `<span class="mk-chip">${esc(m)}</span>`).join('')}</div>`;
+      const all = it.markings;
+      if (all.length <= MK_INLINE_MAX) return `<div class="mk-list">${all.map(m => `<span class="mk-chip">${esc(m)}</span>`).join('')}</div>`;
+      const title = 'Specimen Marking' + (it.test_name ? ' — ' + it.test_name : '');
+      const sub = [it.job_number, it.sample_marking].filter(Boolean).join(' · ');
+      return `<div class="mk-list">${all.slice(0, MK_INLINE_MAX).map(m => `<span class="mk-chip">${esc(m)}</span>`).join('')}
+        <button type="button" class="mk-chip mk-more" data-mk-more="${esc(JSON.stringify(all))}" data-mk-title="${esc(title)}" data-mk-sub="${esc(sub)}" title="Lihat semua ${all.length} Specimen Marking">+${all.length - MK_INLINE_MAX} lagi</button></div>`;
     }
     return it.qty
       ? '<span class="muted" title="Kode jenis pengujian ini belum diatur di Master Data > Kode Jenis Pengujian">Kode belum diatur</span>'
@@ -3719,11 +3800,9 @@
   }
 
   function queueSheetButtonHtml(r) {
-    if (r.sheet_id) return `<button type="button" class="btn btn-sm" data-open-sheet="${r.sheet_id}">Buka Sheet</button>`;
-    if (r.machining_status !== 'selesai') {
-      return '<button type="button" class="btn btn-sm" disabled title="Tim machining perlu menekan Selesai Machining dulu">Menunggu machining</button>';
-    }
-    return `<button type="button" class="btn btn-sm" data-q-create data-req="${r.test_request_id}" data-coupon="${esc(r.coupon_row_no)}" data-test="${esc(r.test_name)}">+ Buat Sheet</button>`;
+    if (r.sheet_id) return iconBtn('sheet', 'Buka Sheet', `data-open-sheet="${r.sheet_id}"`);
+    if (r.machining_status !== 'selesai') return iconBtn('wait', 'Menunggu machining — tim machining perlu menekan Selesai Machining dulu', '', { disabled: true });
+    return iconBtn('sheetNew', 'Buat Sheet', `data-q-create data-req="${r.test_request_id}" data-coupon="${esc(r.coupon_row_no)}" data-test="${esc(r.test_name)}"`, { primary: true });
   }
 
   const QUEUE_TABLES = {
@@ -3735,7 +3814,7 @@
         <td>${r.tests.map(t => esc(t)).join('<br>') || '<span class="muted">-</span>'}</td>
         <td><span class="qty-pill">${r.specimens}</span></td>
         <td>${r.received === 'N' ? '<span class="st-pill st-rejected">Tidak diterima</span>' : '<span class="st-pill st-pending">Belum diterima</span>'}</td>
-        <td class="q-actions"><button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:receiving">Terima &rarr;</button></td>`
+        <td class="q-actions"><div class="row-icons">${iconBtn('receive', 'Terima', `data-q-open="${r.work_order_id}:receiving"`, { primary: true })}</div></td>`
     },
     preparation: {
       head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Specimen Marking', 'Machining', 'Status Sheet', ''],
@@ -3748,8 +3827,8 @@
         <td>${r.sheet_status
           ? `<span class="badge badge-${r.sheet_status === 'final' ? 'final' : 'draft'}">${r.sheet_status === 'final' ? 'Final' : 'Draft'}</span>`
           : '<span class="st-pill st-pending">Belum dibuat</span>'}</td>
-        <td class="q-actions">${queueSheetButtonHtml(r)}
-          <button type="button" class="btn btn-sm" data-q-open="${r.work_order_id}:preparation">Detail</button></td>`
+        <td class="q-actions"><div class="row-icons">${queueSheetButtonHtml(r)}
+          ${iconBtn('detail', 'Detail', `data-q-open="${r.work_order_id}:preparation"`)}</div></td>`
     },
     testing: {
       head: ['Work Order', 'Sampel', 'Jenis Pengujian', 'Specimen Marking', 'Status', ''],
@@ -3759,8 +3838,8 @@
         <td><strong>${esc(r.test_name)}</strong><br><span class="muted">Qty ${esc(r.qty) || '-'}${r.method ? ' &middot; ' + esc(r.method) : ''}</span></td>
         <td>${markingChipsHtml(r)}</td>
         <td>${r.status === 'proses' ? '<span class="st-pill st-draft">Sedang diuji</span>' : '<span class="st-pill st-pending">Belum dimulai</span>'}</td>
-        <td class="q-actions">${r.sheet_id ? `<button type="button" class="btn btn-sm" data-open-sheet="${r.sheet_id}">Buka Sheet</button>` : ''}
-          <button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:testing">Uji &rarr;</button></td>`
+        <td class="q-actions"><div class="row-icons">${r.sheet_id ? iconBtn('sheet', 'Buka Sheet', `data-open-sheet="${r.sheet_id}"`) : ''}
+          ${iconBtn('test', 'Uji', `data-q-open="${r.work_order_id}:testing"`, { primary: true })}</div></td>`
     },
     review: {
       head: ['Work Order', 'No. Laporan', 'Hasil Pengujian', 'Checklist', 'Status', ''],
@@ -3770,7 +3849,7 @@
         <td>Accepted ${r.results.accepted} &middot; Rejected ${r.results.rejected}<br><span class="muted">dari ${r.results.total} pengujian</span></td>
         <td>${r.checklist_ok}/${r.checklist_total} butir</td>
         <td>${r.review_status === 'rejected' ? '<span class="st-pill st-rejected">Perlu revisi</span>' : '<span class="st-pill st-pending">Menunggu review</span>'}</td>
-        <td class="q-actions"><button type="button" class="btn btn-sm btn-primary" data-q-open="${r.work_order_id}:review">Review &rarr;</button></td>`
+        <td class="q-actions"><div class="row-icons">${iconBtn('review', 'Review', `data-q-open="${r.work_order_id}:review"`, { primary: true })}</div></td>`
     }
   };
 
@@ -5144,9 +5223,11 @@
                 <td>${esc(r.inspection_date) || '-'}</td>
                 <td><span class="badge badge-${r.status === 'final' ? 'final' : 'draft'}">${r.status === 'final' ? 'Final' : 'Draft'}</span></td>
                 <td>
-                  <button class="btn btn-sm" data-spec-edit="${r.id}">Buka</button>
-                  <button class="btn btn-sm" data-spec-pdf="${r.id}">Export PDF</button>
-                  <button class="btn btn-sm btn-danger" data-spec-del="${r.id}">Hapus</button>
+                  <div class="row-icons">
+                  ${iconBtn('open', 'Buka', `data-spec-edit="${r.id}"`)}
+                  ${iconBtn('pdf', 'Export PDF', `data-spec-pdf="${r.id}"`)}
+                  ${iconBtn('del', 'Hapus', `data-spec-del="${r.id}"`, { danger: true })}
+                  </div>
                 </td>
               </tr>`).join('')}</tbody>
           </table>`,

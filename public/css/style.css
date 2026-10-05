@@ -1598,3 +1598,40 @@ table.test-items-table input[type="text"] {
   .lhu-hero { flex-direction: column; }
   .lhu-hero-stats { gap: 18px; }
 }
+
+/* Tombol aksi berupa ikon (kolom aksi tabel) */
+.row-icons { display: inline-flex; gap: 6px; flex-wrap: nowrap; align-items: center; vertical-align: middle; }
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border: 1px solid var(--border-strong); border-radius: 8px;
+  background: #fff; color: var(--navy); cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.icon-btn:hover:not(:disabled) { background: var(--bg); border-color: var(--navy); }
+.icon-btn:focus-visible { outline: 2px solid var(--accent-dark); outline-offset: 2px; }
+.icon-btn.is-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.icon-btn.is-primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
+.icon-btn.is-danger { color: var(--danger); border-color: #f0c9c4; background: var(--danger-bg); }
+.icon-btn.is-danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+.icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Chip "+N lagi" dan modal daftar lengkap Specimen Marking */
+button.mk-chip { cursor: pointer; font-family: inherit; }
+.mk-more { background: var(--navy); border-color: var(--navy); color: #fff; }
+.mk-more:hover { filter: brightness(1.15); }
+.list-modal-backdrop {
+  position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  padding: 16px; background: rgba(15, 23, 42, .5);
+}
+.list-modal {
+  width: min(640px, 100%); max-height: 86vh; display: flex; flex-direction: column;
+  background: #fff; border-radius: 12px; box-shadow: 0 18px 48px rgba(0, 0, 0, .28);
+}
+.list-modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 16px 18px 10px; border-bottom: 1px solid var(--border); }
+.list-modal-x { border: 0; background: transparent; font-size: 26px; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0 4px; }
+.list-modal-x:hover { color: var(--danger); }
+.list-modal-body { padding: 14px 18px; overflow-y: auto; }
+.list-modal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 18px 14px; border-top: 1px solid var(--border); }
+.mk-list-full { max-width: none; gap: 6px; }
+.mk-list-full .mk-chip { font-size: 12px; padding: 3px 9px; }
