@@ -297,7 +297,16 @@ function convert(xlsxPath, sheetName) {
           const src = /<mc:Fallback[\s\S]*?<\/mc:Fallback>/.exec(body);
           const txt = [...(src ? src[0] : body).matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m => decode(m[1])).join('');
           const sz = /sz="([0-9]+)"/.exec(src ? src[0] : body);
-          if (txt.trim()) shapes.push({ type: 'text', x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), text: txt, size: sz ? Number(sz[1]) / 100 : 9, math: body.includes('<a14:m>') });
+          // warna & tebal huruf kotak teks (mis. label putih di atas foto)
+          const rp = /<a:rPr([^>]*)>([\s\S]*?)<\/a:rPr>/.exec(src ? src[0] : body);
+          let color = null;
+          if (rp) {
+            const rgb = /<a:srgbClr val="([0-9A-Fa-f]{6})"/.exec(rp[2]);
+            const sch = /<a:schemeClr val="([a-z0-9]+)"/.exec(rp[2]);
+            const sys = /<a:sysClr [^>]*lastClr="([0-9A-Fa-f]{6})"/.exec(rp[2]);
+            if (rgb) color = '#' + rgb[1]; else if (sys) color = '#' + sys[1]; else if (sch) color = /^(bg1|lt1)$/.test(sch[1]) ? '#FFFFFF' : null;
+          }
+          if (txt.trim()) shapes.push({ type: 'text', x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0), text: txt, size: sz ? Number(sz[1]) / 100 : 9, math: body.includes('<a14:m>'), color, bold: !!(rp && / b="1"/.test(rp[1])), align: ((/<a:pPr[^>]* algn="([a-z]+)"/.exec(src ? src[0] : body) || [])[1]) || null, font: ((/<a:latin typeface="([^"]+)"/.exec(src ? src[0] : body) || [])[1]) || null });
         }
         continue;
       }

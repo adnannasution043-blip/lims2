@@ -2699,6 +2699,7 @@
   }
 
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.template_macro) return { marking_specimen: '', thickness: '', width: '', mag: '', result: '' };
     if (state.testReport && state.testReport.template === 'flat') return { marking_specimen: '', length: '', od: '', wt: '', e: '', h: '', first: '', second: '' };
     if (state.testReport && state.testReport.template_fwb) return { marking_specimen: '', remarks: [], result: '' };
     if (state.testReport && state.testReport.category === 'charpy') {
@@ -2711,6 +2712,35 @@
   const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
 
   function testReportRowsHtml() {
+    if (state.testReport && state.testReport.template_macro) {
+      // Macro-Etching: satu baris per spesimen (satu halaman cetak + satu foto makro per baris)
+      const sel = document.getElementById('testReportTemplate');
+      const key = (sel && sel.value) || state.testReport.template;
+      const info = state.testReport.template_macro[key] || { kv: [], magDef: '10X' };
+      const last = state.testReportRows.length - 1;
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr><th>Specimen No.</th><th>Thickness (mm)</th><th>Width (mm)</th><th>Magnification</th><th>Result</th>${info.kv.map(f => `<th>${esc(f.label)}</th>`).join('')}<th>Foto makro</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => {
+          const slot = key + '/s' + (idx + 1);
+          const has = state.testReportPhotoSlots.has(slot);
+          return `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            <td><input type="text" inputmode="decimal" data-tfield="thickness" value="${esc(r.thickness || '')}" style="width:80px"></td>
+            <td><input type="text" inputmode="decimal" data-tfield="width" value="${esc(r.width || '')}" style="width:80px"></td>
+            <td><input type="text" data-tfield="mag" value="${esc(r.mag || '')}" placeholder="${esc(info.magDef)}" style="width:80px"></td>
+            <td><input type="text" list="macroResultList" data-tfield="result" value="${esc(r.result || '')}" style="width:100px"></td>
+            ${info.kv.map(f => `<td><input type="text" data-tfield="${f.key}" value="${esc(r[f.key] || '')}" placeholder="${esc(f.def || '')}" style="width:110px"></td>`).join('')}
+            <td style="min-width:150px;">${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">belum ada foto</span>'}
+              <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
+              ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}</td>
+            <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <datalist id="macroResultList"><option value="Accepted"><option value="Rejected"></datalist>
+      <p class="muted" style="margin:6px 0 0;">Satu baris = satu halaman cetak dengan foto makronya. Foto langsung tersimpan saat dipilih (tidak perlu menekan Simpan). Kolom kosong memakai teks bawaan form (abu-abu); Result kosong tercetak "-".</p>`;
+    }
     if (state.testReport && state.testReport.template === 'flat') {
       const cols = [['length', 'Length of Pipe (mm)'], ['od', 'Outside Diameter D (mm)'], ['wt', 'Wall Thickness t (mm)'], ['e', 'Deformation e'], ['h', 'H (mm) — kosong = dihitung'], ['first', 'First Step Test Result'], ['second', 'Second Step Test Result']];
       return `<table class="task-table">
@@ -2773,12 +2803,45 @@
     bindTestReportRowEvents();
   }
 
+  // Foto makro per baris (slot "<template>/s<n>"): unggah/hapus langsung ke server, di luar tombol Simpan.
+  async function handleMacroPhotoChange(e) {
+    const slot = e.target.dataset && e.target.dataset.mphoto;
+    if (!slot || !e.target.files[0]) return;
+    try {
+      const blob = await shrinkImageToBlob(e.target.files[0], 1600);
+      const res = await fetch('/api/test-reports/' + state.testReport.id + '/photos?slot=' + encodeURIComponent(slot), { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Gagal mengunggah foto');
+      state.testReportPhotoSlots.add(slot);
+      state.testReportPhotoVer[slot] = Date.now();
+      rerenderTestReportRows();
+      toast('Foto tersimpan', 'success');
+    } catch (err) { toast(err.message, 'error'); e.target.value = ''; }
+  }
+
+  async function handleMacroPhotoClick(e) {
+    const slot = e.target.dataset && e.target.dataset.mphotoDel;
+    if (!slot || !confirm('Hapus foto ini?')) return;
+    try {
+      const res = await fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' });
+      if (!res.ok) throw new Error('Gagal menghapus foto');
+      state.testReportPhotoSlots.delete(slot);
+      rerenderTestReportRows();
+    } catch (err) { toast(err.message, 'error'); }
+  }
+
   function bindTestReportRowEvents() {
     const wrap = document.getElementById('testReportRowsWrap');
     wrap.addEventListener('input', handleTestReportRowInput);
     wrap.addEventListener('change', handleTestReportRowInput);
+    wrap.addEventListener('change', handleMacroPhotoChange);
+    wrap.addEventListener('click', handleMacroPhotoClick);
     wrap.querySelectorAll('[data-trow-remove]').forEach(btn => btn.addEventListener('click', () => {
       if (state.testReportRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
+      if (state.testReport.template_macro) {
+        const sel = document.getElementById('testReportTemplate');
+        const slot = ((sel && sel.value) || state.testReport.template) + '/s' + (Number(btn.dataset.trowRemove) + 1);
+        if (state.testReportPhotoSlots.has(slot)) { state.testReportPhotoSlots.delete(slot); fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' }); }
+      }
       state.testReportRows.splice(Number(btn.dataset.trowRemove), 1);
       state.testReportDirty = true;
       rerenderTestReportRows();
@@ -3244,7 +3307,7 @@
         if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi
         if (document.getElementById('testReportHardWrap')) rerenderTestReportHard();
         if (document.getElementById('testReportCorrWrap')) rerenderTestReportCorr();   // nilai tersimpan per label elemen, jadi ikut terbawa
-        if (state.testReport.template_fwb) rerenderTestReportRows();
+        if (state.testReport.template_fwb || state.testReport.template_macro) rerenderTestReportRows();
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
