@@ -2685,6 +2685,9 @@
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
     state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
     state.testReportHard = { lines: JSON.parse(JSON.stringify(((data.fields || {}).hardness || {}).lines || [[], []])), sketch: (data.fields || {}).sketch || '' };
+    state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {}));
+    state.testReportPhotoSlots = new Set(data.photos || []);
+    state.testReportPhotoVer = {};
     state.testReportRows = (data.rows && data.rows.length) ? data.rows.map(r => ({ ...r })) : [{ marking_specimen: '', observation: '', result: '' }];
     state.testReportDirty = false;
     state.testReportReturn = { woId, stageKey };
@@ -2832,6 +2835,124 @@
     const labels = ((state.testReport || {}).template_elements || {})[templateKey] || [];
     return `<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${labels.map(l => `
       <div class="field"><label>${esc(l)}</label><input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`).join('')}</div>`;
+  }
+
+  // Form Corrosion (Pitting / Intergranular): berat sebelum & sesudah uji (5 penimbangan), luas, jam uji, teks ringkasan
+  // dan foto sampel. Hasil hitung (rata-rata, weight loss, rate) dibuat otomatis saat cetak.
+  function corrFive(arr) { const a = Array.isArray(arr) ? arr.slice(0, 5) : []; while (a.length < 5) a.push(''); return a; }
+
+  function testReportCorrHtml(templateKey) {
+    const info = ((state.testReport || {}).template_corr || {})[templateKey];
+    if (!info) return '';
+    const c = state.testReportCorr;
+    const inp = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" data-corr="${key}" value="${esc(c[key] || '')}" placeholder="${esc(ph || '')}"></div>`;
+    const rowW = (name, arr, attr) => `<div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap;"><span style="width:150px;font-size:12px;">${name}</span>${corrFive(arr).map((v, i) => `<div class="field" style="margin:0;width:92px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" ${attr} data-ci="${i}" value="${esc(v)}"></div>`).join('')}</div>`;
+    let weights = '';
+    if (info.weights) {
+      if (info.periods === 3) {
+        weights = [0, 1, 2].map(p => {
+          const per = (c.periods || [])[p] || {};
+          return `<div style="margin-bottom:10px;"><label style="display:block;margin:6px 0;font-weight:600;">Periode ${p + 1}</label>${rowW('Weight before test (g)', per.before, `data-cw="before" data-cp="${p}"`)}${rowW('Weight after test (g)', per.after, `data-cw="after" data-cp="${p}"`)}</div>`;
+        }).join('');
+      } else {
+        weights = rowW('Weight before test (g)', c.before, 'data-cw="before"') + rowW('Weight after test (g)', c.after, 'data-cw="after"');
+      }
+    }
+    const unit = info.areaUnit;
+    const dims = info.weights ? `
+      <div class="form-grid">
+        <div class="field"><label>Panjang L (mm)</label><input type="text" inputmode="decimal" data-corr="l" value="${esc(c.l || '')}"></div>
+        <div class="field"><label>Lebar W (mm)</label><input type="text" inputmode="decimal" data-corr="w" value="${esc(c.w || '')}"></div>
+        <div class="field"><label>Tebal T (mm)</label><input type="text" inputmode="decimal" data-corr="t" value="${esc(c.t || '')}"></div>
+        <div class="field"><label>Surface Area (${esc(unit)}) <span class="en">kosong = dihitung 2(LW+LT+WT)</span></label><input type="text" inputmode="decimal" data-corr="area" value="${esc(c.area || '')}"></div>
+        ${info.density ? `<div class="field"><label>Density (g/cm&sup3;) <span class="en">untuk mpy; kosong = 8.14</span></label><input type="text" inputmode="decimal" data-corr="density" value="${esc(c.density || '')}" placeholder="8.14"></div>` : ''}
+      </div>` : '';
+    const texts = `
+      <div class="form-grid">
+        <div class="field full"><label>Summary of Test <span class="en">kosong = teks bawaan form (xxx diganti jam uji)</span></label><textarea data-corr="summary" rows="3" placeholder="${esc(info.summary)}">${esc(c.summary || '')}</textarea></div>
+        ${info.observation ? `<div class="field full"><label>${info.kind === 'e' ? 'Examination Result' : 'Observation'} <span class="en">kosong = teks bawaan form</span></label><textarea data-corr="observation" rows="2" placeholder="${esc(info.observation)}">${esc(c.observation || '')}</textarea></div>` : ''}
+        ${info.periodObservation ? [1, 2].map(i => `<div class="field full"><label>Observation halaman Periode ${i + 1}</label><textarea data-cobs="${i - 1}" rows="2">${esc(((c.obs || [])[i - 1]) || '')}</textarea></div>`).join('') : ''}
+      </div>${info.kind === 'c' ? '<p class="muted" style="margin:4px 0 0;">Teks bawaan form menyebut "E308L-16 weld metal specimen" — sesuaikan dengan spesimen yang diuji.</p>' : ''}`;
+    const photoHtml = (info.photos || []).map(pg => `
+      <div style="margin-top:12px;"><p class="muted" style="margin:0 0 6px;">${esc(pg.label)} — foto disimpan langsung saat dipilih (tidak perlu menekan Simpan)</p>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">${pg.slots.map(sl => {
+          const has = state.testReportPhotoSlots.has(sl.slot);
+          return `<div style="border:1px solid #ccc;border-radius:6px;padding:8px;">
+            <div style="font-size:12px;font-weight:600;margin-bottom:4px;">${esc(sl.label)}</div>
+            ${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(sl.slot)}&v=${state.testReportPhotoVer[sl.slot] || 0}" alt="" style="width:100%;height:110px;object-fit:contain;background:#111;border-radius:4px;">` : '<div class="muted" style="height:110px;display:flex;align-items:center;justify-content:center;background:#f4f4f4;border-radius:4px;font-size:12px;">belum ada foto</div>'}
+            <input type="file" accept="image/*" data-cphoto="${esc(sl.slot)}" style="margin-top:6px;width:100%;font-size:11px;">
+            ${has ? `<button type="button" class="btn btn-sm btn-danger" data-cphoto-del="${esc(sl.slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}
+          </div>`;
+        }).join('')}</div></div>`).join('');
+    return `<div class="form-grid">${inp('sample_id', 'Sample Identification')}${inp('hours', info.periods === 3 ? 'Jam per periode (Period of Test)' : 'Period of Test (jam)', info.kind === 'e' ? '15' : '')}${inp('volume', 'Volume Test Solution (ml)')}</div>${dims}${weights}${texts}${photoHtml}`;
+  }
+
+  // Foto diperkecil di sisi klien (maks. 1600 px, JPEG) lalu diunggah mentah ke server.
+  function shrinkImageToBlob(file, maxSide) {
+    return new Promise((resolve, reject) => {
+      const fr = new FileReader();
+      fr.onerror = () => reject(new Error('Gagal membaca gambar'));
+      fr.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('File bukan gambar yang valid'));
+        img.onload = () => {
+          const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
+          const ctx = cv.getContext('2d');
+          ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
+          ctx.drawImage(img, 0, 0, cv.width, cv.height);
+          cv.toBlob(b => (b ? resolve(b) : reject(new Error('Gagal memproses gambar'))), 'image/jpeg', 0.85);
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+
+  function rerenderTestReportCorr() {
+    const sel = document.getElementById('testReportTemplate');
+    document.getElementById('testReportCorrWrap').innerHTML = testReportCorrHtml((sel && sel.value) || state.testReport.template);
+  }
+
+  function bindTestReportCorrEvents() {
+    const wrap = document.getElementById('testReportCorrWrap');
+    if (!wrap) return;
+    wrap.addEventListener('input', e => {
+      const t = e.target, c = state.testReportCorr;
+      if (t.dataset.corr) { c[t.dataset.corr] = t.value; state.testReportDirty = true; return; }
+      if (t.dataset.cw) {
+        const target = t.dataset.cp !== undefined ? ((c.periods = c.periods || [{}, {}, {}])[Number(t.dataset.cp)] = c.periods[Number(t.dataset.cp)] || {}) : c;
+        target[t.dataset.cw] = corrFive(target[t.dataset.cw]);
+        target[t.dataset.cw][Number(t.dataset.ci)] = t.value;
+        state.testReportDirty = true; return;
+      }
+      if (t.dataset.cobs !== undefined) { c.obs = c.obs || ['', '']; c.obs[Number(t.dataset.cobs)] = t.value; state.testReportDirty = true; }
+    });
+    wrap.addEventListener('change', async e => {
+      const slot = e.target.dataset.cphoto;
+      if (!slot || !e.target.files[0]) return;
+      try {
+        const blob = await shrinkImageToBlob(e.target.files[0], 1600);
+        const res = await fetch(`/api/test-reports/${state.testReport.id}/photos?slot=${encodeURIComponent(slot)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Gagal mengunggah foto');
+        state.testReportPhotoSlots.add(slot);
+        state.testReportPhotoVer[slot] = Date.now();
+        rerenderTestReportCorr();
+        toast('Foto tersimpan', 'success');
+      } catch (err) { toast(err.message, 'error'); e.target.value = ''; }
+    });
+    wrap.addEventListener('click', async e => {
+      const slot = e.target.dataset.cphotoDel;
+      if (!slot) return;
+      if (!confirm('Hapus foto ini?')) return;
+      try {
+        const res = await fetch(`/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Gagal menghapus foto');
+        state.testReportPhotoSlots.delete(slot);
+        rerenderTestReportCorr();
+      } catch (err) { toast(err.message, 'error'); }
+    });
   }
 
   // Form Hardness: hasil HV per titik (Weld: Line 1 & 2 x 9 titik; Material: 5 titik + sketsa unggahan).
@@ -3026,6 +3147,11 @@
         ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
         ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
+        ${r.template_corr ? `
+        <div class="card">
+          <p class="section-title">Hasil Uji Korosi <span class="en">tabel berat + foto sampel; rata-rata, weight loss dan rate dihitung otomatis saat cetak</span></p>
+          <div id="testReportCorrWrap">${testReportCorrHtml(r.template)}</div>
+        </div>` : ''}
         ${r.template_hard ? `
         <div class="card">
           <p class="section-title">Hasil Hardness (HV) <span class="en">dicetak sebagai halaman Sketch Hardness + halaman hasil</span></p>
@@ -3041,7 +3167,7 @@
         <div class="card">
           <p class="section-title">Elements Analyzed (%) <span class="en">isi hanya elemen yang terukur; kolom kosong tercetak kosong</span></p>
           <div id="testReportElementsWrap">${testReportElementsHtml(r.template)}</div>
-        </div>` : ((r.template_locations || r.template_hard) ? '' : `
+        </div>` : ((r.template_locations || r.template_hard || r.template_corr) ? '' : `
         <div class="card">
           <p class="section-title">Hasil per Spesimen</p>
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
@@ -3104,6 +3230,7 @@
     bindTestReportElementEvents();
     bindTestReportFerriteEvents();
     bindTestReportHardEvents();
+    bindTestReportCorrEvents();
 
     // Ganti varian form (Weld <-> Material): observasi bawaan ikut berganti selama belum diubah manual.
     const tplSel = document.getElementById('testReportTemplate');
@@ -3115,7 +3242,8 @@
         if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);
         const ferWrap = document.getElementById('testReportFerriteWrap');
         if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi
-        if (document.getElementById('testReportHardWrap')) rerenderTestReportHard();   // nilai tersimpan per label elemen, jadi ikut terbawa
+        if (document.getElementById('testReportHardWrap')) rerenderTestReportHard();
+        if (document.getElementById('testReportCorrWrap')) rerenderTestReportCorr();   // nilai tersimpan per label elemen, jadi ikut terbawa
         if (state.testReport.template_fwb) rerenderTestReportRows();
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
@@ -3134,7 +3262,8 @@
     const payload = Object.fromEntries(new FormData(e.target).entries());
     payload.fields = state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
       : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite }
-        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch } : {}));
+        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch }
+          : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
@@ -3146,6 +3275,8 @@
       });
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
+      state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {}));
+      state.testReportPhotoSlots = new Set(state.testReport.photos || []);
       state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
       state.testReportHard = { lines: JSON.parse(JSON.stringify((((state.testReport.fields || {}).hardness) || {}).lines || [[], []])), sketch: (state.testReport.fields || {}).sketch || '' };
       state.testReportDirty = false;

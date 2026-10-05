@@ -737,7 +737,8 @@ const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
 
 // Lembar Hasil Uji tahap Testing (beda dari Pengecekan Spesimen milik tahap Preparation).
 registerTestReportRoutes(app, {
-  pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl
+  pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl,
+  rawBody: express.raw({ type: () => true, limit: '8mb' })
 });
 
 // Master Data > Equipment/Peralatan.

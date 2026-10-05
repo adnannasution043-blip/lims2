@@ -332,6 +332,17 @@ async function initSchema() {
     -- Isian khusus per jenis form (mis. Charpy: test_temp, specimen_size, orientation) tanpa kolom baru per form.
     ALTER TABLE test_reports ADD COLUMN IF NOT EXISTS fields JSONB NOT NULL DEFAULT '{}';
 
+    -- Foto pada Lembar Hasil Uji (mis. foto sampel sebelum/sesudah uji korosi); satu foto per slot, slot = "<template>/<id>"
+    -- sesuai kotak foto di form (disimpan sebagai BYTEA seperti file lain, karena disk server bersifat sementara).
+    CREATE TABLE IF NOT EXISTS test_report_photos (
+      test_report_id INTEGER NOT NULL REFERENCES test_reports(id) ON DELETE CASCADE,
+      slot TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      PRIMARY KEY (test_report_id, slot)
+    );
+
     -- Master Data > Equipment/Peralatan (diminta klien: dipakai untuk mencatat alat uji beserta
     -- status & masa kalibrasinya). Sertifikat kalibrasi disimpan langsung sebagai BYTEA (satu file
     -- per alat, mewakili sertifikat yang berlaku saat ini), sama alasannya dengan work_order_files —
