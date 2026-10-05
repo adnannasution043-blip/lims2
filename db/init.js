@@ -597,6 +597,35 @@ async function initSchema() {
       [testName, code]
     );
   }
+
+  // Work Order yang tahap Report Issued-nya sudah Final sebelum penomoran LHU otomatis ada (atau yang
+  // nomornya belum sempat dibuat) tidak punya No. LHU, jadi tidak muncul di Hasil & Laporan. Beri nomor
+  // dengan aturan yang sama dengan penomoran otomatis (LHU-{yy}-{urutan}); {yy} dari tanggal tahap itu
+  // difinalkan, urutan melanjutkan nomor yang sudah ada. Aman diulang: hanya menyentuh yang belum bernomor.
+  // Dibungkus try/catch: kegagalan di sini tidak boleh menggagalkan startup server.
+  try {
+    const r = await pool.query(`
+      WITH missing AS (
+        SELECT wo.id,
+               to_char(COALESCE(t.updated_at, wo.updated_at, NOW()), 'YY') AS yy,
+               ROW_NUMBER() OVER (
+                 PARTITION BY to_char(COALESCE(t.updated_at, wo.updated_at, NOW()), 'YY')
+                 ORDER BY COALESCE(t.updated_at, wo.updated_at, NOW()), wo.id
+               ) AS rn
+        FROM work_orders wo
+        JOIN work_order_tasks t ON t.work_order_id = wo.id AND t.task_key = 'released' AND t.status = 'final'
+        WHERE wo.lhu_number IS NULL
+      )
+      UPDATE work_orders w
+      SET lhu_number = 'LHU-' || m.yy || '-' ||
+            LPAD((m.rn + (SELECT COUNT(*) FROM work_orders x WHERE x.lhu_number LIKE 'LHU-' || m.yy || '-%'))::text, 5, '0')
+      FROM missing m
+      WHERE w.id = m.id
+    `);
+    if (r.rowCount) console.log(`Backfill No. LHU: ${r.rowCount} Work Order diberi nomor LHU`);
+  } catch (err) {
+    console.error('Backfill No. LHU gagal (dilewati):', err.message);
+  }
 }
 
 module.exports = { pool, initSchema };
