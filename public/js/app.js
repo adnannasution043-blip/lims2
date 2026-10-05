@@ -2699,6 +2699,8 @@
   }
 
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
+    if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '' };
     if (state.testReport && state.testReport.template_macro) return { marking_specimen: '', thickness: '', width: '', mag: '', result: '' };
     if (state.testReport && state.testReport.template === 'flat') return { marking_specimen: '', length: '', od: '', wt: '', e: '', h: '', first: '', second: '' };
     if (state.testReport && state.testReport.template_fwb) return { marking_specimen: '', remarks: [], result: '' };
@@ -2712,6 +2714,52 @@
   const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
 
   function testReportRowsHtml() {
+    if (state.testReport && state.testReport.template === 'nickbreak') {
+      return `<table class="task-table">
+        <thead><tr><th>Specimen No.</th><th>Kind of Discontinuities/Defect</th><th>Depth (mm)</th><th>Length (mm)</th><th>Distance between slag inclusions</th><th>Result</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            <td><input type="text" data-tfield="defect" value="${esc(r.defect || '')}" style="min-width:200px"></td>
+            <td><input type="text" inputmode="decimal" data-tfield="depth" value="${esc(r.depth || '')}" placeholder="-" style="width:70px"></td>
+            <td><input type="text" inputmode="decimal" data-tfield="length" value="${esc(r.length || '')}" placeholder="-" style="width:70px"></td>
+            <td><input type="text" data-tfield="distance" value="${esc(r.distance || '')}" placeholder="-" style="width:110px"></td>
+            <td><input type="text" list="nbResultList" data-tfield="result" value="${esc(r.result || '')}" style="width:100px"></td>
+            <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
+          </tr>`).join('')}</tbody>
+      </table>
+      <datalist id="nbResultList"><option value="Accepted"><option value="Rejected"></datalist>
+      <p class="muted" style="margin:6px 0 0;">Kolom Depth, Length dan Distance yang dikosongkan tercetak "-"; Result kosong juga "-".</p>`;
+    }
+    if (state.testReport && state.testReport.template_micro) {
+      // Microstructure: satu baris per spesimen (satu halaman cetak); foto 1 atau 2 per baris menurut form
+      const sel = document.getElementById('testReportTemplate');
+      const key = (sel && sel.value) || state.testReport.template;
+      const info = state.testReport.template_micro[key] || { thick: false, photosPerRow: 2, photoLabels: [] };
+      const last = state.testReportRows.length - 1;
+      const avg = r => { const ns = [1, 2, 3, 4, 5].map(k => parseFloat(String(r['t' + k] || '').replace(',', '.'))).filter(n => Number.isFinite(n)); return ns.length ? String(Math.round(ns.reduce((a, b) => a + b, 0) / ns.length * 100) / 100) : '-'; };
+      const photoCell = (idx) => Array.from({ length: info.photosPerRow }, (_, p) => {
+        const slotNo = idx * info.photosPerRow + p + 1;
+        const slot = key + '/s' + slotNo;
+        const has = state.testReportPhotoSlots.has(slot);
+        if (slotNo > 20) return '<div class="muted" style="font-size:12px;">maks. 20 foto</div>';
+        return `<div style="margin-bottom:6px;"><div style="font-size:11px;font-weight:600;">${esc(info.photoLabels[p] || 'Foto ' + (p + 1))}</div>
+          ${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:110px;height:56px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">belum ada foto</span>'}
+          <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:3px;">
+          ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:3px;">Hapus foto</button>` : ''}</div>`;
+      }).join('');
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr><th>Specimen No.</th>${info.thick ? [1, 2, 3, 4, 5].map(k => `<th>Spot ${k} (&micro;m)</th>`).join('') + '<th>Average (&micro;m)</th>' : ''}<th>Foto</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
+            ${info.thick ? [1, 2, 3, 4, 5].map(k => `<td><input type="text" inputmode="decimal" data-tfield="t${k}" value="${esc(r['t' + k] || '')}" style="width:70px"></td>`).join('') + `<td class="muted">${avg(r)}</td>` : ''}
+            <td style="min-width:160px;">${photoCell(idx)}</td>
+            <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted" style="margin:6px 0 0;">Satu baris = satu halaman cetak (maks. 10 baris). Foto langsung tersimpan saat dipilih (tidak perlu menekan Simpan).${info.thick ? ' Average dihitung dari spot yang terisi.' : ''}</p>`;
+    }
     if (state.testReport && state.testReport.template_macro) {
       // Macro-Etching: satu baris per spesimen (satu halaman cetak + satu foto makro per baris)
       const sel = document.getElementById('testReportTemplate');
@@ -2837,10 +2885,14 @@
     wrap.addEventListener('click', handleMacroPhotoClick);
     wrap.querySelectorAll('[data-trow-remove]').forEach(btn => btn.addEventListener('click', () => {
       if (state.testReportRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
-      if (state.testReport.template_macro) {
+      if (state.testReport.template_macro || state.testReport.template_micro) {
         const sel = document.getElementById('testReportTemplate');
-        const slot = ((sel && sel.value) || state.testReport.template) + '/s' + (Number(btn.dataset.trowRemove) + 1);
-        if (state.testReportPhotoSlots.has(slot)) { state.testReportPhotoSlots.delete(slot); fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' }); }
+        const key = (sel && sel.value) || state.testReport.template;
+        const per = state.testReport.template_micro ? ((state.testReport.template_micro[key] || {}).photosPerRow || 1) : 1;
+        for (let p = 0; p < per; p++) {
+          const slot = key + '/s' + (Number(btn.dataset.trowRemove) * per + p + 1);
+          if (state.testReportPhotoSlots.has(slot)) { state.testReportPhotoSlots.delete(slot); fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' }); }
+        }
       }
       state.testReportRows.splice(Number(btn.dataset.trowRemove), 1);
       state.testReportDirty = true;
@@ -3207,7 +3259,7 @@
           </div>
         </div>
 
-        ${r.category === 'bending' ? testReportBendFieldsHtml(r) : ''}
+        ${r.category === 'bending' && r.template !== 'nickbreak' ? testReportBendFieldsHtml(r) : ''}
         ${r.category === 'charpy' ? testReportCharpyFieldsHtml(r) : ''}
 
         ${r.template_corr ? `
@@ -3307,7 +3359,7 @@
         if (ferWrap) ferWrap.innerHTML = testReportFerriteHtml(tplSel.value);   // data tersimpan per nama lokasi
         if (document.getElementById('testReportHardWrap')) rerenderTestReportHard();
         if (document.getElementById('testReportCorrWrap')) rerenderTestReportCorr();   // nilai tersimpan per label elemen, jadi ikut terbawa
-        if (state.testReport.template_fwb || state.testReport.template_macro) rerenderTestReportRows();
+        if (state.testReport.template_fwb || state.testReport.template_macro || state.testReport.template_micro) rerenderTestReportRows();
         const oldObs = DEFAULT_OBS[prev], newObs = DEFAULT_OBS[tplSel.value];
         if (oldObs && newObs) {
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
