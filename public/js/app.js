@@ -2694,8 +2694,8 @@
     state.woTaskDirty = false;
     const { work_order: wo, stage } = t;
 
-    pageTitle.textContent = 'Tasks';
-    pageSubtitle.textContent = `Work Order ${wo.job_number} — ${stage.label}`;
+    pageTitle.textContent = `Task ${stage.label}`;
+    pageSubtitle.textContent = `Work Order ${wo.job_number}${wo.company ? ' · ' + wo.company : ''}`;
     topbarActions.innerHTML = `
       <button class="btn" id="btnTaskAll">Semua Tasks</button>
       <button class="btn" id="btnTaskBack">Detail Work Order</button>
@@ -3691,8 +3691,8 @@
   // ----- Tasks: ringkasan semua Work Order -----
 
   async function renderWoTasks() {
-    pageTitle.textContent = 'Tasks';
-    pageSubtitle.textContent = 'Pengerjaan tiap Work Order — Receiving hingga Report Issued';
+    pageTitle.textContent = 'Progress Tasks';
+    pageSubtitle.textContent = 'Pantau posisi dan progress semua Work Order, Receiving hingga Report Issued';
     topbarActions.innerHTML = '';
     contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
 
