@@ -145,7 +145,8 @@ body {
 }
 .nav-item.disabled:hover { background: none; color: var(--text-muted); }
 
-.nav-icon { width: 18px; text-align: center; font-size: 15px; }
+.nav-icon { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
+.nav-icon svg { display: block; }
 
 .nav-exit { margin-top: 10px; margin-right: 16px; color: var(--text-muted); }
 
