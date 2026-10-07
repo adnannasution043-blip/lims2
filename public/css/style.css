@@ -1788,3 +1788,66 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 @media (max-width: 560px) {
   .pipe-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+/* ---------- Pengguna & Role ---------- */
+.um-note { display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; margin-bottom: 16px; border-radius: var(--radius); background: #FFF6E0; border: 1px solid #F1DDA0; color: #7A5A06; font-size: 13px; line-height: 1.5; }
+.um-note svg { flex: none; margin-top: 1px; }
+.um-tabs { display: inline-flex; gap: 4px; padding: 4px; margin-bottom: 16px; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+.um-tab { border: 0; background: transparent; font-family: inherit; font-size: 13.5px; font-weight: 600; color: var(--text-muted); padding: 8px 16px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+.um-tab span { font-size: 11.5px; padding: 1px 8px; border-radius: 10px; background: var(--bg); color: var(--text-muted); }
+.um-tab:hover { color: var(--navy); }
+.um-tab.is-active { background: var(--navy); color: #fff; }
+.um-tab.is-active span { background: rgba(255, 255, 255, .22); color: #fff; }
+.um-person { display: flex; align-items: center; gap: 12px; }
+.um-avatar { width: 36px; height: 36px; border-radius: 50%; flex: none; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: var(--navy); background: linear-gradient(135deg, #e6eefb, #cfdcf3); }
+.um-role-chip { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; background: #E8EEF9; color: var(--navy); }
+.um-status { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.um-status.on { background: var(--success-bg); color: var(--success); }
+.um-status.off { background: #EEF0F4; color: var(--text-muted); }
+.um-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+.um-role { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.um-role-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.um-sys { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 2px 8px; border-radius: 10px; margin-left: 6px; vertical-align: 2px; background: var(--accent-light); color: var(--accent-dark); }
+.um-role-meta { font-size: 12.5px; color: var(--text-muted); }
+.um-role-meta b { color: var(--navy); }
+.um-perm-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.um-perm { display: inline-block; padding: 3px 9px; border-radius: 8px; font-size: 11.5px; font-weight: 600; }
+.um-perm.lv-full { background: var(--success-bg); color: var(--success); }
+.um-perm.lv-edit { background: #E8EEF9; color: var(--navy); }
+.um-perm.lv-view { background: #EEF0F4; color: var(--text-muted); }
+.um-legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; color: var(--text-muted); }
+.um-legend i { width: 12px; height: 12px; padding: 0; border-radius: 4px; vertical-align: -1px; margin-right: 4px; }
+.um-modal { width: min(520px, 100%); }
+.um-modal.um-wide { width: min(700px, 100%); }
+.um-form { display: grid; gap: 14px; margin-bottom: 4px; }
+.um-form .field input[type="text"], .um-form .field input[type="password"], .um-form .field select { width: 100%; }
+.um-help { display: block; margin-top: 4px; font-size: 11.5px; color: var(--text-muted); }
+.um-pw { display: flex; gap: 6px; align-items: center; }
+.um-pw input { flex: 1; min-width: 0; }
+.um-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; cursor: pointer; }
+.um-check input { width: 16px; height: 16px; accent-color: var(--accent-dark); }
+.um-matrix { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+.um-matrix th { text-align: center; font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--text-muted); padding: 8px 6px; border-bottom: 2px solid var(--border); }
+.um-matrix th:first-child, .um-matrix td:first-child { text-align: left; }
+.um-matrix td { text-align: center; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.um-matrix tbody tr:hover { background: #f6f9ff; }
+.um-matrix input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-dark); cursor: pointer; }
+.um-matrix input:disabled { cursor: default; }
+.um-na { color: var(--border-strong); }
+@media (max-width: 720px) {
+  .um-roles { grid-template-columns: 1fr; }
+  .um-tabs { display: flex; }
+  .um-tab { flex: 1; justify-content: center; }
+  .um-pw { flex-wrap: wrap; }
+}
+.um-legend i.um-perm { display: inline-block; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+.um-legend i.um-perm.lv-full { background: #bfe6cf; }
+.um-legend i.um-perm.lv-edit { background: #c7d4ec; }
+.um-legend i.um-perm.lv-view { background: #dfe3ea; }
+#umUsersTable { overflow-x: auto; }
+.um-matrix-wrap { overflow-x: auto; }
+@media (max-width: 720px) {
+  .um-matrix th { font-size: 9.5px; padding: 8px 2px; letter-spacing: 0; }
+  .um-matrix td { padding: 7px 2px; font-size: 12.5px; }
+  .um-matrix th:first-child, .um-matrix td:first-child { padding-right: 6px; min-width: 84px; }
+}

@@ -10,6 +10,7 @@ const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
 const { registerTestReportRoutes } = require('./lib/testReports');
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
+const { registerUserRoutes } = require('./lib/users');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -743,6 +744,9 @@ registerTestReportRoutes(app, {
 
 // Master Data > Equipment/Peralatan.
 registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
+
+// Pengguna & Role (hak akses). Baru disiapkan: belum ada login dan belum ada route yang memeriksa role.
+registerUserRoutes(app, { pool });
 
 // Modul Hasil & Laporan (daftar LHU + status distribusi).
 registerLhuReportRoutes(app, { pool, getFullWorkOrder, rawBody: express.raw({ type: () => true, limit: '12mb' }) });

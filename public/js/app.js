@@ -196,6 +196,9 @@
       } else if (key === 'pengaturan') {
         state.view = 'settings';
         render();
+      } else if (key === 'pengguna') {
+        state.view = 'users';
+        render();
       } else if (key.startsWith('q-')) {
         state.view = 'queue-' + key.slice(2);
         render();
@@ -2057,6 +2060,7 @@
   // Tombol di kolom aksi tabel hanya ikon (tooltip + aria-label berisi nama aksinya), supaya satu baris tidak
   // membengkak jadi dua-tiga baris tombol bertulisan. Atribut data-* tetap sama, jadi penangan klik tidak berubah.
   const ICON_PATHS = {
+    edit: '<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/><path d="m13.5 6.5 4 4"/>',
     open: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H3z"/><path d="M3 10h18l-2 8a2 2 0 0 1-2 1.5H5A2 2 0 0 1 3 18z"/>',
     pdf: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M12 11v6"/><path d="m9.5 14.5 2.5 2.5 2.5-2.5"/>',
     wo: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m9 13 2 2 4-4"/>',
@@ -4455,6 +4459,292 @@
     });
   }
 
+  // ---------- pengguna & role ----------
+  // Baru DISIAPKAN: aplikasi belum punya login dan belum ada fitur yang memeriksa role. Halaman ini hanya
+  // mengelola data pengguna, role, dan matriks hak akses supaya siap dipakai saat login dibuat nanti.
+
+  const PERM_ACTION_LABELS = { view: 'Lihat', create: 'Tambah', edit: 'Ubah', delete: 'Hapus' };
+
+  function userInitials(name) {
+    const parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    return ((parts[0] || '?')[0] + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  }
+
+  function randomPassword(len = 12) {
+    const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const buf = new Uint32Array(len);
+    (window.crypto || window.msCrypto).getRandomValues(buf);
+    return Array.from(buf, n => chars[n % chars.length]).join('');
+  }
+
+  // Modal formulir umum untuk halaman ini. onSave(modalEl) dipanggil saat tombol simpan ditekan; lempar error
+  // untuk menahan modal tetap terbuka, atau selesai biasa untuk menutupnya.
+  function openUmModal({ title, subtitle, bodyHtml, saveLabel, wide, onSave }) {
+    closeUmModal();
+    const wrap = document.createElement('div');
+    wrap.className = 'list-modal-backdrop';
+    wrap.id = 'umModal';
+    wrap.innerHTML = `<div class="list-modal um-modal${wide ? ' um-wide' : ''}" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+        <div class="list-modal-head"><div><strong>${esc(title)}</strong>${subtitle ? `<div class="muted" style="font-size:12px;">${esc(subtitle)}</div>` : ''}</div>
+          <button type="button" class="list-modal-x" aria-label="Tutup" data-um-close>&times;</button></div>
+        <div class="list-modal-body">${bodyHtml}</div>
+        <div class="list-modal-foot"><span></span>
+          <span><button type="button" class="btn btn-sm" data-um-close>Batal</button> <button type="button" class="btn btn-sm btn-primary" data-um-save>${esc(saveLabel || 'Simpan')}</button></span></div>
+      </div>`;
+    wrap.addEventListener('mousedown', e => { wrap._downOnBackdrop = e.target === wrap; });
+    wrap.addEventListener('click', async e => {
+      if ((e.target === wrap && wrap._downOnBackdrop) || e.target.closest('[data-um-close]')) { closeUmModal(); return; }
+      const save = e.target.closest('[data-um-save]');
+      if (!save) return;
+      save.disabled = true;
+      try { await onSave(wrap); closeUmModal(); }
+      catch (err) { toast(err.message || 'Gagal menyimpan', 'error'); save.disabled = false; }
+    });
+    document.body.appendChild(wrap);
+    document.addEventListener('keydown', umModalKey);
+    const first = wrap.querySelector('input:not([disabled]), select');
+    if (first) first.focus();
+    return wrap;
+  }
+  function umModalKey(e) { if (e.key === 'Escape') closeUmModal(); }
+  function closeUmModal() {
+    const el = document.getElementById('umModal');
+    if (el) el.remove();
+    document.removeEventListener('keydown', umModalKey);
+  }
+
+  async function renderUsers() {
+    pageTitle.textContent = 'Pengguna & Role';
+    pageSubtitle.textContent = 'Kelola akun pengguna dan hak akses tiap role';
+    const tab = state.userTab === 'roles' ? 'roles' : 'users';
+    topbarActions.innerHTML = tab === 'users'
+      ? `<button class="btn btn-primary" id="btnNewUser">+ Tambah Pengguna</button>`
+      : `<button class="btn btn-primary" id="btnNewRole">+ Tambah Role</button>`;
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
+
+    let users, rolesData;
+    try {
+      [users, rolesData] = await Promise.all([api('/api/app-users'), api('/api/roles')]);
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      return;
+    }
+    if (state.view !== 'users') return;   // pengguna sudah pindah halaman
+    const items = users.items;
+    const { roles, modules } = rolesData;
+    const reload = () => renderUsers();
+
+    contentEl.innerHTML = `
+      <div class="um-note">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
+        <div><strong>Belum diterapkan.</strong> Aplikasi masih bisa dibuka tanpa login, dan role belum membatasi menu atau aksi apa pun.
+        Data di halaman ini disiapkan lebih dulu supaya tinggal dipasang saat fitur login dibuat.</div>
+      </div>
+      <div class="um-tabs" role="tablist">
+        <button type="button" role="tab" class="um-tab ${tab === 'users' ? 'is-active' : ''}" data-um-tab="users" aria-selected="${tab === 'users'}">Pengguna <span>${items.length}</span></button>
+        <button type="button" role="tab" class="um-tab ${tab === 'roles' ? 'is-active' : ''}" data-um-tab="roles" aria-selected="${tab === 'roles'}">Role &amp; Hak Akses <span>${roles.length}</span></button>
+      </div>
+      <div id="umContent"></div>`;
+
+    contentEl.querySelectorAll('[data-um-tab]').forEach(b => b.addEventListener('click', () => {
+      state.userTab = b.dataset.umTab;
+      reload();
+    }));
+
+    const wrap = document.getElementById('umContent');
+    if (tab === 'users') {
+      wrap.innerHTML = `
+        <div class="card" style="padding:0;">
+          <div style="padding:22px 24px 8px;">
+            <p class="card-title">Daftar Pengguna</p>
+            <p class="card-desc">${items.length} akun &middot; ${items.filter(u => u.active).length} aktif</p>
+          </div>
+          <div id="umUsersTable"></div>
+        </div>`;
+      document.getElementById('btnNewUser').addEventListener('click', () => openUserModal(null, roles, reload));
+      renderSearchablePaginatedTable({
+        key: 'app-users',
+        containerEl: document.getElementById('umUsersTable'),
+        allRows: items,
+        searchFields: ['name', 'username', 'email', 'role_name'],
+        searchPlaceholder: 'Cari nama, username, email, atau role...',
+        emptyHtml: '<p class="muted" style="padding:8px 24px 24px;">Belum ada pengguna. Klik <strong>+ Tambah Pengguna</strong> untuk membuat akun pertama.</p>',
+        renderTableHtml: (pageRows) => `
+          <table class="data-table">
+            <thead><tr><th>Pengguna</th><th>Email</th><th>Role</th><th>Status</th><th>Login terakhir</th><th></th></tr></thead>
+            <tbody>${pageRows.map(u => `
+              <tr>
+                <td><div class="um-person"><span class="um-avatar">${esc(userInitials(u.name))}</span>
+                  <div><strong>${esc(u.name)}</strong><br><span class="muted">@${esc(u.username)}</span></div></div></td>
+                <td>${u.email ? esc(u.email) : '<span class="muted">-</span>'}</td>
+                <td><span class="um-role-chip">${esc(u.role_name || '-')}</span></td>
+                <td><span class="um-status ${u.active ? 'on' : 'off'}">${u.active ? 'Aktif' : 'Nonaktif'}</span></td>
+                <td>${u.last_login_at ? esc(formatDateTimeID(u.last_login_at)) : '<span class="muted">Belum pernah</span>'}</td>
+                <td class="tk-actions">
+                  ${iconBtn('edit', 'Ubah pengguna', `data-um-edit="${u.id}"`)}
+                  ${iconBtn('del', 'Hapus pengguna', `data-um-del="${u.id}"`, { danger: true })}
+                </td>
+              </tr>`).join('')}</tbody>
+          </table>`,
+        bindRowEvents: (container) => {
+          container.querySelectorAll('[data-um-edit]').forEach(b => b.addEventListener('click', () =>
+            openUserModal(items.find(u => String(u.id) === b.dataset.umEdit), roles, reload)));
+          container.querySelectorAll('[data-um-del]').forEach(b => b.addEventListener('click', async () => {
+            const u = items.find(x => String(x.id) === b.dataset.umDel);
+            if (!confirm(`Hapus pengguna "${u.name}" (@${u.username})?`)) return;
+            try { await api(`/api/app-users/${u.id}`, { method: 'DELETE' }); toast('Pengguna dihapus', 'success'); reload(); }
+            catch (err) { toast(err.message, 'error'); }
+          }));
+        }
+      });
+      return;
+    }
+
+    // ----- tab Role & Hak Akses -----
+    const levelOf = (m, acts) => {
+      if (m.actions.every(a => acts.includes(a))) return m.actions.length === 1 ? 'view' : 'full';
+      return acts.includes('edit') || acts.includes('create') || acts.includes('delete') ? 'edit' : 'view';
+    };
+    wrap.innerHTML = `<div class="um-roles">${roles.map(r => {
+      const perms = r.permissions || {};
+      const granted = modules.filter(m => (perms[m.key] || []).length);
+      return `
+        <div class="card um-role">
+          <div class="um-role-head">
+            <div>
+              <p class="card-title" style="margin:0;">${esc(r.name)} ${r.is_system ? '<span class="um-sys">Bawaan sistem</span>' : ''}</p>
+              <p class="muted" style="font-size:12.5px; margin:4px 0 0;">${esc(r.description || 'Tanpa deskripsi')}</p>
+            </div>
+            <div class="tk-actions">
+              ${iconBtn('edit', r.is_system ? 'Lihat role' : 'Ubah role', `data-role-edit="${r.id}"`)}
+              ${r.is_system ? '' : iconBtn('del', 'Hapus role', `data-role-del="${r.id}"`, { danger: true })}
+            </div>
+          </div>
+          <div class="um-role-meta"><b>${r.user_count}</b> pengguna &middot; akses ke <b>${granted.length}</b> dari ${modules.length} menu</div>
+          <div class="um-perm-chips">${granted.length ? granted.map(m => {
+            const acts = perms[m.key] || [];
+            return `<span class="um-perm lv-${levelOf(m, acts)}" title="${esc(m.label)}: ${esc(acts.map(a => PERM_ACTION_LABELS[a]).join(', '))}">${esc(m.label.replace(/ \(.*\)$/, ''))}</span>`;
+          }).join('') : '<span class="muted" style="font-size:12.5px;">Belum ada akses</span>'}</div>
+        </div>`;
+    }).join('')}</div>
+    <div class="um-legend"><span><i class="um-perm lv-full"></i> Akses penuh</span><span><i class="um-perm lv-edit"></i> Lihat + ubah</span><span><i class="um-perm lv-view"></i> Hanya lihat</span></div>`;
+
+    document.getElementById('btnNewRole').addEventListener('click', () => openRoleModal(null, modules, reload));
+    wrap.querySelectorAll('[data-role-edit]').forEach(b => b.addEventListener('click', () =>
+      openRoleModal(roles.find(r => String(r.id) === b.dataset.roleEdit), modules, reload)));
+    wrap.querySelectorAll('[data-role-del]').forEach(b => b.addEventListener('click', async () => {
+      const r = roles.find(x => String(x.id) === b.dataset.roleDel);
+      if (!confirm(`Hapus role "${r.name}"?`)) return;
+      try { await api(`/api/roles/${r.id}`, { method: 'DELETE' }); toast('Role dihapus', 'success'); reload(); }
+      catch (err) { toast(err.message, 'error'); }
+    }));
+  }
+
+  function openUserModal(user, roles, done) {
+    const f = user || {};
+    const editing = !!user;
+    const wrap = openUmModal({
+      title: editing ? 'Ubah Pengguna' : 'Tambah Pengguna',
+      subtitle: editing ? `@${f.username}` : 'Akun baru — belum dipakai untuk login',
+      saveLabel: editing ? 'Simpan Perubahan' : 'Tambah Pengguna',
+      bodyHtml: `
+        <div class="um-form">
+          <div class="field"><label>Nama lengkap</label><input type="text" id="umName" value="${esc(f.name)}" autocomplete="off"></div>
+          <div class="field"><label>Username</label><input type="text" id="umUsername" value="${esc(f.username)}" autocomplete="off" placeholder="mis. budi.santoso"><span class="um-help">Huruf kecil, angka, titik, garis bawah, atau strip (3–40 karakter)</span></div>
+          <div class="field"><label>Email <span class="muted">(opsional)</span></label><input type="text" id="umEmail" value="${esc(f.email)}" autocomplete="off"></div>
+          <div class="field"><label>Role</label>
+            <select id="umRole"><option value="">— Pilih role —</option>${roles.map(r => `<option value="${r.id}" ${Number(f.role_id) === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></div>
+          <div class="field"><label>${editing ? 'Kata sandi baru' : 'Kata sandi'}</label>
+            <div class="um-pw"><input type="password" id="umPassword" autocomplete="new-password" placeholder="${editing ? 'Kosongkan jika tidak diganti' : 'Minimal 8 karakter'}">
+              <button type="button" class="btn btn-sm" id="umPwShow">Tampilkan</button>
+              <button type="button" class="btn btn-sm" id="umPwGen">Buat acak</button></div></div>
+          <label class="um-check"><input type="checkbox" id="umActive" ${f.active === false ? '' : 'checked'}> Akun aktif</label>
+        </div>`,
+      onSave: async (m) => {
+        const val = id => m.querySelector('#' + id).value;
+        const payload = {
+          name: val('umName').trim(), username: val('umUsername').trim(), email: val('umEmail').trim(),
+          role_id: val('umRole') ? Number(val('umRole')) : null, password: val('umPassword'),
+          active: m.querySelector('#umActive').checked
+        };
+        await api(editing ? `/api/app-users/${f.id}` : '/api/app-users', {
+          method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        toast(editing ? 'Pengguna diperbarui' : 'Pengguna ditambahkan', 'success');
+        done();
+      }
+    });
+    const pw = wrap.querySelector('#umPassword');
+    wrap.querySelector('#umPwShow').addEventListener('click', e => {
+      pw.type = pw.type === 'password' ? 'text' : 'password';
+      e.target.textContent = pw.type === 'password' ? 'Tampilkan' : 'Sembunyikan';
+    });
+    wrap.querySelector('#umPwGen').addEventListener('click', () => {
+      pw.value = randomPassword(); pw.type = 'text';
+      wrap.querySelector('#umPwShow').textContent = 'Sembunyikan';
+    });
+  }
+
+  function openRoleModal(role, modules, done) {
+    const f = role || {};
+    const editing = !!role;
+    const locked = !!f.is_system;
+    const perms = f.permissions || {};
+    const has = (mk, a) => locked || (perms[mk] || []).includes(a);
+    const actions = ['view', 'create', 'edit', 'delete'];
+
+    const wrap = openUmModal({
+      title: locked ? `Role ${f.name}` : (editing ? 'Ubah Role' : 'Tambah Role'),
+      subtitle: locked ? 'Role bawaan sistem: akses penuh dan tidak bisa diubah' : 'Centang aksi yang boleh dilakukan role ini di tiap menu',
+      saveLabel: locked ? 'Tutup' : (editing ? 'Simpan Perubahan' : 'Tambah Role'),
+      wide: true,
+      bodyHtml: `
+        <div class="um-form">
+          <div class="field"><label>Nama role</label><input type="text" id="umRoleName" value="${esc(f.name)}" autocomplete="off" ${locked ? 'disabled' : ''}></div>
+          <div class="field"><label>Deskripsi <span class="muted">(opsional)</span></label><input type="text" id="umRoleDesc" value="${esc(f.description)}" autocomplete="off"></div>
+        </div>
+        <div class="um-matrix-wrap"><table class="um-matrix">
+          <thead><tr><th>Menu</th>${actions.map(a => `<th>${PERM_ACTION_LABELS[a]}</th>`).join('')}<th>Semua</th></tr></thead>
+          <tbody>${modules.map(m => `
+            <tr data-mod="${m.key}">
+              <td>${esc(m.label)}</td>
+              ${actions.map(a => m.actions.includes(a)
+                ? `<td><input type="checkbox" data-act="${a}" aria-label="${esc(m.label)}: ${PERM_ACTION_LABELS[a]}" ${has(m.key, a) ? 'checked' : ''} ${locked ? 'disabled' : ''}></td>`
+                : '<td class="um-na">&ndash;</td>').join('')}
+              <td><input type="checkbox" data-all aria-label="${esc(m.label)}: semua aksi" ${m.actions.every(a => has(m.key, a)) ? 'checked' : ''} ${locked ? 'disabled' : ''}></td>
+            </tr>`).join('')}</tbody>
+        </table></div>
+        ${locked ? '' : '<p class="um-help" style="margin-top:8px;">Tambah, Ubah, dan Hapus otomatis ikut mencentang Lihat. Tanpa Lihat, menu itu tidak muncul untuk role ini.</p>'}`,
+      onSave: async (m) => {
+        if (locked) { return; }
+        const permissions = {};
+        m.querySelectorAll('tr[data-mod]').forEach(tr => {
+          const acts = [...tr.querySelectorAll('input[data-act]:checked')].map(i => i.dataset.act);
+          if (acts.length) permissions[tr.dataset.mod] = acts;
+        });
+        await api(editing ? `/api/roles/${f.id}` : '/api/roles', {
+          method: editing ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: m.querySelector('#umRoleName').value.trim(), description: m.querySelector('#umRoleDesc').value.trim(), permissions })
+        });
+        toast(editing ? 'Role diperbarui' : 'Role ditambahkan', 'success');
+        done();
+      }
+    });
+
+    wrap.querySelectorAll('tr[data-mod]').forEach(tr => {
+      const boxes = [...tr.querySelectorAll('input[data-act]')];
+      const all = tr.querySelector('input[data-all]');
+      const sync = () => { all.checked = boxes.length > 0 && boxes.every(b => b.checked); };
+      boxes.forEach(b => b.addEventListener('change', () => {
+        const view = boxes.find(x => x.dataset.act === 'view');
+        if (b.dataset.act !== 'view' && b.checked && view) view.checked = true;      // aksi lain butuh Lihat
+        if (b.dataset.act === 'view' && !b.checked) boxes.forEach(x => { x.checked = false; });   // tanpa Lihat tidak ada akses
+        sync();
+      }));
+      all.addEventListener('change', () => { boxes.forEach(b => { b.checked = all.checked; }); });
+    });
+  }
+
   // ---------- router ----------
 
   const VIEW_TO_NAV_KEY = {
@@ -4468,7 +4758,8 @@
     timeline: 'timeline',
     'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen',
     'lhu-list': 'hasil-laporan', 'lhu-detail': 'hasil-laporan',
-    settings: 'pengaturan'
+    settings: 'pengaturan',
+    users: 'pengguna'
   };
 
   function syncNavActive() {
@@ -4495,6 +4786,7 @@
     else if (state.view === 'lhu-list') renderLhuList();
     else if (state.view === 'lhu-detail') renderLhuDetail();
     else if (state.view === 'settings') renderSettings();
+    else if (state.view === 'users') renderUsers();
     else renderForm();
   }
 

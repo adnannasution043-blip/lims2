@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const { COMPANY_IDS } = require('./companyIds');
 const { TEST_METHOD_SEED } = require('./testMethodSeed');
+const { DEFAULT_ROLES } = require('../lib/users');
 
 // Railway (and most managed Postgres) inject DATABASE_URL automatically once
 // the Postgres plugin is attached to this service. For local dev, put your
@@ -369,6 +370,31 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Pengguna & Role. Baru disiapkan (belum ada login / pemeriksaan hak akses). permissions berbentuk
+    -- {"modul": ["view","create","edit","delete"]}; kata sandi disimpan sebagai hash scrypt.
+    CREATE TABLE IF NOT EXISTS roles (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      description TEXT,
+      permissions JSONB NOT NULL DEFAULT '{}',
+      is_system BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    CREATE TABLE IF NOT EXISTS app_users (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      username TEXT UNIQUE NOT NULL,
+      email TEXT,
+      password_hash TEXT NOT NULL,
+      role_id INTEGER REFERENCES roles(id),
+      active BOOLEAN NOT NULL DEFAULT TRUE,
+      last_login_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     CREATE TABLE IF NOT EXISTS welding_processes (
       id SERIAL PRIMARY KEY,
       name TEXT UNIQUE NOT NULL,
@@ -591,6 +617,17 @@ async function initSchema() {
     ['Ferrite Point Count/ Ferrite Content', 'FP'], ['Intergranular / Pitting Corrosion', 'IC'],
     ['Through Thickness', 'TT']
   ];
+  // Role bawaan: hanya dibuat saat tabel roles masih kosong, supaya role yang sengaja dihapus tidak muncul lagi.
+  const roleCount = await pool.query('SELECT COUNT(*) AS n FROM roles');
+  if (Number(roleCount.rows[0].n) === 0) {
+    for (const r of DEFAULT_ROLES) {
+      await pool.query(
+        'INSERT INTO roles (name, description, permissions, is_system) VALUES ($1,$2,$3,$4) ON CONFLICT (name) DO NOTHING',
+        [r.name, r.description, JSON.stringify(r.permissions), r.is_system]
+      );
+    }
+  }
+
   for (const [testName, code] of TEST_TYPE_CODE_SEED) {
     await pool.query(
       `INSERT INTO test_type_codes (test_name, code) VALUES ($1,$2) ON CONFLICT (test_name) DO NOTHING`,
