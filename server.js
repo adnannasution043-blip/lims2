@@ -7,7 +7,7 @@ const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
 const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
 const { PROCESS_STEPS } = require('./db/workOrderSteps');
 const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
-const { registerTestReportRoutes } = require('./lib/testReports');
+const { registerTestReportRoutes, canonicalTestName } = require('./lib/testReports');
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
@@ -193,7 +193,11 @@ async function computeMarkingInfo(testRequestId, testName, couponRowNo) {
   const qty = items[0] ? (parseInt(items[0].qty, 10) || 0) : 0;
 
   const { rows: codeRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [testName]);
-  const code = (codeRows[0] || {}).code || '';
+  let code = (codeRows[0] || {}).code || '';
+  if (!code && canonicalTestName(testName) !== testName) {   // nama bebas dari "Other Test": pakai kode nama bakunya
+    const { rows: canonRows } = await pool.query(`SELECT code FROM test_type_codes WHERE test_name = $1`, [canonicalTestName(testName)]);
+    code = (canonRows[0] || {}).code || '';
+  }
 
   const markings = [];
   for (let i = 1; i <= qty; i++) markings.push(`${sampleMarking}-${code}${i}`);
