@@ -7,11 +7,13 @@ const fs = require('fs');
 const ROOT = path.join(__dirname, '..') + path.sep;
 const { convert } = require(path.join(__dirname, 'xlsx-to-template.js'));
 const dir = path.resolve(process.argv[2] || '.') + path.sep;
-const jobs = [['FULL.SEC', 'Sheet1', 'tn-full'], ['RED.SEC', 'Sheet1', 'tn-red'], ['TENSILE-Bolt', 'Sheet1 (2)', 'tn-bolt'], ['TENSILE-MAT', '8 TS (1)', 'tn-mat'], ['All.Weld', 'Sheet1', 'tn-weld'], ['TTT-MAT', 'Sheet1', 'tn-ttt'], ['16-PRESS', 'Sheet1', 'tn-comp']];
+const jobs = [['FULL.SEC', 'Sheet1', 'tn-full'], ['RED.SEC', 'Sheet1', 'tn-red'], ['TENSILE-Bolt', 'Sheet1 (2)', 'tn-bolt'], ['TENSILE-MAT', '8 TS (1)', 'tn-mat'], ['All.Weld', 'Sheet1', 'tn-weld'], ['TTT-MAT', 'Sheet1', 'tn-ttt'], ['16-PRESS', 'Sheet1', 'tn-comp'], ['25-GESER-LAS', 'Sheet1', 'tn-geser']];
 for (const [part, sheet, key] of jobs) {
   const file = fs.readdirSync(dir).find(f => f.includes(part));
   if (!file) continue;   // form milik folder lain
   const t = convert(dir + file, sheet);
+  // Judul kolom Geser Las memakai deretan spasi sebagai pengganti baris baru ("Diameter      (mm)"): jadikan baris baru
+  if (key === 'tn-geser') t.rows.forEach(r => r.cells.forEach(c => { if (typeof c.v === 'string' && / {3,}/.test(c.v)) c.v = c.v.replace(/ {2,}/g, '\n'); }));
   fs.writeFileSync(ROOT + 'lib/reportTemplates/' + key + '.json', JSON.stringify(t));
   console.log(key.padEnd(9), 'rows', t.rows.length);
 }
