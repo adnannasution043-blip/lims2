@@ -615,7 +615,7 @@ async function initSchema() {
     ['Macro-etching & Examination', 'MC'], ['Fillet Weld Break', 'FW'], ['Flattening Test', 'FT'],
     ['Chemical Composition Test', 'CA'], ['Microstructure / Metallography', 'MS'],
     ['Ferrite Point Count/ Ferrite Content', 'FP'], ['Intergranular / Pitting Corrosion', 'IC'],
-    ['Through Thickness', 'TT'], ['Compression Test', 'CP'], ['Flaring Test', 'FL'], ['Geser Las Test', 'GL']
+    ['Through Thickness', 'TT'], ['Compression Test', 'CP'], ['Flaring Test', 'FL'], ['Geser Las Test', 'GL'], ['Peel Test', 'PL']
   ];
   // Role bawaan: hanya dibuat saat tabel roles masih kosong, supaya role yang sengaja dihapus tidak muncul lagi.
   const roleCount = await pool.query('SELECT COUNT(*) AS n FROM roles');
