@@ -2832,6 +2832,7 @@
 
   function blankTestReportRow() {
     if (state.testReport && state.testReport.template_grain) return { l1: '', l2: '', l3: '', len: '' };
+    if (state.testReport && state.testReport.template_sem) return { marking_specimen: '' };
     if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
     if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
     if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '' };
@@ -2883,6 +2884,30 @@
       </table>
       <datalist id="nbResultList"><option value="Accepted"><option value="Rejected"></datalist>
       <p class="muted" style="margin:6px 0 0;">Kolom Depth, Length dan Distance yang dikosongkan tercetak "-"; Result kosong juga "-".</p>`;
+    }
+    if (state.testReport && state.testReport.template_sem) {
+      // SEM-EDX: satu baris per spesimen = dua halaman cetak (foto SEM + hasil EDX berupa gambar)
+      const key = state.testReport.template;
+      const last = state.testReportRows.length - 1;
+      const labels = ['Foto SEM (halaman 1)', 'Spektrum EDX (halaman 2)', 'Tabel hasil EDX (halaman 2)'];
+      const photoCell = (idx, p) => {
+        const slot = key + '/s' + (idx * 3 + p + 1);
+        const has = state.testReportPhotoSlots.has(slot);
+        return `<td style="min-width:150px;"><div style="font-size:11px;font-weight:600;">${labels[p]}</div>
+          ${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">Belum ada gambar</span>'}
+          <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
+          ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus</button>` : ''}</td>`;
+      };
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr><th>Specimen No.</th><th>${labels[0]}</th><th>${labels[1]}</th><th>${labels[2]}</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen || '')}" placeholder="mis. ABN.9.1-SE1"></td>
+            ${photoCell(idx, 0)}${photoCell(idx, 1)}${photoCell(idx, 2)}
+            <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted" style="margin:6px 0 0;">Satu baris = satu spesimen = dua halaman cetak (maks. 10 baris). Spektrum dan tabel hasil EDX diunggah sebagai gambar (screenshot dari alat). Gambar langsung tersimpan saat dipilih (tidak perlu menekan Simpan).</p>`;
     }
     if (state.testReport && state.testReport.template_grain) {
       // Grain Size: 5 field pengamatan tetap; tiap field punya foto (Lampiran) dan tiga garis ukur
@@ -3060,10 +3085,10 @@
     wrap.addEventListener('click', handleMacroPhotoClick);
     wrap.querySelectorAll('[data-trow-remove]').forEach(btn => btn.addEventListener('click', () => {
       if (state.testReportRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
-      if (state.testReport.template_macro || state.testReport.template_micro) {
+      if (state.testReport.template_macro || state.testReport.template_micro || state.testReport.template_sem) {
         const sel = document.getElementById('testReportTemplate');
         const key = (sel && sel.value) || state.testReport.template;
-        const per = state.testReport.template_micro ? ((state.testReport.template_micro[key] || {}).photosPerRow || 1) : 1;
+        const per = state.testReport.template_micro ? ((state.testReport.template_micro[key] || {}).photosPerRow || 1) : (state.testReport.template_sem ? 3 : 1);
         for (let p = 0; p < per; p++) {
           const slot = key + '/s' + (Number(btn.dataset.trowRemove) * per + p + 1);
           if (state.testReportPhotoSlots.has(slot)) { state.testReportPhotoSlots.delete(slot); fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' }); }
@@ -3531,6 +3556,7 @@
     const addRowBtn = document.getElementById('btnAddReportRow');
     if (addRowBtn) {
       addRowBtn.addEventListener('click', () => {
+        if (state.testReport.template_sem && state.testReportRows.length >= 10) { toast('Maksimal 10 spesimen per laporan', 'error'); return; }
         state.testReportRows.push(blankTestReportRow());
         state.testReportDirty = true;
         rerenderTestReportRows();

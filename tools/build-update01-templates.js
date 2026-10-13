@@ -1,5 +1,5 @@
 // (Dev tool) Membuat template form dari folder "Form Report_Update01" yang tidak memakai mesin tabel Tensile:
-// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
+// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) dan SEM-EDX (sem + sem-edx). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
 //   node tools/build-update01-templates.js "<folder Form Report_Update01>"
 const path = require('path');
 const fs = require('fs');
@@ -15,9 +15,17 @@ const grainAtt = t => {
   const p = photos[0];
   t.slots = [{ id: 's1', x: p.x, y: p.y, w: p.w, h: p.h, label: 'Foto mikrostruktur', fit: 'contain' }];
 };
+// SEM-EDX: semua gambar selain logo (lebar 215) adalah foto/gambar tempel dari alat -> dijadikan slot foto
+const semSlots = labels => t => {
+  const pics = t.images.filter(i => i.w !== 215).sort((a, b) => a.y - b.y);
+  t.images = t.images.filter(i => i.w === 215);
+  t.slots = pics.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: labels[i] || 'Gambar', fit: 'contain' }));
+};
 const jobs = [['Flaring Test', '14-FLAR', 'Sheet1', 'flaring'], ['Peel Test', '23-PEEL', 'Sheet1', 'peel'],
   ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'MT (grainsize)', 'grain'],
-  ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'Att. 1', 'grain-att', grainAtt]];
+  ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'Att. 1', 'grain-att', grainAtt],
+  ['Sem-EDX test', 'SEM-EDX', '1', 'sem', semSlots(['Foto SEM'])],
+  ['Sem-EDX test', 'SEM-EDX', '2', 'sem-edx', semSlots(['Spektrum EDX', 'Tabel hasil EDX'])]];
 for (const [folder, part, sheet, key, post] of jobs) {
   const dir = path.join(base, folder);
   if (!fs.existsSync(dir)) continue;
