@@ -2821,7 +2821,17 @@
     return !state.testReportDirty || confirm('Perubahan pada Lembar Hasil Uji ini belum disimpan. Tetap pindah halaman?');
   }
 
+  // Ringkasan hitung Grain Size per field untuk layar input (sama dengan yang dicetak)
+  function grainCalcText(r) {
+    const ns = ['l1', 'l2', 'l3'].map(k => parseFloat(String(r[k] || '').replace(',', '.'))).filter(n => Number.isFinite(n));
+    const len = parseFloat(String(r.len || '').replace(',', '.'));
+    if (!ns.length) return '-';
+    const n = ns.reduce((a, b) => a + b, 0);
+    return 'N = ' + (Math.round(n * 100) / 100) + (len > 0 ? ' · ' + (n / len).toFixed(2) + ' /mm' : '');
+  }
+
   function blankTestReportRow() {
+    if (state.testReport && state.testReport.template_grain) return { l1: '', l2: '', l3: '', len: '' };
     if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
     if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
     if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '' };
@@ -2873,6 +2883,28 @@
       </table>
       <datalist id="nbResultList"><option value="Accepted"><option value="Rejected"></datalist>
       <p class="muted" style="margin:6px 0 0;">Kolom Depth, Length dan Distance yang dikosongkan tercetak "-"; Result kosong juga "-".</p>`;
+    }
+    if (state.testReport && state.testReport.template_grain) {
+      // Grain Size: 5 field pengamatan tetap; tiap field punya foto (Lampiran) dan tiga garis ukur
+      const key = state.testReport.template;
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr><th>Field</th><th>Intercept garis 1</th><th>Intercept garis 2</th><th>Intercept garis 3</th><th>Total panjang garis (mm)</th><th>Hasil hitung</th><th>Foto mikrostruktur</th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => {
+          const slot = key + '/s' + (idx + 1);
+          const has = state.testReportPhotoSlots.has(slot);
+          return `
+          <tr data-trow="${idx}">
+            <td><strong>${idx + 1}</strong></td>
+            ${['l1', 'l2', 'l3'].map(k => `<td><input type="text" inputmode="decimal" data-tfield="${k}" value="${esc(r[k] || '')}" style="width:80px"></td>`).join('')}
+            <td><input type="text" inputmode="decimal" data-tfield="len" value="${esc(r.len || '')}" style="width:90px"></td>
+            <td class="muted" data-gcalc style="white-space:nowrap;">${grainCalcText(r)}</td>
+            <td style="min-width:150px;">${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">Belum ada foto</span>'}
+              <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
+              ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <p class="muted" style="margin:6px 0 0;">Field yang terisi (angka atau foto) dicetak sebagai satu halaman Lampiran; field kosong dilewati. Intercept Grain (N) = jumlah tiga garis, Intercept/mm = N ÷ total panjang garis, rata-ratanya dihitung otomatis. Foto langsung tersimpan saat dipilih (tidak perlu menekan Simpan).</p>`;
     }
     if (state.testReport && state.testReport.template_micro) {
       // Microstructure: satu baris per spesimen (satu halaman cetak); foto 1 atau 2 per baris menurut form
@@ -3056,6 +3088,8 @@
     if (!row || !e.target.dataset.tfield) return;
     row[e.target.dataset.tfield] = e.target.value;
     state.testReportDirty = true;
+    const gc = state.testReport && state.testReport.template_grain && e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-gcalc]') : null;
+    if (gc) gc.textContent = grainCalcText(row);
   }
 
   function testReportBendFieldsHtml(r) {
@@ -3413,6 +3447,16 @@
             <div class="field"><label>Test Speed</label><input type="text" name="field_test_speed" value="${esc((r.fields || {}).test_speed)}" placeholder="mis. 12 MPa/s"></div>
           </div>
         </div>` : ''}
+        ${r.template_grain ? `
+        <div class="card">
+          <p class="section-title">Ringkasan Grain Size <span class="en">diketik; belum dihitung otomatis (rumus klien belum dikonfirmasi)</span></p>
+          <div class="form-grid">
+            <div class="field"><label>Grain Size Indices (G)</label><input type="text" name="field_grain_g" value="${esc((r.fields || {}).grain_g)}" placeholder="mis. 7.5"></div>
+            <div class="field"><label>Grain / mm²</label><input type="text" name="field_grain_mm2" value="${esc((r.fields || {}).grain_mm2)}"></div>
+            <div class="field"><label>Mean Dia. of Grain (mm)</label><input type="text" name="field_grain_dia" value="${esc((r.fields || {}).grain_dia)}"></div>
+            <div class="field"><label>Mean Area of Grain (mm²)</label><input type="text" name="field_grain_area" value="${esc((r.fields || {}).grain_area)}"></div>
+          </div>
+        </div>` : ''}
         ${r.template_corr ? `
         <div class="card">
           <p class="section-title">Hasil Uji Korosi <span class="en">tabel berat + foto sampel; rata-rata, weight loss dan rate dihitung otomatis saat cetak</span></p>
@@ -3435,9 +3479,9 @@
           <div id="testReportElementsWrap">${testReportElementsHtml(r.template)}</div>
         </div>` : ((r.template_locations || r.template_hard || r.template_corr) ? '' : `
         <div class="card">
-          <p class="section-title">Hasil per Spesimen</p>
+          <p class="section-title">${r.template_grain ? 'Hasil per Field Pengamatan' : 'Hasil per Spesimen'}</p>
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
-          <button type="button" class="btn btn-sm" id="btnAddReportRow" style="margin-top:10px;">+ Tambah Baris</button>
+          <button type="button" class="btn btn-sm" id="btnAddReportRow" style="margin-top:10px;${r.template_grain ? 'display:none;' : ''}">+ Tambah Baris</button>
         </div>`)}
 
         <div class="card">
