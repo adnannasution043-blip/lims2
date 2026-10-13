@@ -1,5 +1,5 @@
 // (Dev tool) Membuat template form dari folder "Form Report_Update01" yang tidak memakai mesin tabel Tensile:
-// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) SEM-EDX (sem + sem-edx) Salt Spray (salt + salt-photos) dan HIC (hic + hic-result + hic-log). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
+// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) SEM-EDX (sem + sem-edx) Salt Spray (salt + salt-photos) HIC (hic + hic-result + hic-log) dan SCC (scc). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
 //   node tools/build-update01-templates.js "<folder Form Report_Update01>"
 const path = require('path');
 const fs = require('fs');
@@ -28,6 +28,12 @@ const saltSlots = t => {
   const labels = ['Before - Front Side', 'After - Front Side', 'Before - Back Side', 'After - Back Side'];
   t.slots = pics.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: labels[i], fit: 'contain' }));
 };
+// SCC: satu foto contoh (di atas 100000 karakter base64) -> satu slot foto spesimen 20X; logo KAN tetap
+const sccSlots = t => {
+  const pics = t.images.filter(i => i.data.length >= PHOTO_MIN);
+  t.images = t.images.filter(i => i.data.length < PHOTO_MIN);
+  t.slots = pics.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: 'Foto spesimen (20X)', fit: 'contain' }));
+};
 const jobs = [['Flaring Test', '14-FLAR', 'Sheet1', 'flaring'], ['Peel Test', '23-PEEL', 'Sheet1', 'peel'],
   ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'MT (grainsize)', 'grain'],
   ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'Att. 1', 'grain-att', grainAtt],
@@ -37,7 +43,8 @@ const jobs = [['Flaring Test', '14-FLAR', 'Sheet1', 'flaring'], ['Peel Test', '2
   ['Salt Spray Test', 'SALT-SPRAY', '2', 'salt-photos', saltSlots],
   ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '1', 'hic'],
   ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '2', 'hic-result'],
-  ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '3', 'hic-log']];
+  ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '3', 'hic-log'],
+  ['Stress Corrosion Cracking Test (SCC)', 'SCCMAT', '1', 'scc', sccSlots]];
 for (const [folder, part, sheet, key, post] of jobs) {
   const dir = path.join(base, folder);
   if (!fs.existsSync(dir)) continue;

@@ -3570,9 +3570,9 @@
         </div>` : ''}
         ${(r.template_pset && r.template_pset.fields) ? `
         <div class="card">
-          <p class="section-title">Test Parameter &amp; Observasi <span class="en">kosong = nilai bawaan form (abu-abu); Observation bawaan ikut lama paparan yang diisi</span></p>
+          <p class="section-title">Isian Form <span class="en">kosong = nilai bawaan form (abu-abu); teks bawaan yang menyebut lama uji ikut lama yang Anda isi</span></p>
           <div class="form-grid">
-            ${r.template_pset.fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input type="text" name="field_${f.key}" value="${esc((r.fields || {})[f.key])}" placeholder="${esc(f.def)}"></div>`).join('')}
+            ${r.template_pset.fields.map(f => `<div class="field"${f.long ? ' style="grid-column:1/-1;"' : ''}><label>${esc(f.label)}</label>${f.long ? `<textarea name="field_${f.key}" rows="3" placeholder="${esc(f.def)}">${esc((r.fields || {})[f.key])}</textarea>` : `<input type="text" name="field_${f.key}" value="${esc((r.fields || {})[f.key])}" placeholder="${esc(f.def)}">`}</div>`).join('')}
           </div>
         </div>` : ''}
         ${r.template_grain ? `
