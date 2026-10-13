@@ -2809,6 +2809,7 @@
     state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
     state.testReportHard = { lines: JSON.parse(JSON.stringify(((data.fields || {}).hardness || {}).lines || [[], []])), sketch: (data.fields || {}).sketch || '' };
     state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {}));
+    state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
     state.testReportPhotoSlots = new Set(data.photos || []);
     state.testReportPhotoVer = {};
     state.testReportRows = (data.rows && data.rows.length) ? data.rows.map(r => ({ ...r })) : [{ marking_specimen: '', observation: '', result: '' }];
@@ -2819,6 +2820,22 @@
 
   function confirmLeaveTestReport() {
     return !state.testReportDirty || confirm('Perubahan pada Lembar Hasil Uji ini belum disimpan. Tetap pindah halaman?');
+  }
+
+  // HIC: hitung per section untuk layar input (rumus & pembulatan sama dengan cetakan)
+  function hicNums(v) { return String(v == null ? '' : v).split(/[ ,;]+/).map(x => parseFloat(String(x).replace(',', '.'))).filter(n => Number.isFinite(n)); }
+  function hicCalcText(r) {
+    const sum = v => hicNums(v).reduce((a, b) => a + b, 0);
+    const secs = [1, 2, 3].map(k => {
+      const W = parseFloat(String(r['w' + k] || '').replace(',', '.')), T = parseFloat(String(r['t' + k] || '').replace(',', '.'));
+      if (!(W > 0) || !(T > 0)) return null;
+      const a = sum(r['a' + k]), b = sum(r['b' + k]), q = n => Math.round(n * 100) / 100;
+      return { csr: q((a * b) / (W * T) * 100), clr: q(a / W * 100), ctr: q(b / T * 100) };
+    });
+    const ok = secs.filter(Boolean);
+    if (!ok.length) return '-';
+    const m = k => (ok.reduce((x, y) => x + y[k], 0) / ok.length).toFixed(2);
+    return 'CSR ' + m('csr') + ' · CLR ' + m('clr') + ' · CTR ' + m('ctr');
   }
 
   // Ringkasan hitung Grain Size per field untuk layar input (sama dengan yang dicetak)
@@ -2832,6 +2849,7 @@
 
   function blankTestReportRow() {
     if (state.testReport && state.testReport.template_grain) return { l1: '', l2: '', l3: '', len: '' };
+    if (state.testReport && state.testReport.template_hic) return { marking_specimen: '', orient: 'Longitudinal', w1: '', t1: '', a1: '', b1: '', w2: '', t2: '', a2: '', b2: '', w3: '', t3: '', a3: '', b3: '' };
     if (state.testReport && state.testReport.template_pset) return { marking_specimen: '' };
     if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
     if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
@@ -2884,6 +2902,26 @@
       </table>
       <datalist id="nbResultList"><option value="Accepted"><option value="Rejected"></datalist>
       <p class="muted" style="margin:6px 0 0;">Kolom Depth, Length dan Distance yang dikosongkan tercetak "-"; Result kosong juga "-".</p>`;
+    }
+    if (state.testReport && state.testReport.template_hic) {
+      // HIC: satu baris per spesimen; tiap section (3) berisi W, T, daftar a (panjang retak) dan b (tebal retak)
+      const last = state.testReportRows.length - 1;
+      const inp = (idx, r, k, w, ph) => `<td><input type="text" inputmode="decimal" data-tfield="${k}" value="${esc(r[k] || '')}" placeholder="${ph || ''}" style="width:${w}px"></td>`;
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead>
+          <tr><th rowspan="2">Specimen No.</th><th rowspan="2">Orientation</th><th colspan="4">Section 1</th><th colspan="4">Section 2</th><th colspan="4">Section 3</th><th rowspan="2">Hasil (rata-rata 3 section)</th><th rowspan="2"></th></tr>
+          <tr>${[1, 2, 3].map(() => '<th>W (mm)</th><th>T (mm)</th><th>a (mm)</th><th>b (mm)</th>').join('')}</tr>
+        </thead>
+        <tbody>${state.testReportRows.map((r, idx) => `
+          <tr data-trow="${idx}">
+            <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen || '')}" style="width:120px"></td>
+            <td><input type="text" data-tfield="orient" value="${esc(r.orient || '')}" placeholder="Longitudinal" style="width:100px"></td>
+            ${[1, 2, 3].map(k => inp(idx, r, 'w' + k, 62) + inp(idx, r, 't' + k, 62) + inp(idx, r, 'a' + k, 96, 'mis. 1.02 0.5') + inp(idx, r, 'b' + k, 96, 'mis. 0.4')).join('')}
+            <td class="muted" data-hcalc style="white-space:nowrap;">${hicCalcText(r)}</td>
+            <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
+          </tr>`).join('')}</tbody>
+      </table></div>
+      <p class="muted" style="margin:6px 0 0;">W = lebar, T = tebal spesimen. a = panjang retak dan b = tebal retak; bila ada beberapa retak, tulis dipisah spasi atau koma (dijumlahkan). Kosongkan a dan b bila tidak ada retak (hasil 0). CSR = (Σa × Σb) ÷ (W × T) × 100, CLR = Σa ÷ W × 100, CTR = Σb ÷ T × 100. Section tanpa W/T dicetak "-".</p>`;
     }
     if (state.testReport && state.testReport.template_pset) {
       // Foto per spesimen (SEM-EDX, Salt Spray): satu baris per spesimen; jumlah & nama slot gambar dari info form
@@ -3116,6 +3154,8 @@
     state.testReportDirty = true;
     const gc = state.testReport && state.testReport.template_grain && e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-gcalc]') : null;
     if (gc) gc.textContent = grainCalcText(row);
+    const hc = state.testReport && state.testReport.template_hic && e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-hcalc]') : null;
+    if (hc) hc.textContent = hicCalcText(row);
   }
 
   function testReportBendFieldsHtml(r) {
@@ -3387,6 +3427,50 @@
     });
   }
 
+  function testReportHicLogHtml() {
+    const log = state.testReportHicLog || [];
+    return `<table class="task-table">
+      <thead><tr><th>Date</th><th>H2S Concentration</th><th>pH Value</th><th>Temperature</th><th></th></tr></thead>
+      <tbody>${log.map((l, i) => `
+        <tr data-hlog="${i}">
+          <td><input type="date" data-hl="date" value="${esc(l.date || '')}"></td>
+          <td><input type="text" data-hl="h2s" value="${esc(l.h2s || '')}" placeholder="-" style="width:110px"></td>
+          <td><input type="text" inputmode="decimal" data-hl="ph" value="${esc(l.ph || '')}" placeholder="-" style="width:80px"></td>
+          <td><input type="text" inputmode="decimal" data-hl="temp" value="${esc(l.temp || '')}" placeholder="-" style="width:80px"></td>
+          <td><button type="button" class="btn btn-sm btn-danger" data-hlog-del="${i}">&#128465;</button></td>
+        </tr>`).join('')}</tbody>
+    </table>
+    ${log.length ? '' : '<p class="muted" style="margin:6px 0;">Belum ada data log.</p>'}
+    <button type="button" class="btn btn-sm" data-hlog-add style="margin-top:8px;">+ Tambah Hari</button>
+    <p class="muted" style="margin:6px 0 0;">Tanggal baris baru otomatis satu hari setelah baris terakhir. Kolom yang kosong tercetak "-".</p>`;
+  }
+
+  function bindTestReportHicLogEvents() {
+    const wrap = document.getElementById('testReportHicLogWrap');
+    if (!wrap) return;
+    const redraw = () => { wrap.innerHTML = testReportHicLogHtml(); };
+    wrap.addEventListener('input', e => {
+      const tr = e.target.closest('[data-hlog]');
+      if (!tr || !e.target.dataset.hl) return;
+      state.testReportHicLog[Number(tr.dataset.hlog)][e.target.dataset.hl] = e.target.value;
+      state.testReportDirty = true;
+    });
+    wrap.addEventListener('click', e => {
+      const del = e.target.closest('[data-hlog-del]');
+      if (del) { state.testReportHicLog.splice(Number(del.dataset.hlogDel), 1); state.testReportDirty = true; redraw(); return; }
+      if (e.target.closest('[data-hlog-add]')) {
+        const log = state.testReportHicLog;
+        let date = '';
+        const prev = log.length ? log[log.length - 1].date : '';
+        if (/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(prev)) { const d = new Date(prev + 'T00:00:00'); d.setDate(d.getDate() + 1); date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+        if (log.length >= 120) { toast('Maksimal 120 baris log', 'error'); return; }
+        log.push({ date, h2s: '', ph: '', temp: '' });
+        state.testReportDirty = true;
+        redraw();
+      }
+    });
+  }
+
   function bindTestReportElementEvents() {
     const wrap = document.getElementById('testReportElementsWrap');
     if (!wrap) return;
@@ -3472,6 +3556,17 @@
             <div class="field"><label>Type Specimen</label><input type="text" name="field_type_specimen" value="${esc((r.fields || {}).type_specimen)}" placeholder="mis. Round / Flat"></div>
             <div class="field"><label>Test Speed</label><input type="text" name="field_test_speed" value="${esc((r.fields || {}).test_speed)}" placeholder="mis. 12 MPa/s"></div>
           </div>
+        </div>` : ''}
+        ${r.template_hic ? `
+        <div class="card">
+          <p class="section-title">Test Condition <span class="en">kosong = nilai bawaan form (abu-abu)</span></p>
+          <div class="form-grid">
+            ${r.template_hic.fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input type="text" name="field_${f.key}" value="${esc((r.fields || {})[f.key])}" placeholder="${esc(f.def)}"></div>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <p class="section-title">Monitoring Lingkungan <span class="en">lampiran (halaman 3) hanya dicetak bila diisi</span></p>
+          <div id="testReportHicLogWrap">${testReportHicLogHtml()}</div>
         </div>` : ''}
         ${(r.template_pset && r.template_pset.fields) ? `
         <div class="card">
@@ -3572,6 +3667,7 @@
       bindTestReportRowEvents();
     }
     bindTestReportElementEvents();
+    bindTestReportHicLogEvents();
     bindTestReportFerriteEvents();
     bindTestReportHardEvents();
     bindTestReportCorrEvents();
@@ -3604,7 +3700,8 @@
   async function onTestReportSubmit(e) {
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
-    payload.fields = state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
+    payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
+      : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
       : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite }
         : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch }
           : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
@@ -3620,6 +3717,7 @@
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
       state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {}));
+      state.testReportHicLog = JSON.parse(JSON.stringify((state.testReport.fields || {}).hic_log || []));
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);
       state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
       state.testReportHard = { lines: JSON.parse(JSON.stringify((((state.testReport.fields || {}).hardness) || {}).lines || [[], []])), sketch: (state.testReport.fields || {}).sketch || '' };

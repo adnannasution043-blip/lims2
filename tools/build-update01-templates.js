@@ -1,5 +1,5 @@
 // (Dev tool) Membuat template form dari folder "Form Report_Update01" yang tidak memakai mesin tabel Tensile:
-// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) SEM-EDX (sem + sem-edx) dan Salt Spray (salt + salt-photos). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
+// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) SEM-EDX (sem + sem-edx) Salt Spray (salt + salt-photos) dan HIC (hic + hic-result + hic-log). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
 //   node tools/build-update01-templates.js "<folder Form Report_Update01>"
 const path = require('path');
 const fs = require('fs');
@@ -34,7 +34,10 @@ const jobs = [['Flaring Test', '14-FLAR', 'Sheet1', 'flaring'], ['Peel Test', '2
   ['Sem-EDX test', 'SEM-EDX', '1', 'sem', semSlots(['Foto SEM'])],
   ['Sem-EDX test', 'SEM-EDX', '2', 'sem-edx', semSlots(['Spektrum EDX', 'Tabel hasil EDX'])],
   ['Salt Spray Test', 'SALT-SPRAY', '1', 'salt'],
-  ['Salt Spray Test', 'SALT-SPRAY', '2', 'salt-photos', saltSlots]];
+  ['Salt Spray Test', 'SALT-SPRAY', '2', 'salt-photos', saltSlots],
+  ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '1', 'hic'],
+  ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '2', 'hic-result'],
+  ['Hydrogen Induced Cracking Test (HIC)', 'HIC-MAT', '3', 'hic-log']];
 for (const [folder, part, sheet, key, post] of jobs) {
   const dir = path.join(base, folder);
   if (!fs.existsSync(dir)) continue;
