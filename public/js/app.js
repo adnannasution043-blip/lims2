@@ -5,6 +5,21 @@
   const pageSubtitle = document.getElementById('pageSubtitle');
   const toastEl = document.getElementById('toast');
 
+  // Sembunyikan aplikasi sampai status login diketahui (boot() di bawah); sesi yang berakhir di tengah jalan (401) -> halaman login.
+  const appShell0 = document.querySelector('.app-shell');
+  if (appShell0) appShell0.style.visibility = 'hidden';
+  let sessionDead = false;
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async function (input, init) {
+    const res = await nativeFetch(input, init);
+    const url = typeof input === 'string' ? input : ((input && input.url) || '');
+    if (res.status === 401 && url.startsWith('/api/') && !url.startsWith('/api/auth/') && !sessionDead) {
+      sessionDead = true;
+      showLogin('Sesi Anda berakhir. Silakan login kembali.');
+    }
+    return res;
+  };
+
   let TEST_TYPES = [];
   let WELDING_PROCESSES = [];
   let WELDING_POSITIONS = [];
@@ -162,6 +177,119 @@
     });
   })();
 
+  // ---------- login, sesi, dan hak akses ----------
+
+  let AUTH = { enforced: false, user: null };
+
+  const NAV_MODULE = {
+    dashboard: 'dashboard', 'permintaan-uji': 'permintaan-uji', 'work-order': 'work-order', tasks: 'tasks',
+    'pengecekan-spesimen': 'pengecekan-spesimen', 'hasil-laporan': 'hasil-laporan', 'manajemen-data': 'master-data',
+    pengguna: 'pengguna', pengaturan: 'pengaturan'
+  };
+  const navModule = key => (key.startsWith('q-') ? 'antrian-kerja' : NAV_MODULE[key]);
+  // Hak akses menurut role (hanya berlaku bila penerapan login aktif; server tetap memeriksa di setiap permintaan)
+  function can(module, action = 'view') {
+    if (!AUTH.enforced) return true;
+    const perms = (AUTH.user && AUTH.user.permissions) || {};
+    return Array.isArray(perms[module]) && perms[module].includes(action);
+  }
+
+  function showLogin(message) {
+    const shell = document.querySelector('.app-shell');
+    if (shell) shell.style.display = 'none';
+    const old = document.getElementById('loginScreen');
+    if (old) old.remove();
+    const el = document.createElement('div');
+    el.id = 'loginScreen';
+    el.className = 'login-screen';
+    el.innerHTML = `<form class="login-card" id="loginForm">
+        <img class="login-logo" src="img/detech-logo.png" alt="DETECH Material Testing Laboratory">
+        <h1>Masuk</h1>
+        <p class="login-sub">Silakan login untuk memakai DETECH LIMS</p>
+        <p class="login-msg" id="loginMsg" role="alert" ${message ? '' : 'hidden'}>${esc(message || '')}</p>
+        <div class="field"><label for="loginUser">Username</label>
+          <input type="text" id="loginUser" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+        <div class="field"><label for="loginPass">Kata sandi</label>
+          <div class="login-pw"><input type="password" id="loginPass" name="password" autocomplete="current-password" required>
+            <button type="button" class="btn btn-sm" id="loginShow">Tampilkan</button></div></div>
+        <button type="submit" class="btn btn-primary login-btn" id="loginBtn">Masuk</button>
+        <p class="login-foot">Lupa kata sandi? Hubungi Administrator.</p>
+      </form>`;
+    document.body.appendChild(el);
+    const msg = document.getElementById('loginMsg'), btn = document.getElementById('loginBtn');
+    const pass = document.getElementById('loginPass'), user = document.getElementById('loginUser');
+    document.getElementById('loginShow').addEventListener('click', e => {
+      pass.type = pass.type === 'password' ? 'text' : 'password';
+      e.target.textContent = pass.type === 'password' ? 'Tampilkan' : 'Sembunyikan';
+    });
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      btn.disabled = true; btn.textContent = 'Memeriksa...'; msg.hidden = true;
+      try {
+        const res = await nativeFetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: user.value.trim(), password: pass.value }) });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Gagal login');
+        location.reload();
+      } catch (err) {
+        msg.textContent = err.message; msg.hidden = false;
+        btn.disabled = false; btn.textContent = 'Masuk';
+        pass.value = ''; pass.focus();
+      }
+    });
+    (message ? pass : user).focus();
+  }
+
+  async function doLogout() {
+    try { await nativeFetch('/api/auth/logout', { method: 'POST' }); } catch (e) { /* tetap muat ulang */ }
+    location.reload();
+  }
+
+  function openAccountModal() {
+    const u = AUTH.user;
+    if (!u) return;
+    const wrap = openUmModal({
+      title: 'Akun Saya', subtitle: `@${u.username} · ${u.role_name || 'tanpa role'}`, saveLabel: 'Ganti Kata Sandi',
+      bodyHtml: `<div class="um-form">
+          <div class="field"><label>Nama</label><input type="text" value="${esc(u.name)}" disabled></div>
+          <div class="field"><label>Kata sandi saat ini</label><input type="password" id="acCurrent" autocomplete="current-password"></div>
+          <div class="field"><label>Kata sandi baru</label><input type="password" id="acNext" autocomplete="new-password" placeholder="Minimal 8 karakter"></div>
+          <div class="field"><label>Ulangi kata sandi baru</label><input type="password" id="acConfirm" autocomplete="new-password"></div>
+          <button type="button" class="btn btn-sm" id="acLogout" style="justify-self:start;">Keluar dari akun ini</button>
+        </div>`,
+      onSave: async (m) => {
+        const cur = m.querySelector('#acCurrent').value, next = m.querySelector('#acNext').value, conf = m.querySelector('#acConfirm').value;
+        if (!cur || !next) throw new Error('Isi kata sandi saat ini dan yang baru');
+        if (next !== conf) throw new Error('Kata sandi baru dan pengulangannya tidak sama');
+        await api('/api/auth/password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ current: cur, next }) });
+        toast('Kata sandi diganti', 'success');
+      }
+    });
+    wrap.querySelector('#acLogout').addEventListener('click', doLogout);
+  }
+
+  // Menu yang tidak boleh dilihat role ini disembunyikan; kartu akun ditambahkan di atas tombol Keluar
+  function setupAuthUi() {
+    if (AUTH.enforced) {
+      document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
+        const m = navModule(el.dataset.nav);
+        if (m && !can(m)) el.hidden = true;
+      });
+      document.querySelectorAll('.nav-section').forEach(sec => {
+        let n = sec.nextElementSibling, any = false;
+        while (n && !n.classList.contains('nav-section')) { if (n.matches('.nav-item') && !n.hidden) any = true; n = n.nextElementSibling; }
+        sec.hidden = !any;
+      });
+    }
+    const exit = document.querySelector('.nav-exit');
+    if (AUTH.user && exit && !document.getElementById('navUser')) {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.id = 'navUser'; chip.className = 'nav-user'; chip.title = 'Akun saya (ganti kata sandi)';
+      chip.innerHTML = `<span class="um-avatar">${esc(userInitials(AUTH.user.name))}</span><span class="nav-user-text"><strong>${esc(AUTH.user.name)}</strong><span>${esc(AUTH.user.role_name || '-')}</span></span>`;
+      chip.addEventListener('click', openAccountModal);
+      exit.parentNode.insertBefore(chip, exit);
+    }
+  }
+
   // ---------- nav ----------
 
   document.querySelectorAll('.nav-item[data-nav]').forEach(el => {
@@ -203,7 +331,8 @@
         state.view = 'queue-' + key.slice(2);
         render();
       } else if (key === 'keluar') {
-        toast('Logout belum tersedia di tahap ini', 'error');
+        if (AUTH.user) doLogout();
+        else toast('Login sedang dimatikan (menu Pengaturan > Keamanan Login)', 'error');
       } else {
         toast('Modul ini akan tersedia di tahap berikutnya', 'error');
       }
@@ -4646,7 +4775,23 @@
     pageSubtitle.textContent = 'Pengaturan aplikasi DETECH LIMS';
     topbarActions.innerHTML = '';
 
+    let authInfo = null;
+    try { authInfo = await api('/api/settings/auth'); } catch (e) { authInfo = null; }
+    const authCard = authInfo ? `
+      <div class="card">
+        <p class="card-title">Keamanan Login</p>
+        <p class="card-desc">Saat <strong>aktif</strong>, semua orang wajib login dan hak akses tiap role (menu dan aksi) berjalan. Saat <strong>dimatikan</strong>, aplikasi bisa dibuka tanpa login seperti sebelumnya.</p>
+        <div class="auth-switch">
+          <span class="um-status ${authInfo.enforced && !authInfo.forced_off ? 'on' : 'off'}">${authInfo.enforced && !authInfo.forced_off ? 'Aktif' : 'Dimatikan'}</span>
+          <button type="button" class="btn" id="btnToggleAuth" ${authInfo.forced_off ? 'disabled' : ''}>${authInfo.enforced ? 'Matikan penerapan login' : 'Aktifkan penerapan login'}</button>
+          <span class="muted">${authInfo.admin_count} Administrator aktif</span>
+        </div>
+        ${authInfo.forced_off ? '<p class="um-help" style="margin-top:10px;color:var(--danger);">Login dimatikan paksa oleh variabel server <b>AUTH_DISABLE</b>. Hapus variabel itu untuk memakai saklar ini.</p>' : ''}
+        <p class="um-help" style="margin-top:10px;">Jika terkunci (lupa kata sandi Administrator): di server isi variabel <b>ADMIN_USERNAME</b> dan <b>ADMIN_PASSWORD</b> (min. 8 karakter) lalu deploy ulang untuk membuat/memulihkan akun Administrator, kemudian hapus kedua variabel itu. Variabel <b>AUTH_DISABLE=1</b> mematikan login sementara.</p>
+      </div>` : '';
+
     contentEl.innerHTML = `
+      ${authCard}
       <div class="card">
         <p class="card-title" style="color: var(--danger);">Reset Data</p>
         <p class="card-desc">
@@ -4664,6 +4809,19 @@
           Hapus Semua Data Transaksional
         </button>
       </div>`;
+
+    const toggleAuth = document.getElementById('btnToggleAuth');
+    if (toggleAuth) toggleAuth.addEventListener('click', async () => {
+      const turnOn = !authInfo.enforced;
+      const ask = turnOn
+        ? 'Aktifkan penerapan login? Semua orang (termasuk Anda) harus login, dan role akan membatasi menu serta aksi.'
+        : 'Matikan penerapan login? Siapa pun yang membuka aplikasi bisa memakainya TANPA login sampai Anda mengaktifkannya lagi.';
+      if (!confirm(ask)) return;
+      try {
+        await api('/api/settings/auth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enforced: turnOn }) });
+        location.reload();
+      } catch (err) { toast(err.message, 'error'); }
+    });
 
     const input = document.getElementById('resetConfirmInput');
     const btn = document.getElementById('btnResetData');
@@ -4766,8 +4924,9 @@
     contentEl.innerHTML = `
       <div class="um-note">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></svg>
-        <div><strong>Belum diterapkan.</strong> Aplikasi masih bisa dibuka tanpa login, dan role belum membatasi menu atau aksi apa pun.
-        Data di halaman ini disiapkan lebih dulu supaya tinggal dipasang saat fitur login dibuat.</div>
+        <div>${AUTH.enforced
+          ? '<strong>Login & role aktif.</strong> Semua orang wajib login, dan role membatasi menu serta aksi: perubahan di sini langsung berlaku (paling lambat beberapa detik).'
+          : '<strong>Login sedang dimatikan.</strong> Aplikasi bisa dibuka tanpa login dan role belum membatasi apa pun. Aktifkan di menu Pengaturan &gt; Keamanan Login.'}</div>
       </div>
       <div class="um-tabs" role="tablist">
         <button type="button" role="tab" class="um-tab ${tab === 'users' ? 'is-active' : ''}" data-um-tab="users" aria-selected="${tab === 'users'}">Pengguna <span>${items.length}</span></button>
@@ -6803,8 +6962,20 @@
     await loadTestMethods();
     await loadCustomers();
     await loadEquipment();
+    if (!can('dashboard')) {   // role tanpa akses Dashboard: buka menu pertama yang boleh
+      const first = [...document.querySelectorAll('.nav-item[data-nav]')].find(n => !n.hidden && n.dataset.nav !== 'keluar');
+      if (first) { first.click(); return; }
+    }
     render();
   }
 
-  init();
+  async function boot() {
+    try { AUTH = await (await nativeFetch('/api/auth/me')).json(); } catch (e) { AUTH = { enforced: false, user: null }; }
+    if (AUTH.enforced && !AUTH.user) { showLogin(); return; }
+    setupAuthUi();
+    if (appShell0) appShell0.style.visibility = '';
+    init();
+  }
+
+  boot();
 })();

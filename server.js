@@ -11,12 +11,18 @@ const { registerTestReportRoutes, canonicalTestName } = require('./lib/testRepor
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
+const { createAuth, ensureAdmin } = require('./lib/auth');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Login & role: semua /api/* (kecuali /api/auth/*) dan halaman cetak wajib login saat penerapan aktif (lihat lib/auth.js).
+const auth = createAuth(pool);
+app.use(auth.middleware());
+auth.registerRoutes(app);
 
 // ---------- helpers ----------
 
@@ -749,7 +755,7 @@ registerTestReportRoutes(app, {
 // Master Data > Equipment/Peralatan.
 registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
-// Pengguna & Role (hak akses). Baru disiapkan: belum ada login dan belum ada route yang memeriksa role.
+// Pengguna & Role (hak akses); diterapkan oleh middleware login di lib/auth.js.
 registerUserRoutes(app, { pool });
 
 // Modul Hasil & Laporan (daftar LHU + status distribusi).
@@ -1261,6 +1267,7 @@ app.get('/specimen-inspections/:id/print', async (req, res) => {
 // ---------- startup ----------
 
 initSchema()
+  .then(() => ensureAdmin(pool).catch(err => console.error('[auth] Gagal menyiapkan Administrator awal:', err.message)))
   .then(() => {
     app.listen(PORT, () => {
       console.log(`DETECH LIMS running on http://localhost:${PORT}`);

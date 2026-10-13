@@ -370,6 +370,13 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Pengaturan aplikasi (key/value): auth_enforced ('true'/'false'), session_secret (penanda tangan cookie sesi).
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Pengguna & Role. Baru disiapkan (belum ada login / pemeriksaan hak akses). permissions berbentuk
     -- {"modul": ["view","create","edit","delete"]}; kata sandi disimpan sebagai hash scrypt.
     CREATE TABLE IF NOT EXISTS roles (

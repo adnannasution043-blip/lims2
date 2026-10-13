@@ -1851,3 +1851,45 @@ table.master-table tr:hover .row-icons { opacity: 1; }
   .um-matrix td { padding: 7px 2px; font-size: 12.5px; }
   .um-matrix th:first-child, .um-matrix td:first-child { padding-right: 6px; min-width: 84px; }
 }
+
+/* ---------- Halaman login ---------- */
+.login-screen {
+  position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 20px;
+  background: radial-gradient(1200px 600px at 15% 10%, #e8eefb 0%, transparent 60%), radial-gradient(900px 500px at 90% 95%, #fbeaea 0%, transparent 55%), var(--bg);
+  overflow-y: auto;
+}
+.login-card {
+  width: min(400px, 100%); background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 30px 30px 24px;
+  box-shadow: 0 20px 50px rgba(14, 50, 112, .12);
+}
+.login-logo { display: block; height: 56px; width: auto; margin: 0 auto 14px; }
+.login-card h1 { font-size: 22px; color: var(--navy); margin: 0; text-align: center; }
+.login-sub { margin: 4px 0 18px; text-align: center; color: var(--text-muted); font-size: 13.5px; }
+.login-card .field { margin-bottom: 14px; }
+.login-card .field input { width: 100%; box-sizing: border-box; }
+.login-pw { display: flex; gap: 6px; align-items: center; }
+.login-pw input { flex: 1; min-width: 0; }
+.login-btn { width: 100%; margin-top: 4px; padding: 11px 14px; font-size: 14.5px; justify-content: center; }
+.login-msg { margin: 0 0 14px; padding: 10px 12px; border-radius: 8px; background: var(--danger-bg); color: var(--danger); font-size: 13px; line-height: 1.45; }
+.login-msg[hidden] { display: none; }
+.login-foot { margin: 16px 0 0; text-align: center; font-size: 12px; color: var(--text-muted); }
+
+/* ---------- Kartu akun di sidebar ---------- */
+.nav-user {
+  display: flex; align-items: center; gap: 10px; width: calc(100% - 28px); margin: 8px 14px 4px 14px; padding: 9px 10px;
+  border: 1px solid var(--border); border-radius: 12px; background: #fff; cursor: pointer; text-align: left; font-family: inherit;
+}
+.nav-user:hover { border-color: var(--navy); background: #f6f9ff; }
+.nav-user .um-avatar { width: 32px; height: 32px; font-size: 12px; }
+.nav-user-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.nav-user-text strong { font-size: 13px; color: var(--navy); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav-user-text span { font-size: 11.5px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-collapsed .nav-user-text { display: none; }
+.sidebar-collapsed .nav-user { width: auto; justify-content: center; margin-left: 8px; margin-right: 8px; }
+.auth-switch { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.field input[type="password"] {
+  border: 1px solid var(--border-strong); border-radius: 7px; padding: 9px 11px; font-size: 13.5px; font-family: inherit; color: var(--text); background: var(--surface);
+}
+.field input[type="password"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
+.field input[type="password"]:disabled { background: var(--bg); color: var(--text-muted); }
+.um-form .field input[type="password"] { width: 100%; box-sizing: border-box; }
