@@ -2822,6 +2822,25 @@
     return !state.testReportDirty || confirm('Perubahan pada Lembar Hasil Uji ini belum disimpan. Tetap pindah halaman?');
   }
 
+  // HIC / SSCC: info form aktif (peta per template dari server); kind: 'hic' | 'sscc-fpb' | 'sscc-pr'
+  function hicInfoNow() {
+    const r = state.testReport;
+    if (!r || !r.template_hic) return null;
+    const sel = document.getElementById('testReportTemplate');
+    return r.template_hic[(sel && sel.value) || r.template] || null;
+  }
+  // isian kondisi uji (nilai bawaan form sebagai placeholder); nilai yang sedang diketik dibawa saat form berganti
+  function hicCondGridHtml(info, values) {
+    return info.fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input type="text" name="field_${f.key}" value="${esc(values[f.key])}" placeholder="${esc(f.def)}"></div>`).join('');
+  }
+  // SSCC PR: luas penampang dan beban target (rumus form klien: 0.25 x 3.14 x D^2; beban = stress x luas)
+  function prCalcText(r) {
+    const d = parseFloat(String(r.d || '').replace(',', '.')), st = parseFloat(String(r.stress || '').replace(',', '.'));
+    if (!Number.isFinite(d)) return '-';
+    const area = 0.25 * 3.14 * d * d;
+    return 'A = ' + area.toFixed(2) + ' mm²' + (Number.isFinite(st) ? ' · P = ' + (st * area).toFixed(2) + ' N' : '');
+  }
+
   // HIC: hitung per section untuk layar input (rumus & pembulatan sama dengan cetakan)
   function hicNums(v) { return String(v == null ? '' : v).split(/[ ,;]+/).map(x => parseFloat(String(x).replace(',', '.'))).filter(n => Number.isFinite(n)); }
   function hicCalcText(r) {
@@ -2849,6 +2868,7 @@
 
   function blankTestReportRow() {
     if (state.testReport && state.testReport.template_grain) return { l1: '', l2: '', l3: '', len: '' };
+    if (state.testReport && state.testReport.template_hic && hicInfoNow() && hicInfoNow().kind !== 'hic') return { marking_specimen: '', orient: 'Longitudinal', stress: '', modulus: '', dim: '', h: '', a: '', strain: '', d: '', obs: '' };
     if (state.testReport && state.testReport.template_hic) return { marking_specimen: '', orient: 'Longitudinal', w1: '', t1: '', a1: '', b1: '', w2: '', t2: '', a2: '', b2: '', w3: '', t3: '', a3: '', b3: '' };
     if (state.testReport && state.testReport.template_pset) return { marking_specimen: '' };
     if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
@@ -2902,6 +2922,30 @@
       </table>
       <datalist id="nbResultList"><option value="Accepted"><option value="Rejected"></datalist>
       <p class="muted" style="margin:6px 0 0;">Kolom Depth, Length dan Distance yang dikosongkan tercetak "-"; Result kosong juga "-".</p>`;
+    }
+    if (state.testReport && state.testReport.template_hic && hicInfoNow() && hicInfoNow().kind !== 'hic') {
+      // SSCC (FPB / PR): satu baris per spesimen = kolom tabel pembebanan + observasi + foto 20X
+      const info = hicInfoNow(), pr = info.kind === 'sscc-pr';
+      const last = state.testReportRows.length - 1;
+      const cell = (idx, r, k, w, ph) => `<td><input type="text" data-tfield="${k}" value="${esc(r[k] || '')}" placeholder="${esc(ph || '')}" style="width:${w}px"></td>`;
+      return `<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr><th>Specimen No.</th><th>Orientation</th><th>Target Stress (MPa)</th><th>Young's Modulus (GPa)</th>${pr ? '<th>D (mm)</th><th>A (mm)</th><th>Hasil hitung</th>' : '<th>Dimension (L x W x T)</th><th>H</th><th>A</th><th>Target Strain</th>'}<th>Observation</th><th>Foto 20X</th><th></th></tr></thead>
+        <tbody>${state.testReportRows.map((r, idx) => {
+          const slot = info.kind + '/s' + (idx + 1);
+          const has = state.testReportPhotoSlots.has(slot);
+          return `
+          <tr data-trow="${idx}">
+            ${cell(idx, r, 'marking_specimen', 90, 'CT' + (idx + 1))}${cell(idx, r, 'orient', 100, 'Longitudinal')}${cell(idx, r, 'stress', 70)}${cell(idx, r, 'modulus', 70)}
+            ${pr ? cell(idx, r, 'd', 60) + cell(idx, r, 'a', 60) + `<td class="muted" data-hcalc style="white-space:nowrap;">${prCalcText(r)}</td>` : cell(idx, r, 'dim', 150, 'mis. 110.12 x 19.87 x 5.02') + cell(idx, r, 'h', 55) + cell(idx, r, 'a', 55) + cell(idx, r, 'strain', 70)}
+            ${cell(idx, r, 'obs', 150, 'No Crack was Observed')}
+            <td style="min-width:150px;">${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">Belum ada foto</span>'}
+              <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
+              ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}</td>
+            <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+      <p class="muted" style="margin:6px 0 0;">Satu baris = satu spesimen (maks. ${info.max}). ${pr ? 'Cross Section area = 0,25 × 3,14 × D² dan Target Load = Target Stress × area, dihitung otomatis; kolom dimensi tercetak "D x A".' : 'Semua kolom diketik apa adanya (form tidak memuat rumus Target Strain).'} Observation kosong = "No Crack was Observed". Foto 20X langsung tersimpan saat dipilih; foto terikat pada pilihan form (FPB / PR).</p>`;
     }
     if (state.testReport && state.testReport.template_hic) {
       // HIC: satu baris per spesimen; tiap section (3) berisi W, T, daftar a (panjang retak) dan b (tebal retak)
@@ -3124,7 +3168,7 @@
     wrap.addEventListener('click', handleMacroPhotoClick);
     wrap.querySelectorAll('[data-trow-remove]').forEach(btn => btn.addEventListener('click', () => {
       if (state.testReportRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
-      if (state.testReport.template_macro || state.testReport.template_micro || state.testReport.template_pset) {
+      if (state.testReport.template_macro || state.testReport.template_micro || state.testReport.template_pset || (hicInfoNow() && hicInfoNow().kind !== 'hic')) {
         const sel = document.getElementById('testReportTemplate');
         const key = (sel && sel.value) || state.testReport.template;
         const per = state.testReport.template_micro ? ((state.testReport.template_micro[key] || {}).photosPerRow || 1) : (state.testReport.template_pset ? state.testReport.template_pset.labels.length : 1);
@@ -3155,7 +3199,7 @@
     const gc = state.testReport && state.testReport.template_grain && e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-gcalc]') : null;
     if (gc) gc.textContent = grainCalcText(row);
     const hc = state.testReport && state.testReport.template_hic && e.target.closest('tr') ? e.target.closest('tr').querySelector('[data-hcalc]') : null;
-    if (hc) hc.textContent = hicCalcText(row);
+    if (hc) hc.textContent = (hicInfoNow() && hicInfoNow().kind === 'sscc-pr') ? prCalcText(row) : hicCalcText(row);
   }
 
   function testReportBendFieldsHtml(r) {
@@ -3561,11 +3605,11 @@
         <div class="card">
           <p class="section-title">Test Condition <span class="en">kosong = nilai bawaan form (abu-abu)</span></p>
           <div class="form-grid">
-            ${r.template_hic.fields.map(f => `<div class="field"><label>${esc(f.label)}</label><input type="text" name="field_${f.key}" value="${esc((r.fields || {})[f.key])}" placeholder="${esc(f.def)}"></div>`).join('')}
+            <div id="testReportHicCondWrap" style="display:contents;">${hicCondGridHtml(r.template_hic[r.template] || Object.values(r.template_hic)[0], r.fields || {})}</div>
           </div>
         </div>
         <div class="card">
-          <p class="section-title">Monitoring Lingkungan <span class="en">lampiran (halaman 3) hanya dicetak bila diisi</span></p>
+          <p class="section-title">Monitoring Lingkungan <span class="en">lampiran (halaman terakhir) hanya dicetak bila diisi</span></p>
           <div id="testReportHicLogWrap">${testReportHicLogHtml()}</div>
         </div>` : ''}
         ${(r.template_pset && r.template_pset.fields) ? `
@@ -3659,6 +3703,8 @@
     const addRowBtn = document.getElementById('btnAddReportRow');
     if (addRowBtn) {
       addRowBtn.addEventListener('click', () => {
+        const hiMax = hicInfoNow();
+        if (hiMax && hiMax.kind !== 'hic' && state.testReportRows.length >= hiMax.max) { toast('Maksimal ' + hiMax.max + ' spesimen per laporan', 'error'); return; }
         if (state.testReport.template_pset && state.testReportRows.length >= state.testReport.template_pset.max) { toast('Maksimal ' + state.testReport.template_pset.max + ' spesimen per laporan', 'error'); return; }
         state.testReportRows.push(blankTestReportRow());
         state.testReportDirty = true;
@@ -3678,6 +3724,13 @@
       const DEFAULT_OBS = { 'bend-sec': 'No Open Discontinuity was Observed', 'bend-mat': 'No Crack was Observed' };
       let prev = tplSel.value;
       tplSel.addEventListener('change', () => {
+        const hicCond = document.getElementById('testReportHicCondWrap');
+        if (hicCond && state.testReport.template_hic) {   // nilai bawaan (placeholder) beda per form; nilai yang sudah diketik dibawa
+          const cur = {};
+          hicCond.querySelectorAll('input').forEach(i => { cur[i.name.replace(/^field_/, '')] = i.value; });
+          hicCond.innerHTML = hicCondGridHtml(state.testReport.template_hic[tplSel.value] || Object.values(state.testReport.template_hic)[0], cur);
+          rerenderTestReportRows();
+        }
         const elWrap = document.getElementById('testReportElementsWrap');
         if (elWrap) elWrap.innerHTML = testReportElementsHtml(tplSel.value);
         const ferWrap = document.getElementById('testReportFerriteWrap');
