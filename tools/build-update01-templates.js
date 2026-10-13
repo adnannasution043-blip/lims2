@@ -1,5 +1,5 @@
 // (Dev tool) Membuat template form dari folder "Form Report_Update01" yang tidak memakai mesin tabel Tensile:
-// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) dan SEM-EDX (sem + sem-edx). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
+// Flaring (flaring), Peel (peel) dan Grain Size (grain + grain-att) SEM-EDX (sem + sem-edx) dan Salt Spray (salt + salt-photos). Compression dan Geser Las dibuat oleh build-tensile-templates.js.
 //   node tools/build-update01-templates.js "<folder Form Report_Update01>"
 const path = require('path');
 const fs = require('fs');
@@ -21,11 +21,20 @@ const semSlots = labels => t => {
   t.images = t.images.filter(i => i.w === 215);
   t.slots = pics.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: labels[i] || 'Gambar', fit: 'contain' }));
 };
+// Salt Spray: empat foto contoh (Before/After x Front/Back) -> empat slot, urut: baris atas kiri-kanan, baris bawah kiri-kanan
+const saltSlots = t => {
+  const pics = t.images.filter(i => i.w !== 215).sort((a, b) => ((a.y > 450 ? 1 : 0) * 10000 + a.x) - ((b.y > 450 ? 1 : 0) * 10000 + b.x));
+  t.images = t.images.filter(i => i.w === 215);
+  const labels = ['Before - Front Side', 'After - Front Side', 'Before - Back Side', 'After - Back Side'];
+  t.slots = pics.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: labels[i], fit: 'contain' }));
+};
 const jobs = [['Flaring Test', '14-FLAR', 'Sheet1', 'flaring'], ['Peel Test', '23-PEEL', 'Sheet1', 'peel'],
   ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'MT (grainsize)', 'grain'],
   ['Determination of the apparent grain size test', '22-GRAIN-SIZE', 'Att. 1', 'grain-att', grainAtt],
   ['Sem-EDX test', 'SEM-EDX', '1', 'sem', semSlots(['Foto SEM'])],
-  ['Sem-EDX test', 'SEM-EDX', '2', 'sem-edx', semSlots(['Spektrum EDX', 'Tabel hasil EDX'])]];
+  ['Sem-EDX test', 'SEM-EDX', '2', 'sem-edx', semSlots(['Spektrum EDX', 'Tabel hasil EDX'])],
+  ['Salt Spray Test', 'SALT-SPRAY', '1', 'salt'],
+  ['Salt Spray Test', 'SALT-SPRAY', '2', 'salt-photos', saltSlots]];
 for (const [folder, part, sheet, key, post] of jobs) {
   const dir = path.join(base, folder);
   if (!fs.existsSync(dir)) continue;
