@@ -14,6 +14,9 @@ const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
 
 const app = express();
+// Route peka huruf besar-kecil: tanpa ini Express 4 menerima "/API/..." sebagai "/api/..." sementara middleware
+// login memeriksa awalan "/api/" (lihat juga lib/auth.js yang menormalkan path). Harus diset sebelum app.use pertama.
+app.set('case sensitive routing', true);
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '2mb' }));
