@@ -370,6 +370,19 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Jejak aktivitas: setiap perubahan data lewat API (siapa, kapan, apa, hasil). Isi permintaan tidak disimpan.
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id BIGSERIAL PRIMARY KEY,
+      at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      user_id INTEGER,
+      username TEXT,
+      method TEXT NOT NULL,
+      path TEXT NOT NULL,
+      status INTEGER,
+      ip TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_log_at ON audit_log(at);
+
     -- Riwayat pencabutan LHU (revisi): siapa, kapan, alasan. Jumlah baris per Work Order = nomor revisi (Rev.).
     CREATE TABLE IF NOT EXISTS lhu_revocations (
       id SERIAL PRIMARY KEY,

@@ -4056,7 +4056,8 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      toast(payload.status === 'final' ? `Tahap ${t.stage.label} diselesaikan` : 'Draft tersimpan', 'success');
+      const resetMsg = (state.woTask.reset_stages || []).length ? ` · tahap ${state.woTask.reset_stages.join(' & ')} ikut kembali ke Draft (perlu diselesaikan / disetujui ulang)` : '';
+      toast((payload.status === 'final' ? `Tahap ${t.stage.label} diselesaikan` : 'Draft tersimpan') + resetMsg, 'success');
       state.queueCountsAt = 0;
       render();
     } catch (err) {
@@ -4795,6 +4796,78 @@
 
   // ---------- pengaturan ----------
 
+  // ---------- jejak aktivitas ----------
+  const AUDIT_STAGE = { receiving: 'Receiving', preparation: 'Preparation', testing: 'Testing', reporting: 'Reporting', review: 'Review & Approval', released: 'Report Issued' };
+  function auditLabel(method, path) {
+    const p = String(path || '');
+    const verb = { POST: 'Tambah', PUT: 'Ubah', PATCH: 'Ubah', DELETE: 'Hapus' }[method] || method;
+    const rules = [
+      [/^\/api\/auth\/login$/, () => 'Login'], [/^\/api\/auth\/logout$/, () => 'Logout'], [/^\/api\/auth\/password$/, () => 'Ganti kata sandi sendiri'],
+      [/^\/api\/requests\/(\d+)\/work-order$/, m => `Buat Work Order dari Permintaan Uji #${m[1]}`],
+      [/^\/api\/requests\/(\d+)\/specimen-inspections$/, m => `Buat Pengecekan Spesimen (Permintaan #${m[1]})`],
+      [/^\/api\/requests$/, () => 'Buat Permintaan Uji'], [/^\/api\/requests\/(\d+)$/, m => `${verb} Permintaan Uji #${m[1]}`],
+      [/^\/api\/work-orders\/(\d+)\/tasks\/([a-z]+)$/, m => `Simpan tahap ${AUDIT_STAGE[m[2]] || m[2]} (WO #${m[1]})`],
+      [/^\/api\/work-orders\/(\d+)\/revoke-lhu$/, m => `Cabut LHU (WO #${m[1]})`],
+      [/^\/api\/work-orders\/(\d+)\/test-reports$/, m => `Buat Lembar Hasil Uji (WO #${m[1]})`],
+      [/^\/api\/work-orders\/(\d+)\/machining$/, m => `Status machining (WO #${m[1]})`],
+      [/^\/api\/work-orders\/(\d+)\/files$/, m => `Unggah file bukti (WO #${m[1]})`],
+      [/^\/api\/work-orders\/(\d+)$/, m => `${verb} Work Order #${m[1]}`],
+      [/^\/api\/test-reports\/(\d+)\/photos?$/, m => `${method === 'DELETE' ? 'Hapus' : 'Unggah'} foto Lembar Hasil Uji #${m[1]}`],
+      [/^\/api\/test-reports\/(\d+)$/, m => `${verb} Lembar Hasil Uji #${m[1]}`],
+      [/^\/api\/specimen-inspections\/(\d+)$/, m => `${verb} Pengecekan Spesimen #${m[1]}`],
+      [/^\/api\/work-order-files\/(\d+)$/, m => `Hapus file bukti #${m[1]}`],
+      [/^\/api\/(lhu-reports|lhu-attachments|lhu-distributions)/, () => `${verb} data Hasil & Laporan`],
+      [/^\/api\/app-users/, () => `${verb} pengguna`], [/^\/api\/roles/, () => `${verb} role`],
+      [/^\/api\/settings\/auth$/, () => 'Ubah saklar Keamanan Login'], [/^\/api\/admin\/reset-data$/, () => 'RESET DATA transaksi'],
+      [/^\/api\/(master|customers|equipment|specimen-types|test-type-codes)/, () => `${verb} Master Data`]
+    ];
+    for (const [re, fn] of rules) { const m = re.exec(p); if (m) return fn(m); }
+    return method + ' ' + p;
+  }
+  function auditStatusHtml(code) {
+    if (code >= 200 && code < 300) return '<span class="um-status on">Berhasil</span>';
+    const why = { 400: 'Ditolak', 401: 'Gagal / perlu login', 403: 'Tanpa akses', 404: 'Tidak ditemukan', 409: 'Terkunci', 429: 'Diblokir sementara' }[code] || 'Error';
+    return `<span class="um-status off" title="kode ${code}">${why}</span>`;
+  }
+  let auditItems = [];
+  async function auditCardHtml() {
+    try { auditItems = (await api('/api/audit-log?limit=300')).items; } catch (e) { auditItems = []; return ''; }
+    return `
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Jejak Aktivitas</p>
+          <p class="card-desc">Siapa mengubah apa dan kapan (300 aktivitas terakhir). Isi data yang diketik tidak disimpan di sini.</p>
+        </div>
+        <div id="auditTableArea"></div>
+      </div>`;
+  }
+  function bindAuditTable() {
+    const area = document.getElementById('auditTableArea');
+    if (!area) return;
+    const rows = auditItems.map(it => ({ ...it, label: auditLabel(it.method, it.path), when: formatDateTimeID(it.at), who: it.username || '(tanpa login)' }));
+    renderSearchablePaginatedTable({
+      key: 'audit-log',
+      containerEl: area,
+      allRows: rows,
+      searchFields: ['who', 'label', 'path', 'ip'],
+      searchPlaceholder: 'Cari pengguna atau aktivitas...',
+      pageSize: 15,
+      emptyHtml: '<p class="muted" style="padding:8px 24px 20px;">Belum ada aktivitas tercatat.</p>',
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Waktu</th><th>Pengguna</th><th>Aktivitas</th><th>Hasil</th><th>IP</th></tr></thead>
+          <tbody>${pageRows.map(r => `
+            <tr>
+              <td style="white-space:nowrap;">${esc(r.when)}</td>
+              <td>${esc(r.who)}</td>
+              <td>${esc(r.label)}<br><span class="muted" style="font-size:11.5px;">${esc(r.method)} ${esc(r.path)}</span></td>
+              <td>${auditStatusHtml(Number(r.status))}</td>
+              <td class="muted" style="font-size:12px;">${esc(r.ip || '-')}</td>
+            </tr>`).join('')}</tbody>
+        </table>`
+    });
+  }
+
   async function renderSettings() {
     pageTitle.textContent = 'Pengaturan';
     pageSubtitle.textContent = 'Pengaturan aplikasi DETECH LIMS';
@@ -4815,8 +4888,10 @@
         <p class="um-help" style="margin-top:10px;">Jika terkunci (lupa kata sandi Administrator): di server isi variabel <b>ADMIN_USERNAME</b> dan <b>ADMIN_PASSWORD</b> (min. 8 karakter) lalu deploy ulang untuk membuat/memulihkan akun Administrator, kemudian hapus kedua variabel itu. Variabel <b>AUTH_DISABLE=1</b> mematikan login sementara.</p>
       </div>` : '';
 
+    const auditCard = await auditCardHtml();
     contentEl.innerHTML = `
       ${authCard}
+      ${auditCard}
       <div class="card">
         <p class="card-title" style="color: var(--danger);">Reset Data</p>
         <p class="card-desc">
@@ -4835,6 +4910,7 @@
         </button>
       </div>`;
 
+    bindAuditTable();
     const toggleAuth = document.getElementById('btnToggleAuth');
     if (toggleAuth) toggleAuth.addEventListener('click', async () => {
       const turnOn = !authInfo.enforced;
@@ -6740,7 +6816,8 @@
   }
 
   function todayISODate() {
-    return new Date().toISOString().slice(0, 10);
+    const d = new Date();   // tanggal lokal (WIB); toISOString() memakai UTC sehingga sebelum 07:00 WIB terbaca kemarin
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
   async function renderEquipmentMaster() {

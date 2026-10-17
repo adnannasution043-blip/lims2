@@ -12,7 +12,8 @@ const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
-const { nextNumber, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard } = require('./lib/integrity');
+const { nextNumber, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard, yearWIB } = require('./lib/integrity');
+const { auditTrail, registerAuditRoutes } = require('./lib/audit');
 
 const app = express();
 // Route peka huruf besar-kecil: tanpa ini Express 4 menerima "/API/..." sebagai "/api/..." sementara middleware
@@ -26,7 +27,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Login & role: semua /api/* (kecuali /api/auth/*) dan halaman cetak wajib login saat penerapan aktif (lihat lib/auth.js).
 const auth = createAuth(pool);
 app.use(auth.middleware());
+// Jejak aktivitas: semua perubahan data (termasuk login & yang ditolak kunci) dicatat setelah selesai (lib/audit.js).
+app.use(auditTrail(pool));
 auth.registerRoutes(app);
+registerAuditRoutes(app, { pool });
 // Setelah LHU terbit, Permintaan Uji / Work Order / hasil uji / pengecekan spesimen terkunci (lihat lib/integrity.js).
 app.use(lockGuard(pool));
 
@@ -34,8 +38,7 @@ app.use(lockGuard(pool));
 
 async function generateJobNumber() {
   // e.g. DE.1.26.0001  (DE.1.yy.seq) — seq resets to 0001 each new year
-  const now = new Date();
-  const y = String(now.getFullYear()).slice(2);
+  const y = yearWIB();   // tahun menurut WIB (server berjalan di UTC)
   const prefix = `DE.1.${y}.`;
   // nomor tertinggi + 1 (bukan jumlah data + 1, yang memberi nomor ganda setelah ada yang dihapus)
   return nextNumber(pool, 'test_requests', 'job_number', prefix, 4);
