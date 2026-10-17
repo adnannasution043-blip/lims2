@@ -370,6 +370,16 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Riwayat pencabutan LHU (revisi): siapa, kapan, alasan. Jumlah baris per Work Order = nomor revisi (Rev.).
+    CREATE TABLE IF NOT EXISTS lhu_revocations (
+      id SERIAL PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      lhu_number TEXT,
+      reason TEXT NOT NULL,
+      revoked_by TEXT,
+      revoked_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Pengaturan aplikasi (key/value): auth_enforced ('true'/'false'), session_secret (penanda tangan cookie sesi).
     CREATE TABLE IF NOT EXISTS app_settings (
       key TEXT PRIMARY KEY,

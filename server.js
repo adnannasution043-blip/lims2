@@ -12,6 +12,7 @@ const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
+const { nextNumber, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard } = require('./lib/integrity');
 
 const app = express();
 // Route peka huruf besar-kecil: tanpa ini Express 4 menerima "/API/..." sebagai "/api/..." sementara middleware
@@ -26,6 +27,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 const auth = createAuth(pool);
 app.use(auth.middleware());
 auth.registerRoutes(app);
+// Setelah LHU terbit, Permintaan Uji / Work Order / hasil uji / pengecekan spesimen terkunci (lihat lib/integrity.js).
+app.use(lockGuard(pool));
 
 // ---------- helpers ----------
 
@@ -34,12 +37,8 @@ async function generateJobNumber() {
   const now = new Date();
   const y = String(now.getFullYear()).slice(2);
   const prefix = `DE.1.${y}.`;
-  const { rows } = await pool.query(
-    `SELECT COUNT(*) AS c FROM test_requests WHERE job_number LIKE $1`,
-    [`${prefix}%`]
-  );
-  const seq = String(parseInt(rows[0].c, 10) + 1).padStart(4, '0');
-  return `${prefix}${seq}`;
+  // nomor tertinggi + 1 (bukan jumlah data + 1, yang memberi nomor ganda setelah ada yang dihapus)
+  return nextNumber(pool, 'test_requests', 'job_number', prefix, 4);
 }
 
 function signatureToBuffer(dataUrl) {
@@ -575,7 +574,16 @@ app.post('/api/requests', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const jobNumber = b.job_number || await generateJobNumber();
+    let jobNumber = String(b.job_number || '').trim() || await generateJobNumber();
+    const { rows: taken } = await client.query('SELECT 1 FROM test_requests WHERE job_number = $1', [jobNumber]);
+    if (taken.length) {
+      // nomor otomatis (format DE.1.yy.nnnn) yang keduluan dipakai orang lain -> ambil nomor berikutnya; nomor ketikan sendiri -> tolak
+      if (!/^DE[.]1[.][0-9]{2}[.][0-9]+$/.test(jobNumber)) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: `No. Pekerjaan ${jobNumber} sudah dipakai` });
+      }
+      jobNumber = await generateJobNumber();
+    }
     const { rows: [inserted] } = await client.query(
       `INSERT INTO test_requests (
          job_number, received_date, company, po_number, customer_id, on_behalf_owner,
@@ -609,6 +617,7 @@ app.post('/api/requests', async (req, res) => {
     res.status(201).json(await getFullRequest(inserted.id));
   } catch (err) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(409).json({ error: 'No. Pekerjaan bentrok dengan penyimpanan lain pada saat yang sama. Silakan simpan lagi.' });
     console.error(err);
     res.status(500).json({ error: 'Gagal menyimpan data', detail: String(err.message || err) });
   } finally {
@@ -625,10 +634,14 @@ app.put('/api/requests/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     const { rows: existingRows } = await client.query(`SELECT id, status FROM test_requests WHERE id = $1`, [id]);
-    if (!existingRows.length) {
-      client.release();
-      return res.status(404).json({ error: 'Not found' });
+    if (!existingRows.length) return res.status(404).json({ error: 'Not found' });   // client dilepas di finally
+    const jn = String(b.job_number || '').trim();
+    if (jn) {
+      const { rows: dup } = await client.query('SELECT 1 FROM test_requests WHERE job_number = $1 AND id <> $2', [jn, id]);
+      if (dup.length) return res.status(400).json({ error: `No. Pekerjaan ${jn} sudah dipakai Permintaan Uji lain` });
     }
+    const couponProblem = await couponChangeProblem(client, Number(id), b.coupon_tests);
+    if (couponProblem) return res.status(400).json({ error: couponProblem });
 
     await client.query('BEGIN');
 
@@ -679,6 +692,7 @@ app.put('/api/requests/:id', async (req, res) => {
     res.json(await getFullRequest(id));
   } catch (err) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(400).json({ error: 'No. Pekerjaan sudah dipakai Permintaan Uji lain' });
     console.error(err);
     res.status(500).json({ error: 'Gagal memperbarui data', detail: String(err.message || err) });
   } finally {
@@ -865,10 +879,7 @@ app.put('/api/work-orders/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     const { rows: existing } = await client.query(`SELECT id FROM work_orders WHERE id = $1`, [id]);
-    if (!existing.length) {
-      client.release();
-      return res.status(404).json({ error: 'Not found' });
-    }
+    if (!existing.length) return res.status(404).json({ error: 'Not found' });   // client dilepas di finally
 
     await client.query('BEGIN');
 
@@ -1196,10 +1207,7 @@ app.put('/api/specimen-inspections/:id', async (req, res) => {
   const client = await pool.connect();
   try {
     const { rows: existing } = await client.query(`SELECT id FROM specimen_inspections WHERE id = $1`, [id]);
-    if (!existing.length) {
-      client.release();
-      return res.status(404).json({ error: 'Not found' });
-    }
+    if (!existing.length) return res.status(404).json({ error: 'Not found' });   // client dilepas di finally
 
     await client.query('BEGIN');
 
@@ -1270,6 +1278,7 @@ app.get('/specimen-inspections/:id/print', async (req, res) => {
 // ---------- startup ----------
 
 initSchema()
+  .then(() => ensureUniqueNumbers(pool).catch(err => console.error('[integritas]', err.message)))
   .then(() => ensureAdmin(pool).catch(err => console.error('[auth] Gagal menyiapkan Administrator awal:', err.message)))
   .then(() => {
     app.listen(PORT, () => {

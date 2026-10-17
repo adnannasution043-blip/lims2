@@ -1335,7 +1335,9 @@
       <div class="coupon-row">
         <div class="coupon-row-header">
           <strong>Coupon Test #${idx + 1}</strong>
-          <button type="button" class="btn btn-sm btn-danger" data-remove-row="${idx}">Hapus baris</button>
+          ${row.row_no && state.formData && state.formData.work_order_id
+            ? '<span class="muted" style="font-size:12px;" title="Hasil uji dan marking menempel pada nomor coupon">Terkunci: Work Order sudah dibuat</span>'
+            : `<button type="button" class="btn btn-sm btn-danger" data-remove-row="${idx}">Hapus baris</button>`}
         </div>
         <div class="coupon-row-body">
 
@@ -2742,10 +2744,19 @@
     if (stage.key === 'released') {
       // Report Issued: kartu Informasi Penerbitan LHU + Ringkasan Approval/Final Check/Dokumen,
       // beda dari 4 tahap "form" lain (bukan sekadar extraFields di kartu generik).
+      // Setelah terbit, form terkunci; membuka kembali hanya lewat Cabut LHU (Administrator, alasan wajib).
+      const issued = stage.status === 'final';
+      const canRevoke = issued && (!AUTH.enforced || (AUTH.user && AUTH.user.is_admin));
+      const issuedActions = issued ? `
+            <div class="form-actions">
+              <div><span class="muted">LHU sudah diterbitkan${stage.updated_at ? ' · ' + esc(formatDateTimeID(stage.updated_at)) : ''}. Data terkunci.</span></div>
+              <div class="right">${canRevoke ? '<button type="button" class="btn btn-danger" id="btnRevokeLhu">Cabut LHU untuk revisi</button>' : '<span class="muted">Revisi: minta Administrator mencabut LHU</span>'}</div>
+            </div>` : '';
       return `
         ${lockedBanner}
+        ${issuedActions}
         <form id="woTaskForm">
-          ${fieldsetOpen}
+          ${issued ? '<fieldset class="task-fieldset" disabled>' : fieldsetOpen}
             ${releasedInfoCardHtml(t)}
             ${releasedBodyHtml(t)}
             <div id="woTaskProblems"></div>
@@ -3973,6 +3984,20 @@
       b.addEventListener('click', () => { state.woTaskPendingStatus = b.dataset.status; });
     });
     form.addEventListener('submit', onWoTaskSubmit);
+
+    const revokeBtn = document.getElementById('btnRevokeLhu');
+    if (revokeBtn) revokeBtn.addEventListener('click', async () => {
+      const t = state.woTask;
+      const reason = prompt(`Cabut LHU ${t.work_order.lhu_number || ''}?\n\nSemua tahap akan terbuka kembali untuk direvisi. No. LHU tetap sama, nomor revisi (Rev.) bertambah, dan pencabutan tercatat.\n\nTulis alasan pencabutan:`);
+      if (reason === null) return;
+      if (reason.trim().length < 5) { toast('Alasan pencabutan minimal 5 karakter', 'error'); return; }
+      try {
+        state.woTask = await api(`/api/work-orders/${t.work_order.id}/revoke-lhu`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }) });
+        toast('LHU dicabut. Work Order terbuka untuk revisi; terbitkan lagi setelah selesai.', 'success');
+        state.queueCountsAt = 0;
+        render();
+      } catch (err) { toast(err.message, 'error'); }
+    });
 
     const markAllReceived = document.getElementById('btnMarkAllReceived');
     if (markAllReceived) markAllReceived.addEventListener('click', () => {
