@@ -100,6 +100,7 @@ const pool = {
       return { rows: [row] };
     }
     const q = sql.trim();
+    if (/^SELECT COUNT[(][*][)] AS n FROM test_report_photos/.test(q)) return { rows: [{ n: photoStore.filter(p => p.id === Number(params[0])).length }] };
     if (/^SELECT slot FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0])).map(p => ({ slot: p.slot })) };
     if (/^SELECT slot, mime_type, data FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0])) };
     if (/^SELECT mime_type, data FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0]) && p.slot === params[1]) };
@@ -176,15 +177,29 @@ function call(method, path, params, body) {
   assert.strictEqual(r.body.sample_marking, 'ABN.9.1');
   assert.strictEqual(r.body.qty, 3);
 
+  // Finalisasi ditolak bila data belum lengkap (tanggal uji, penguji, Result tiap spesimen)
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { status: 'final', rows: [] });
+  assert.strictEqual(r.status, 400);
+  assert.strictEqual(r.body.code, 'INCOMPLETE');
+  assert.ok(r.body.problems.some(p => /Date of Tested/.test(p)));
+  assert.ok(r.body.problems.some(p => /Belum ada data hasil/.test(p)));
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, {
+    date_tested: '2026-09-25', test_conducted_by: 'Budi', status: 'final',
+    rows: [{ marking_specimen: 'ABN.9.1-BR1', observation: 'OK', result: 'accepted' }, { marking_specimen: 'ABN.9.1-BR2', result: 'zzz' }]
+  });
+  assert.strictEqual(r.status, 400);
+  assert.deepStrictEqual(r.body.problems, ['Spesimen ABN.9.1-BR2: Result belum dipilih']);   // enum tidak valid dihitung kosong
+  assert.strictEqual(reports[0].status, 'draft');
+
   // PUT: field bend + rows tersanitasi, kunci asing pada rows diabaikan
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, {
     report_no: 'RPT-1', date_tested: '2026-09-25', bend_angle_actual: '181', specimen_width_actual: '20.1',
     testing_machine: 'Hydraulic Press 400 Bar', welder_name: 'Joko', witnessed_by: 'PT Y', test_conducted_by: 'Budi',
-    remarks: 'ok', status: 'final',
+    remarks: 'ok', status: 'draft',
     rows: [{ marking_specimen: 'ABN.9.1-BR1', observation: 'OK', result: 'accepted', evil: '<script>' }, { marking_specimen: 'ABN.9.1-BR2', result: 'zzz' }]
   });
   assert.strictEqual(r.status, 200);
-  assert.strictEqual(r.body.status, 'final');
+  assert.strictEqual(r.body.status, 'draft');
   assert.strictEqual(r.body.rows.length, 2);
   assert.strictEqual(r.body.rows[0].result, 'accepted');
   assert.strictEqual(r.body.rows[1].result, '');       // enum tidak valid -> dikosongkan

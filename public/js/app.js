@@ -45,6 +45,25 @@
     }[c]));
   }
 
+  // Finalisasi ditolak server karena data belum lengkap: daftar kekurangannya ditampilkan di atas form
+  // (toast terlalu singkat untuk dibaca). Mengembalikan true bila error itu memang jenis ini.
+  function showIncomplete(err, formEl) {
+    const old = document.getElementById('incompleteBox');
+    if (old) old.remove();
+    if (!err || err.code !== 'INCOMPLETE' || !formEl) return false;
+    const box = document.createElement('div');
+    box.id = 'incompleteBox';
+    box.className = 'incomplete-box';
+    box.setAttribute('role', 'alert');
+    box.innerHTML = `<strong>Belum bisa Finalisasi — lengkapi data berikut dulu:</strong>
+      <ul>${(err.problems || []).map(p => `<li>${esc(p)}</li>`).join('')}</ul>
+      <span class="muted">Data tetap bisa disimpan sebagai Draft.</span>`;
+    formEl.prepend(box);
+    box.scrollIntoView({ block: 'start' });
+    toast('Data belum lengkap untuk Finalisasi', 'error');
+    return true;
+  }
+
   async function api(path, opts) {
     const res = await fetch(path, opts);
     if (!res.ok) {
@@ -184,7 +203,7 @@
 
   const NAV_MODULE = {
     dashboard: 'dashboard', 'permintaan-uji': 'permintaan-uji', 'work-order': 'work-order', tasks: 'tasks',
-    'pengecekan-spesimen': 'pengecekan-spesimen', 'hasil-laporan': 'hasil-laporan', 'manajemen-data': 'master-data',
+    'pengecekan-spesimen': 'pengecekan-spesimen', machining: 'machining', 'hasil-laporan': 'hasil-laporan', 'manajemen-data': 'master-data',
     pengguna: 'pengguna', pengaturan: 'pengaturan'
   };
   const navModule = key => (key.startsWith('q-') ? 'antrian-kerja' : NAV_MODULE[key]);
@@ -312,6 +331,9 @@
         render();
       } else if (key === 'pengecekan-spesimen') {
         state.view = 'specimen-list';
+        render();
+      } else if (key === 'machining') {
+        state.view = 'machining';
         render();
       } else if (key === 'hasil-laporan') {
         state.view = 'lhu-list';
@@ -3952,7 +3974,7 @@
       toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
       render();
     } catch (err) {
-      toast(err.message, 'error');
+      if (!showIncomplete(err, e.target)) toast(err.message, 'error');
     }
   }
 
@@ -4358,6 +4380,81 @@
         <td class="q-actions"><div class="row-icons">${iconBtn('review', 'Review', `data-q-open="${r.work_order_id}:review"`, { primary: true })}</div></td>`
     }
   };
+
+  // ---------- menu Machining (role Machining) ----------
+  // Dibuat sesederhana mungkin: per Work Order hanya spesimen yang harus dibuat dan satu tombol Mulai / Selesai.
+  async function renderMachining() {
+    pageTitle.textContent = 'Machining';
+    pageSubtitle.textContent = 'Spesimen yang harus dibuat — tekan Mulai saat mengerjakan, Selesai bila semua spesimen sudah jadi';
+    topbarActions.innerHTML = '<button class="btn" id="btnMachRefresh">Muat ulang</button>';
+    document.getElementById('btnMachRefresh').addEventListener('click', () => renderMachining());
+    contentEl.innerHTML = '<div class="card"><p class="muted">Memuat daftar machining...</p></div>';
+    let rows;
+    try {
+      rows = (await api('/api/machining')).rows || [];
+    } catch (e) {
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat daftar machining: ${esc(e.message)}</p></div>`;
+      return;
+    }
+    if (state.view !== 'machining') return;
+    const count = g => rows.filter(r => r.group === g).length;
+    const editable = can('machining', 'edit') || can('tasks', 'edit');
+    const button = r => {
+      if (!editable) return '';
+      if (r.group === 'menunggu') return `<button type="button" class="btn btn-primary mach-btn" data-mach="start" data-wo="${r.work_order_id}">Mulai Machining</button>`;
+      if (r.group === 'proses') return `<button type="button" class="btn btn-primary mach-btn" data-mach="finish" data-wo="${r.work_order_id}">Selesai Machining</button>`;
+      return '';
+    };
+    const timeInfo = r => {
+      const m = r.machining;
+      if (r.group === 'proses' && m.started_at) return `Dimulai ${esc(formatDateTimeID(m.started_at))} &middot; berjalan ${esc(fmtDurationID(m.started_at))}`;
+      if (r.group === 'selesai' && m.finished_at) return `Selesai ${esc(formatDateTimeID(m.finished_at))} &middot; durasi ${esc(fmtDurationID(m.started_at, m.finished_at))}`;
+      return r.testing_date ? `Target uji ${fmtDateCell(r.testing_date)}` : 'Sampel sudah diterima';
+    };
+    const card = r => `
+      <div class="card mach-card mach-${r.group}">
+        <div class="mach-head">
+          <div>
+            <p class="mach-job">${esc(r.job_number)} ${machiningPillHtml(r.machining.status)}</p>
+            <p class="muted mach-sub">${esc(r.company) || '-'}${r.project_name ? ' &middot; ' + esc(r.project_name) : ''}</p>
+            <p class="muted mach-sub">${timeInfo(r)} &middot; <strong>${r.specimens}</strong> spesimen</p>
+          </div>
+          <div>${button(r)}</div>
+        </div>
+        <div class="task-table-wrap"><table class="task-table">
+          <thead><tr><th>Coupon</th><th>Jenis Pengujian</th><th>Qty</th><th>Specimen Marking</th></tr></thead>
+          <tbody>${r.coupons.map(c => c.tests.map((t, i) => `
+            <tr>
+              ${i === 0 ? `<td rowspan="${c.tests.length}"><strong>${esc(c.sample_marking) || '#' + c.coupon_row_no}</strong><br><span class="muted">${esc(c.coupon_label)}</span></td>` : ''}
+              <td>${esc(t.test_name)}</td>
+              <td>${esc(t.qty) || '-'}</td>
+              <td>${markingChipsHtml({ ...t, job_number: r.job_number, sample_marking: c.sample_marking })}</td>
+            </tr>`).join('')).join('') || '<tr><td colspan="4" class="muted">Belum ada Jenis Pengujian pada Permintaan Uji.</td></tr>'}</tbody>
+        </table></div>
+      </div>`;
+    contentEl.innerHTML = `
+      <div class="task-stats">
+        <div class="task-stat">${statIcon('play')}<b>${count('proses')}</b><span>Sedang machining</span></div>
+        <div class="task-stat">${statIcon('hourglass')}<b>${count('menunggu')}</b><span>Menunggu</span></div>
+        <div class="task-stat ok">${statIcon('checkCircle')}<b>${count('selesai')}</b><span>Selesai (7 hari)</span></div>
+      </div>
+      ${rows.length ? rows.map(card).join('') : '<div class="card"><p class="dash-empty">Tidak ada spesimen yang perlu dikerjakan. Work Order muncul di sini setelah sampelnya diterima (Receiving selesai).</p></div>'}`;
+    contentEl.querySelectorAll('[data-mach]').forEach(btn => btn.addEventListener('click', async () => {
+      const action = btn.dataset.mach;
+      if (action === 'finish' && !confirm('Semua spesimen untuk Work Order ini sudah selesai dibuat?')) return;
+      btn.disabled = true;
+      try {
+        await api(`/api/work-orders/${btn.dataset.wo}/machining`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action })
+        });
+        toast(action === 'start' ? 'Machining dimulai' : 'Machining selesai', 'success');
+        renderMachining();
+      } catch (err) {
+        toast(err.message, 'error');
+        btn.disabled = false;
+      }
+    }));
+  }
 
   async function renderQueue(name) {
     const def = QUEUE_DEFS[name];
@@ -5281,6 +5378,7 @@
     timeline: 'timeline',
     'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen',
     'lhu-list': 'hasil-laporan', 'lhu-detail': 'hasil-laporan',
+    machining: 'machining',
     settings: 'pengaturan',
     users: 'pengguna'
   };
@@ -5307,6 +5405,7 @@
     else if (state.view === 'specimen-list') renderSpecimenList();
     else if (state.view === 'specimen-form') renderSpecimenForm();
     else if (state.view === 'lhu-list') renderLhuList();
+    else if (state.view === 'machining') renderMachining();
     else if (state.view === 'lhu-detail') renderLhuDetail();
     else if (state.view === 'settings') renderSettings();
     else if (state.view === 'users') renderUsers();
@@ -5975,7 +6074,7 @@
       state.view = 'specimen-list';
       render();
     } catch (err) {
-      toast(err.message, 'error');
+      if (!showIncomplete(err, form)) toast(err.message, 'error');
     }
   }
 

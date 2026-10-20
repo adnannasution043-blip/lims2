@@ -14,6 +14,7 @@ const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
 const { nextNumber, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard, yearWIB } = require('./lib/integrity');
 const { auditTrail, registerAuditRoutes } = require('./lib/audit');
+const { specimenSheetProblems } = require('./lib/completeness');
 
 const app = express();
 // Route peka huruf besar-kecil: tanpa ini Express 4 menerima "/API/..." sebagai "/api/..." sementara middleware
@@ -1240,8 +1241,14 @@ app.put('/api/specimen-inspections/:id', async (req, res) => {
   const b = req.body || {};
   const client = await pool.connect();
   try {
-    const { rows: existing } = await client.query(`SELECT id FROM specimen_inspections WHERE id = $1`, [id]);
+    const { rows: existing } = await client.query(`SELECT id, category, shape FROM specimen_inspections WHERE id = $1`, [id]);
     if (!existing.length) return res.status(404).json({ error: 'Not found' });   // client dilepas di finally
+    if (b.status === 'final') {
+      const problems = specimenSheetProblems({ ...b, category: existing[0].category, shape: existing[0].shape }, b.rows);
+      if (problems.length) {
+        return res.status(400).json({ error: 'Data belum lengkap untuk Finalisasi — ' + problems.join('; '), code: 'INCOMPLETE', problems });
+      }
+    }
 
     await client.query('BEGIN');
 

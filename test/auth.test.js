@@ -58,6 +58,20 @@ assert.strictEqual(A.actionFor('tasks', 'POST'), 'edit'); assert.strictEqual(A.a
 assert.strictEqual(A.actionFor('master-data', 'POST'), 'create'); assert.strictEqual(A.actionFor('master-data', 'DELETE'), 'delete');
 assert.strictEqual(A.actionFor('permintaan-uji', 'PUT'), 'edit');
 
+// ---- role Machining: hanya menu Machining; tombol Mulai/Selesai juga tetap bisa dipakai pengguna Tasks ----
+const mach = { permissions: { machining: ['view', 'edit'] } };
+const tech = { permissions: { tasks: ['view', 'edit'] } };
+const viewer = { permissions: { tasks: ['view'], dashboard: ['view'] } };
+const can = (u, m, p) => A.allowed(u, A.ruleFor(m, p), m);
+assert.ok(can(mach, 'GET', '/api/machining'));
+assert.ok(can(mach, 'POST', '/api/work-orders/5/machining'));
+assert.ok(!can(mach, 'GET', '/api/work-orders/5/tasks/preparation'));
+assert.ok(!can(mach, 'PUT', '/api/work-orders/5/tasks/testing'));
+assert.ok(!can(mach, 'GET', '/api/requests'));
+assert.ok(can(tech, 'POST', '/api/work-orders/5/machining'));
+assert.ok(can(tech, 'GET', '/api/machining'));
+assert.ok(!can(viewer, 'POST', '/api/work-orders/5/machining'));
+
 // ---- token ----
 const secret = 'rahasia-uji-yang-cukup-panjang';
 const fakeUser = { id: 7, password_hash: 'x' };

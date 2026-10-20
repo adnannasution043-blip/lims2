@@ -1,7 +1,7 @@
 const { Pool } = require('pg');
 const { COMPANY_IDS } = require('./companyIds');
 const { TEST_METHOD_SEED } = require('./testMethodSeed');
-const { DEFAULT_ROLES } = require('../lib/users');
+const { DEFAULT_ROLES, MACHINING_ROLE } = require('../lib/users');
 
 // Railway (and most managed Postgres) inject DATABASE_URL automatically once
 // the Postgres plugin is attached to this service. For local dev, put your
@@ -663,6 +663,15 @@ async function initSchema() {
         [r.name, r.description, JSON.stringify(r.permissions), r.is_system]
       );
     }
+  }
+  // Role Machining ditambahkan sekali ke database lama; kalau kemudian sengaja dihapus, tidak dibuat lagi.
+  const seeded = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_role_machining'`);
+  if (!seeded.rows.length) {
+    await pool.query(
+      'INSERT INTO roles (name, description, permissions, is_system) VALUES ($1,$2,$3,FALSE) ON CONFLICT (name) DO NOTHING',
+      [MACHINING_ROLE.name, MACHINING_ROLE.description, JSON.stringify(MACHINING_ROLE.permissions)]
+    );
+    await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_role_machining', '1') ON CONFLICT (key) DO NOTHING`);
   }
 
   for (const [testName, code] of TEST_TYPE_CODE_SEED) {

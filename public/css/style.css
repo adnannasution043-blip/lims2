@@ -1901,3 +1901,18 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 
 /* ID & Atas Nama Perusahaan terisi dari pilihan Perusahaan (Master Customer) */
 .field input[readonly] { background: var(--bg); color: var(--text-muted); cursor: default; }
+
+/* Daftar kekurangan data saat Finalisasi ditolak */
+.incomplete-box { border: 1px solid var(--danger); background: #fdf1f1; color: var(--text); border-radius: 8px; padding: 12px 16px; margin: 0 0 16px; }
+.incomplete-box strong { color: var(--danger); }
+.incomplete-box ul { margin: 6px 0 6px 18px; padding: 0; }
+.incomplete-box li { margin: 2px 0; }
+
+/* Menu Machining (role Machining) */
+.mach-card { border-left: 4px solid var(--border); }
+.mach-card.mach-proses { border-left-color: var(--accent); }
+.mach-card.mach-selesai { border-left-color: var(--success, #2e7d32); }
+.mach-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.mach-job { font-size: 17px; font-weight: 700; margin: 0 0 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mach-sub { margin: 2px 0; }
+.mach-btn { font-size: 15px; padding: 12px 22px; min-width: 180px; }
