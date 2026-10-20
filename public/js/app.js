@@ -149,6 +149,7 @@
       welding_position: '',
       ref_code: '',
       no_wps: '',
+      welder_name: '',
       testing_purpose: '',
       note: '',
       charpy_temp: '', charpy_wm: '', charpy_bm: '', charpy_haz: '',
@@ -1008,12 +1009,6 @@
       <datalist id="testMethodList">
         ${TEST_METHODS.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
-      <datalist id="customerIdList">
-        ${[...new Set(CUSTOMERS.map(c => c.customer_id))].map(v => `<option value="${esc(v)}">`).join('')}
-      </datalist>
-      <datalist id="onBehalfOwnerList">
-        ${[...new Set(CUSTOMERS.map(c => c.on_behalf_owner))].map(v => `<option value="${esc(v)}">`).join('')}
-      </datalist>
       <form id="reqForm">
 
         <div class="card">
@@ -1024,8 +1019,9 @@
               <input type="text" name="job_number" value="${esc(f.job_number)}">
             </div>
             <div class="field">
-              <label>Perusahaan <span class="en">Company</span></label>
-              <input type="text" name="company" value="${esc(f.company)}">
+              <label>Perusahaan <span class="en">Company &middot; pilih dari Master Customer</span></label>
+              ${customerSelectHtml(f)}
+              <input type="hidden" name="company" id="companyInput" value="${esc(f.company)}">
             </div>
             <div class="field">
               <label>Tgl. Diterima <span class="en">Received Date</span></label>
@@ -1037,11 +1033,11 @@
             </div>
             <div class="field">
               <label>ID Perusahaan <span class="en">Cust. ID</span></label>
-              <input type="text" list="customerIdList" autocomplete="off" id="customerIdInput" name="customer_id" value="${esc(f.customer_id)}">
+              <input type="text" id="customerIdInput" name="customer_id" value="${esc(f.customer_id)}" readonly title="Terisi dari Perusahaan yang dipilih">
             </div>
             <div class="field">
               <label>Atas Nama Perusahaan <span class="en">On Behalf Owner</span></label>
-              <input type="text" list="onBehalfOwnerList" autocomplete="off" id="onBehalfOwnerInput" name="on_behalf_owner" value="${esc(f.on_behalf_owner)}">
+              <input type="text" id="onBehalfOwnerInput" name="on_behalf_owner" value="${esc(f.on_behalf_owner)}" readonly title="Terisi dari Perusahaan yang dipilih">
             </div>
             <div class="field">
               <label>Nama Projek <span class="en">Project Name</span></label>
@@ -1049,11 +1045,11 @@
             </div>
             <div class="field">
               <label>No. Telepon <span class="en">Phone No.</span></label>
-              <input type="text" name="phone" value="${esc(f.phone)}">
+              <input type="text" name="phone" id="phoneInput" value="${esc(f.phone)}">
             </div>
             <div class="field full">
               <label>Alamat <span class="en">Address</span></label>
-              <textarea name="address">${esc(f.address)}</textarea>
+              <textarea name="address" id="addressInput">${esc(f.address)}</textarea>
             </div>
           </div>
         </div>
@@ -1395,6 +1391,10 @@
                   <label>No WPS</label>
                   <input type="text" data-row="${idx}" data-field="no_wps" value="${esc(row.no_wps)}">
                 </div>
+                <div class="field">
+                  <label>Welder's Name <span class="en">opsional, tercetak di Lembar Hasil Uji</span></label>
+                  <input type="text" data-row="${idx}" data-field="welder_name" value="${esc(row.welder_name)}">
+                </div>
               </div>
             </div>
           </div>
@@ -1454,17 +1454,16 @@
     document.getElementById('couponRows').addEventListener('input', handleCouponInput);
     document.getElementById('couponRows').addEventListener('change', handleCouponInput);
 
-    // ID Perusahaan & Atas Nama Perusahaan are a paired customer record —
-    // picking/typing one that matches an existing pair fills in the other.
-    const custIdInput = document.getElementById('customerIdInput');
-    const ownerInput = document.getElementById('onBehalfOwnerInput');
-    custIdInput.addEventListener('input', () => {
-      const owner = findOwnerByCustomerId(custIdInput.value.trim());
-      if (owner) ownerInput.value = owner;
-    });
-    ownerInput.addEventListener('input', () => {
-      const custId = findCustomerIdByOwner(ownerInput.value.trim());
-      if (custId) custIdInput.value = custId;
+    // Perusahaan dipilih dari Master Customer (tidak diketik); ID Perusahaan, Atas Nama Perusahaan, alamat & telepon
+    // ikut terisi. Alamat & telepon masih bisa disesuaikan per permintaan.
+    document.getElementById('customerPick').addEventListener('change', e => {
+      const c = CUSTOMERS.find(x => String(x.id) === e.target.value);
+      if (!c) return;
+      document.getElementById('companyInput').value = customerCompany(c);
+      document.getElementById('customerIdInput').value = c.customer_id || '';
+      document.getElementById('onBehalfOwnerInput').value = c.on_behalf_owner || '';
+      if (c.address) document.getElementById('addressInput').value = c.address;
+      if (c.phone) document.getElementById('phoneInput').value = c.phone;
     });
 
     const delBtn = document.getElementById('btnDelete');
@@ -1521,6 +1520,10 @@
     payload.coupon_tests = state.couponRows;
     payload.confirmation_agreed = document.getElementById('confirmationAgreed').checked;
 
+    if (payload.status === 'final' && !String(payload.company || '').trim()) {
+      toast('Pilih Perusahaan dari Master Customer terlebih dahulu sebelum Finalisasi', 'error');
+      return;
+    }
     if (payload.status === 'final' && !payload.confirmation_agreed) {
       toast('Centang konfirmasi persetujuan terlebih dahulu sebelum Finalisasi', 'error');
       return;
@@ -2393,7 +2396,7 @@
           </div>
         </div>
         <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian &amp; Specimen Marking</th><th>Tgl. Uji</th><th>Alat</th><th>Status</th><th>Catatan</th><th>Lembar Hasil Uji</th></tr></thead>
+          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian &amp; Specimen Marking</th><th>Tgl. Uji</th><th>Status</th><th>Lembar Hasil Uji</th></tr></thead>
           <tbody>${t.items.map(it => `
             <tr data-task-row data-key="${esc(it.key)}">
               <td>${couponCellHtml(it)}</td>
@@ -2403,11 +2406,10 @@
                 ${it.sheet_status ? `<div class="test-cell-sheet muted">Spesimen: ${it.sheet_status === 'final' ? 'Final' : 'Draft'}</div>` : ''}
               </td>
               <td><input type="date" data-f="tested_date" value="${esc(it.tested_date)}"></td>
-              <td><input type="text" data-f="equipment" list="testEquipmentList" autocomplete="off" value="${esc(it.equipment)}" placeholder="Pilih / ketik"></td>
-              <td><select data-f="status">${woSelectOptions(TEST_STATUS_OPTIONS, it.status)}</select></td>
-              <td><input type="text" data-f="note" value="${esc(it.note)}" placeholder="Catatan"></td>
+              <td><select data-f="status">${woSelectOptions(TEST_STATUS_OPTIONS, it.status)}</select>
+                <input type="hidden" data-f="equipment" value="${esc(it.equipment)}"><input type="hidden" data-f="note" value="${esc(it.note)}"></td>
               <td class="test-cell-report">${it.report_status ? `<div>${sheetBadge(it.report_status)}</div>` : ''}${reportActionHtml(it)}</td>
-            </tr>`).join('') || '<tr><td colspan="7" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
+            </tr>`).join('') || '<tr><td colspan="5" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
           </tbody>
         </table></div>
       </div>`;
@@ -3343,9 +3345,11 @@
   }
 
   function testReportBendFieldsHtml(r) {
+    // Satu isian per dimensi (isian "Actual" dihapus atas permintaan klien). Nilai Actual lama dipindah ke isian ini
+    // (isian tampil diawali nilai Actual bila Code kosong), lalu kolom Actual dikosongkan saat disimpan.
     const pair = (label, codeName, actualName, codeVal, actualVal, placeholder) => `
-      <div class="field"><label>${esc(label)} <span class="en">Code</span></label><input type="text" name="${codeName}" value="${esc(codeVal)}" placeholder="${esc(placeholder || '')}"></div>
-      <div class="field"><label>${esc(label)} <span class="en">Actual</span></label><input type="text" name="${actualName}" value="${esc(actualVal)}"></div>`;
+      <div class="field"><label>${esc(label)}</label><input type="text" name="${codeName}" value="${esc(codeVal || actualVal)}" placeholder="${esc(placeholder || '')}">
+        <input type="hidden" name="${actualName}" value=""></div>`;
     return `
       <div class="card">
         <p class="section-title">Dimensi Pengujian Bend <span class="en">sesuai form DE.1/TR/02/BEND.SEC</span></p>
@@ -3629,6 +3633,31 @@
     <p class="muted" style="margin:6px 0 0;">Tanggal baris baru otomatis satu hari setelah baris terakhir. Kolom yang kosong tercetak "-".</p>`;
   }
 
+  // Witnessed By: beberapa nama, disimpan digabung koma pada kolom yang sama (data lama satu nama tetap terbaca)
+  function witnessNames(v) {
+    const list = String(v || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
+    return list.length ? list : [''];
+  }
+  function witnessRowHtml(name) {
+    return `<div class="witness-row"><input type="text" data-witness value="${esc(name)}" placeholder="Nama / instansi"><button type="button" class="btn btn-sm btn-danger" data-witness-del aria-label="Hapus saksi">&times;</button></div>`;
+  }
+  function bindWitnessEvents() {
+    const list = document.getElementById('witnessList'), hidden = document.getElementById('witnessedByValue');
+    if (!list || !hidden) return;
+    const sync = () => { hidden.value = [...list.querySelectorAll('[data-witness]')].map(i => i.value.trim()).filter(Boolean).join(', '); state.testReportDirty = true; };
+    list.addEventListener('input', sync);
+    list.addEventListener('click', e => {
+      if (!e.target.closest('[data-witness-del]')) return;
+      const rows = list.querySelectorAll('.witness-row');
+      if (rows.length > 1) e.target.closest('.witness-row').remove(); else rows[0].querySelector('input').value = '';
+      sync();
+    });
+    document.getElementById('btnAddWitness').addEventListener('click', () => {
+      list.insertAdjacentHTML('beforeend', witnessRowHtml(''));
+      list.lastElementChild.querySelector('input').focus();
+    });
+  }
+
   function bindTestReportHicLogEvents() {
     const wrap = document.getElementById('testReportHicLogWrap');
     if (!wrap) return;
@@ -3793,15 +3822,19 @@
         <div class="card">
           <p class="section-title">${r.template_grain ? 'Hasil per Field Pengamatan' : 'Hasil per Spesimen'}</p>
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
-          <button type="button" class="btn btn-sm" id="btnAddReportRow" style="margin-top:10px;${r.template_grain ? 'display:none;' : ''}">+ Tambah Baris</button>
+          <button type="button" class="btn btn-sm" id="btnAddReportRow" style="display:none;">+ Tambah Baris</button>
         </div>`)}
 
         <div class="card">
           <p class="section-title">Info Tambahan</p>
           <div class="form-grid">
             <div class="field"><label>Testing Machine Used</label><input type="text" name="testing_machine" value="${esc(r.testing_machine)}" placeholder="Hydraulic Press Machine, Capacity : 400 Bar"></div>
-            <div class="field"><label>Welder's Name</label><input type="text" name="welder_name" value="${esc(r.welder_name)}"></div>
-            <div class="field"><label>Witnessed By</label><input type="text" name="witnessed_by" value="${esc(r.witnessed_by)}"></div>
+            <div class="field"><label>Welder's Name <span class="en">dari coupon di Permintaan Uji</span></label><input type="text" value="${esc(((r.coupon || {}).welder_name) || r.welder_name) || '-'}" disabled>
+              <input type="hidden" name="welder_name" value="${esc(r.welder_name)}"></div>
+            <div class="field"><label>Witnessed By <span class="en">bisa lebih dari 1 orang</span></label>
+              <div id="witnessList">${witnessNames(r.witnessed_by).map(witnessRowHtml).join('')}</div>
+              <button type="button" class="btn btn-sm" id="btnAddWitness" style="align-self:flex-start;margin-top:4px;">+ Tambah saksi</button>
+              <input type="hidden" name="witnessed_by" id="witnessedByValue" value="${esc(r.witnessed_by)}"></div>
             <div class="field"><label>Test Conducted by</label><input type="text" name="test_conducted_by" value="${esc(r.test_conducted_by) || esc(r.testing_pic)}"></div>
             <div class="field full"><label>Remarks</label><textarea name="remarks">${esc(r.remarks)}</textarea></div>
           </div>
@@ -3854,6 +3887,7 @@
     }
     bindTestReportElementEvents();
     bindTestReportHicLogEvents();
+    bindWitnessEvents();
     bindTestReportFerriteEvents();
     bindTestReportHardEvents();
     bindTestReportCorrEvents();
@@ -6151,6 +6185,9 @@
           couponSelect.innerHTML = couponRows.map(c => `<option value="${c.row_no}">${esc(couponRowLabel(c))}</option>`).join('')
             || '<option value="">Belum ada Coupon Test</option>';
           couponSelect.disabled = false;
+          // coupon pertama langsung terpilih tanpa event "change": muat Jenis Pengujian-nya sekarang (dulu tetap
+          // "Pilih Coupon Test dulu" sehingga sheet tidak bisa dibuat dari menu ini)
+          if (couponSelect.value) await loadTests(testRequestId, couponSelect.value);
         } catch (err) {
           couponSelect.innerHTML = '<option value="">Gagal memuat Coupon Test</option>';
           toast(err.message, 'error');
@@ -6451,8 +6488,13 @@
 
     wrap.innerHTML = `
       <div class="card">
-        <p class="section-title">Tambah Customer</p>
+        <p class="section-title" id="custFormTitle">Tambah Customer</p>
         <form id="custAddForm" class="form-grid">
+          <input type="hidden" id="custEditId" value="">
+          <div class="field">
+            <label>Nama Perusahaan <span class="en">Company</span></label>
+            <input type="text" id="custCompanyInput" placeholder="Nama perusahaan (tampil di pilihan Permintaan Uji)" autocomplete="off">
+          </div>
           <div class="field">
             <label>ID Perusahaan</label>
             <input type="text" id="custIdInput" placeholder="ID Perusahaan" autocomplete="off">
@@ -6461,8 +6503,17 @@
             <label>Atas Nama Perusahaan</label>
             <input type="text" id="custOwnerInput" placeholder="Atas Nama Perusahaan" autocomplete="off">
           </div>
-          <div class="field" style="justify-content: flex-end;">
-            <button type="submit" class="btn btn-primary">+ Tambah</button>
+          <div class="field">
+            <label>No. Telepon <span class="en">Phone</span></label>
+            <input type="text" id="custPhoneInput" autocomplete="off">
+          </div>
+          <div class="field full">
+            <label>Alamat <span class="en">Address</span></label>
+            <textarea id="custAddressInput"></textarea>
+          </div>
+          <div class="field" style="justify-content: flex-end; flex-direction: row; gap: 8px;">
+            <button type="submit" class="btn btn-primary" id="custSubmitBtn">+ Tambah</button>
+            <button type="button" class="btn" id="custCancelEdit" style="display:none;">Batal ubah</button>
           </div>
         </form>
       </div>
@@ -6479,19 +6530,37 @@
       key: 'customers',
       containerEl: document.getElementById('custTableArea'),
       allRows: CUSTOMERS,
-      searchFields: ['customer_id', 'on_behalf_owner'],
+      searchFields: ['customer_id', 'on_behalf_owner', 'company', 'address'],
       searchPlaceholder: 'Cari ID atau nama perusahaan...',
       renderTableHtml: (pageRows) => `
         <table class="data-table">
-          <thead><tr><th>ID Perusahaan</th><th>Atas Nama Perusahaan</th><th></th></tr></thead>
+          <thead><tr><th>Nama Perusahaan</th><th>ID Perusahaan</th><th>Atas Nama Perusahaan</th><th>Alamat / Telepon</th><th></th></tr></thead>
           <tbody>${pageRows.map(c => `
             <tr>
+              <td>${c.company ? esc(c.company) : '<span class="muted">belum diisi</span>'}</td>
               <td>${esc(c.customer_id)}</td>
               <td>${esc(c.on_behalf_owner)}</td>
-              <td><button class="btn btn-sm btn-danger" data-cust-del="${c.id}">Hapus</button></td>
+              <td>${esc(c.address) || '-'}${c.phone ? '<br><span class="muted">' + esc(c.phone) + '</span>' : ''}</td>
+              <td style="white-space:nowrap;"><button class="btn btn-sm" data-cust-edit="${c.id}">Ubah</button> <button class="btn btn-sm btn-danger" data-cust-del="${c.id}">Hapus</button></td>
             </tr>`).join('')}</tbody>
         </table>`,
       bindRowEvents: (container) => {
+        container.querySelectorAll('[data-cust-edit]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const c = CUSTOMERS.find(x => String(x.id) === btn.dataset.custEdit);
+            if (!c) return;
+            document.getElementById('custEditId').value = c.id;
+            document.getElementById('custCompanyInput').value = c.company || '';
+            document.getElementById('custIdInput').value = c.customer_id || '';
+            document.getElementById('custOwnerInput').value = c.on_behalf_owner || '';
+            document.getElementById('custPhoneInput').value = c.phone || '';
+            document.getElementById('custAddressInput').value = c.address || '';
+            document.getElementById('custFormTitle').textContent = 'Ubah Customer';
+            document.getElementById('custSubmitBtn').textContent = 'Simpan perubahan';
+            document.getElementById('custCancelEdit').style.display = '';
+            document.getElementById('custAddForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          });
+        });
         container.querySelectorAll('[data-cust-del]').forEach(btn => {
           btn.addEventListener('click', async () => {
             if (!confirm('Hapus customer ini dari master?')) return;
@@ -6507,18 +6576,26 @@
       }
     });
 
+    document.getElementById('custCancelEdit').addEventListener('click', () => renderMasterData());
     document.getElementById('custAddForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const customerId = document.getElementById('custIdInput').value.trim();
       const owner = document.getElementById('custOwnerInput').value.trim();
-      if (!customerId || !owner) return;
+      if (!customerId || !owner) { toast('ID Perusahaan dan Atas Nama Perusahaan wajib diisi', 'error'); return; }
+      const editId = document.getElementById('custEditId').value;
+      const body = {
+        customer_id: customerId, on_behalf_owner: owner,
+        company: document.getElementById('custCompanyInput').value.trim(),
+        phone: document.getElementById('custPhoneInput').value.trim(),
+        address: document.getElementById('custAddressInput').value.trim()
+      };
       try {
-        await api('/api/customers', {
-          method: 'POST',
+        await api(editId ? `/api/customers/${editId}` : '/api/customers', {
+          method: editId ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customer_id: customerId, on_behalf_owner: owner })
+          body: JSON.stringify(body)
         });
-        toast('Customer ditambahkan', 'success');
+        toast(editId ? 'Customer diperbarui' : 'Customer ditambahkan', 'success');
         renderMasterData();
       } catch (err) {
         toast(err.message, 'error');
@@ -7037,16 +7114,24 @@
     }
   }
 
-  function findOwnerByCustomerId(custId) {
-    if (!custId) return null;
-    const owners = [...new Set(CUSTOMERS.filter(c => c.customer_id === custId).map(c => c.on_behalf_owner))];
-    return owners.length === 1 ? owners[0] : null;
+  // Nama perusahaan di master; data lama yang belum diisi memakai Atas Nama Perusahaan
+  function customerCompany(c) { return String(c.company || '').trim() || String(c.on_behalf_owner || '').trim(); }
+  function customerLabel(c) {
+    const name = customerCompany(c), owner = String(c.on_behalf_owner || '').trim();
+    return `${name}${owner && owner !== name ? ' — a.n. ' + owner : ''} (${c.customer_id})`;
   }
-
-  function findCustomerIdByOwner(owner) {
-    if (!owner) return null;
-    const ids = [...new Set(CUSTOMERS.filter(c => c.on_behalf_owner === owner).map(c => c.customer_id))];
-    return ids.length === 1 ? ids[0] : null;
+  function customerSelectHtml(f) {
+    const list = [...CUSTOMERS].sort((a, b) => customerLabel(a).localeCompare(customerLabel(b), 'id'));
+    const cur = list.find(c => c.customer_id === f.customer_id && c.on_behalf_owner === f.on_behalf_owner
+      && (!f.company || customerCompany(c) === f.company))
+      || list.find(c => c.customer_id === f.customer_id && c.on_behalf_owner === f.on_behalf_owner);
+    // permintaan lama yang perusahaannya tidak ada di master tetap tampil apa adanya sampai diganti
+    const legacy = !cur && f.company ? `<option value="" selected>${esc(f.company)} (data lama, belum ada di Master Customer)</option>` : '';
+    return `<select id="customerPick">
+      ${legacy || `<option value="" ${cur ? '' : 'selected'} disabled>— Pilih perusahaan —</option>`}
+      ${list.map(c => `<option value="${c.id}" ${cur === c ? 'selected' : ''}>${esc(customerLabel(c))}</option>`).join('')}
+    </select>
+    <span class="muted" style="font-size:12px;">Belum ada di daftar? Tambahkan dulu di Master Data &rsaquo; Customer.</span>`;
   }
 
   async function init() {

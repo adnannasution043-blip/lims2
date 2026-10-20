@@ -1893,3 +1893,11 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 .field input[type="password"]:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-light); }
 .field input[type="password"]:disabled { background: var(--bg); color: var(--text-muted); }
 .um-form .field input[type="password"] { width: 100%; box-sizing: border-box; }
+
+/* Witnessed By: beberapa nama */
+#witnessList { display: grid; gap: 6px; }
+.witness-row { display: flex; gap: 6px; align-items: center; }
+.witness-row input { flex: 1; min-width: 0; }
+
+/* ID & Atas Nama Perusahaan terisi dari pilihan Perusahaan (Master Customer) */
+.field input[readonly] { background: var(--bg); color: var(--text-muted); cursor: default; }

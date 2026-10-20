@@ -180,6 +180,8 @@ async function initSchema() {
     -- No. LHU (Laporan Hasil Uji) — dibuat otomatis (format LHU-{yy}-{urutan}) begitu tahap
     -- Report Issued diselesaikan, tidak diketik manual. Tetap tersimpan walau tahap diedit lagi.
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS lhu_number TEXT;
+    -- Welder's Name diisi sekali per coupon di Permintaan Uji (dulu di tiap Lembar Hasil Uji)
+    ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS welder_name TEXT;
 
     -- Kolom distribusi lama (satu status per Work Order) — sudah digantikan tabel
     -- lhu_distributions di bawah (riwayat, bisa kirim berkali-kali). Dibiarkan ada (tidak dipakai
@@ -475,6 +477,11 @@ async function initSchema() {
       created_at TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(customer_id, on_behalf_owner)
     );
+    -- Perusahaan di Permintaan Uji dipilih dari master ini (tidak diketik), jadi master juga menyimpan nama perusahaan,
+    -- alamat & telepon yang ikut terisi saat dipilih
+    ALTER TABLE customers ADD COLUMN IF NOT EXISTS company TEXT;
+    ALTER TABLE customers ADD COLUMN IF NOT EXISTS address TEXT;
+    ALTER TABLE customers ADD COLUMN IF NOT EXISTS phone TEXT;
 
     -- Pengecekan Spesimen (DPI-LP-FR-26-1..4). One sheet per test category
     -- (Tensile Flat/Round, Bending Flat/Round, Charpy Impact) — a single

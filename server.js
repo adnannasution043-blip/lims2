@@ -262,8 +262,8 @@ async function insertCouponRows(client, testRequestId, couponRows) {
          material_size, outside_diameter, thickness, heat_number, welding_process,
          welding_position, ref_code, no_wps, testing_purpose, note,
          charpy_temp, charpy_wm, charpy_bm, charpy_haz, charpy_fl, charpy_fl2,
-         charpy_optional_label, charpy_optional, hardness_spot
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+         charpy_optional_label, charpy_optional, hardness_spot, welder_name
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        RETURNING id`,
       [
         testRequestId, rowNo, JSON.stringify(row.coupon_type || []), row.coupon_type_other || '',
@@ -273,7 +273,7 @@ async function insertCouponRows(client, testRequestId, couponRows) {
         row.testing_purpose || '', row.note || '',
         row.charpy_temp || '', row.charpy_wm || '', row.charpy_bm || '', row.charpy_haz || '',
         row.charpy_fl || '', row.charpy_fl2 || '', row.charpy_optional_label || '', row.charpy_optional || '',
-        row.hardness_spot || ''
+        row.hardness_spot || '', String(row.welder_name || '').trim().slice(0, 200)
       ]
     );
 
@@ -437,10 +437,19 @@ app.get('/api/test-methods', async (req, res) => {
   }
 });
 
+const CUSTOMER_COLS = 'id, customer_id, on_behalf_owner, company, address, phone';
+const customerFields = b => ({
+  customer_id: String(b.customer_id || '').trim(),
+  on_behalf_owner: String(b.on_behalf_owner || '').trim(),
+  company: String(b.company || '').trim().slice(0, 300),
+  address: String(b.address || '').trim().slice(0, 1000),
+  phone: String(b.phone || '').trim().slice(0, 100)
+});
+
 app.get('/api/customers', async (req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, customer_id, on_behalf_owner FROM customers ORDER BY id ASC`
+      `SELECT ${CUSTOMER_COLS} FROM customers ORDER BY id ASC`
     );
     res.json({ customers: rows });
   } catch (err) {
@@ -450,19 +459,21 @@ app.get('/api/customers', async (req, res) => {
 });
 
 app.post('/api/customers', async (req, res) => {
-  const b = req.body || {};
-  const customerId = (b.customer_id || '').trim();
-  const owner = (b.on_behalf_owner || '').trim();
-  if (!customerId || !owner) {
+  const f = customerFields(req.body || {});
+  if (!f.customer_id || !f.on_behalf_owner) {
     return res.status(400).json({ error: 'ID Perusahaan dan Atas Nama Perusahaan tidak boleh kosong' });
   }
   try {
+    // pasangan ID + Atas Nama yang sudah ada dilengkapi (nama perusahaan/alamat/telepon yang diisi menimpa yang lama)
     await pool.query(
-      `INSERT INTO customers (customer_id, on_behalf_owner) VALUES ($1, $2)
-       ON CONFLICT (customer_id, on_behalf_owner) DO NOTHING`,
-      [customerId, owner]
+      `INSERT INTO customers (customer_id, on_behalf_owner, company, address, phone) VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (customer_id, on_behalf_owner) DO UPDATE SET
+         company = COALESCE(NULLIF(EXCLUDED.company, ''), customers.company),
+         address = COALESCE(NULLIF(EXCLUDED.address, ''), customers.address),
+         phone = COALESCE(NULLIF(EXCLUDED.phone, ''), customers.phone)`,
+      [f.customer_id, f.on_behalf_owner, f.company, f.address, f.phone]
     );
-    const { rows } = await pool.query(`SELECT id, customer_id, on_behalf_owner FROM customers ORDER BY id ASC`);
+    const { rows } = await pool.query(`SELECT ${CUSTOMER_COLS} FROM customers ORDER BY id ASC`);
     res.status(201).json({ customers: rows });
   } catch (err) {
     console.error(err);
@@ -470,10 +481,30 @@ app.post('/api/customers', async (req, res) => {
   }
 });
 
+app.put('/api/customers/:id', async (req, res) => {
+  const f = customerFields(req.body || {});
+  if (!f.customer_id || !f.on_behalf_owner) {
+    return res.status(400).json({ error: 'ID Perusahaan dan Atas Nama Perusahaan tidak boleh kosong' });
+  }
+  try {
+    const r = await pool.query(
+      `UPDATE customers SET customer_id = $1, on_behalf_owner = $2, company = $3, address = $4, phone = $5 WHERE id = $6`,
+      [f.customer_id, f.on_behalf_owner, f.company, f.address, f.phone, req.params.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'Customer tidak ditemukan' });
+    const { rows } = await pool.query(`SELECT ${CUSTOMER_COLS} FROM customers ORDER BY id ASC`);
+    res.json({ customers: rows });
+  } catch (err) {
+    if (err && err.code === '23505') return res.status(400).json({ error: 'Pasangan ID Perusahaan + Atas Nama Perusahaan itu sudah ada di master' });
+    console.error(err);
+    res.status(500).json({ error: 'Gagal menyimpan customer' });
+  }
+});
+
 app.delete('/api/customers/:id', async (req, res) => {
   try {
     await pool.query(`DELETE FROM customers WHERE id = $1`, [req.params.id]);
-    const { rows } = await pool.query(`SELECT id, customer_id, on_behalf_owner FROM customers ORDER BY id ASC`);
+    const { rows } = await pool.query(`SELECT ${CUSTOMER_COLS} FROM customers ORDER BY id ASC`);
     res.json({ customers: rows });
   } catch (err) {
     console.error(err);
