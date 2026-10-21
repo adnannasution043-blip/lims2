@@ -264,6 +264,42 @@
     location.reload();
   }
 
+  // Gambar tanda tangan / stempel diubah ke PNG di browser: diperkecil (sisi terpanjang maks. 900 px) dan, bila diminta,
+  // latar putih/terang dibuat transparan supaya hasil scan atau foto di kertas putih menyatu dengan form.
+  function imageToPng(file, removeWhite) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 900 / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * scale)); c.height = Math.max(1, Math.round(img.height * scale));
+        const ctx = c.getContext('2d');
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        if (removeWhite) {
+          const d = ctx.getImageData(0, 0, c.width, c.height);
+          for (let i = 0; i < d.data.length; i += 4) {
+            const lum = (d.data[i] + d.data[i + 1] + d.data[i + 2]) / 3;
+            if (lum > 225) d.data[i + 3] = 0;
+            else if (lum > 185) d.data[i + 3] = Math.round(d.data[i + 3] * (225 - lum) / 40);   // tepi halus
+          }
+          ctx.putImageData(d, 0, 0);
+        }
+        URL.revokeObjectURL(url);
+        c.toBlob(b => (b ? resolve(b) : reject(new Error('Gagal mengubah gambar'))), 'image/png');
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('File bukan gambar yang bisa dibaca')); };
+      img.src = url;
+    });
+  }
+
+  async function uploadPng(path, file, removeWhite) {
+    if (!/^image\//.test(file.type)) throw new Error('Pilih file gambar (PNG atau JPG)');
+    const blob = await imageToPng(file, removeWhite);
+    if (blob.size > 1024 * 1024) throw new Error('Gambar terlalu besar setelah diproses (maks. 1 MB)');
+    return api(path, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: blob });
+  }
+
   function openAccountModal() {
     const u = AUTH.user;
     if (!u) return;
@@ -275,6 +311,21 @@
           <div class="field"><label>Kata sandi baru</label><input type="password" id="acNext" autocomplete="new-password" placeholder="Minimal 8 karakter"></div>
           <div class="field"><label>Ulangi kata sandi baru</label><input type="password" id="acConfirm" autocomplete="new-password"></div>
           <button type="button" class="btn btn-sm" id="acLogout" style="justify-self:start;">Keluar dari akun ini</button>
+          <div class="ac-sig">
+            <p class="ac-sig-title">Tanda tangan otomatis <span class="muted">untuk Review &amp; Approval dan LHU</span></p>
+            <div class="field"><label>Jabatan <span class="en">tercetak di bawah nama pada LHU</span></label>
+              <div class="ac-row"><input type="text" id="acTitle" value="${esc(u.job_title || '')}" placeholder="mis. Technical Manager"><button type="button" class="btn btn-sm" id="acTitleSave">Simpan jabatan</button></div></div>
+            <div class="field"><label>Gambar tanda tangan</label>
+              <div id="acSigBox">${u.has_signature ? `<img class="sig-preview" src="/api/auth/signature?v=${Date.now()}" alt="Tanda tangan saya">` : '<span class="muted">Belum ada.</span>'}</div>
+              <label class="check-inline"><input type="checkbox" id="acSigWhite" checked> Buang latar putih (untuk hasil scan / foto di kertas)</label>
+              <div class="ac-row">
+                <input type="file" id="acSigFile" accept="image/png,image/jpeg,image/webp" hidden>
+                <button type="button" class="btn btn-sm btn-primary" id="acSigUpload">Unggah gambar tanda tangan</button>
+                ${u.has_signature ? '<button type="button" class="btn btn-sm btn-danger" id="acSigDelete">Hapus</button>' : ''}
+              </div>
+              <p class="um-help">Gunakan tanda tangan asli di kertas putih (scan atau foto lurus), atau PNG berlatar transparan. Hanya Anda yang bisa memakai tanda tangan ini.</p>
+            </div>
+          </div>
         </div>`,
       onSave: async (m) => {
         const cur = m.querySelector('#acCurrent').value, next = m.querySelector('#acNext').value, conf = m.querySelector('#acConfirm').value;
@@ -285,6 +336,27 @@
       }
     });
     wrap.querySelector('#acLogout').addEventListener('click', doLogout);
+    const refreshAfter = r => { if (r && r.user) AUTH.user = { ...AUTH.user, ...r.user }; };
+    wrap.querySelector('#acTitleSave').addEventListener('click', async () => {
+      try { refreshAfter(await api('/api/auth/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ job_title: wrap.querySelector('#acTitle').value }) })); toast('Jabatan disimpan', 'success'); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+    const sigFile = wrap.querySelector('#acSigFile');
+    wrap.querySelector('#acSigUpload').addEventListener('click', () => sigFile.click());
+    sigFile.addEventListener('change', async () => {
+      const file = sigFile.files[0]; sigFile.value = '';
+      if (!file) return;
+      try {
+        refreshAfter(await uploadPng('/api/auth/signature', file, wrap.querySelector('#acSigWhite').checked));
+        wrap.querySelector('#acSigBox').innerHTML = `<img class="sig-preview" src="/api/auth/signature?v=${Date.now()}" alt="Tanda tangan saya">`;
+        toast('Tanda tangan disimpan', 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    const sigDel = wrap.querySelector('#acSigDelete');
+    if (sigDel) sigDel.addEventListener('click', async () => {
+      try { refreshAfter(await api('/api/auth/signature', { method: 'DELETE' })); wrap.querySelector('#acSigBox').innerHTML = '<span class="muted">Belum ada.</span>'; sigDel.remove(); toast('Tanda tangan dihapus', 'success'); }
+      catch (err) { toast(err.message, 'error'); }
+    });
   }
 
   // Menu yang tidak boleh dilihat role ini disembunyikan; kartu akun ditambahkan di atas tombol Keluar
@@ -2548,19 +2620,50 @@
       </div>`;
   }
 
+  // Tanda tangan otomatis: gambar, nama & jabatan dari akun yang sedang login (diunggah di Akun Saya)
+  function autoSigPanelHtml(a, mode) {
+    const u = AUTH.user;
+    if (!u) return '<p class="muted" style="margin-top:10px;">Tanda tangan otomatis hanya bisa dipakai setelah login.</p>';
+    const saved = mode === 'auto' && a.signature;
+    const img = saved ? a.signature : (u.has_signature ? '/api/auth/signature?v=' + Date.now() : '');
+    return `<div class="auto-sig">
+      ${img ? `<img class="sig-preview" src="${img}" alt="Tanda tangan ${esc(u.name)}">` : '<p class="muted">Akun Anda belum punya gambar tanda tangan.</p>'}
+      <div><strong>${esc(saved ? a.name : u.name)}</strong><br><span class="muted">${esc((saved ? a.title : u.job_title) || 'Jabatan belum diisi')}</span></div>
+      <button type="button" class="btn btn-sm" data-open-account>Atur tanda tangan &amp; jabatan di Akun Saya</button>
+    </div>`;
+  }
+
   function approvalCardHtml(t) {
     const a = t.approval || {};
+    const mode = a.sig_mode === 'auto' ? 'auto' : 'manual';
+    // belum pernah disimpan: stempel aktif secara bawaan
+    const stampOn = (a.status || a.name || a.signature) ? !!a.stamp : true;
     return `
       <div class="card">
         <p class="section-title">Approval <span class="en">— keputusan atas laporan</span></p>
         <div class="field"><label>Keputusan</label>
           ${woSeg('approval_status', '', a.status || '', [['', 'Menunggu'], ['approved', 'Disetujui'], ['rejected', 'Ditolak / Revisi']])}
         </div>
-        <div class="form-grid" style="margin-top:14px;">
-          <div class="field"><label>Nama Approver</label><input type="text" name="approver_name" value="${esc(a.name)}"></div>
-          <div class="field"><label>Tanggal Approval <span class="en">Date</span></label><input type="date" name="approval_date" value="${esc(a.date)}"></div>
+        <div class="field" style="margin-top:14px;"><label>Tanggal Approval <span class="en">Date</span></label><input type="date" name="approval_date" value="${esc(a.date)}" style="max-width:260px;"></div>
+        <div class="field" style="margin-top:14px;"><label>Cara Tanda Tangan</label>
+          ${woSeg('approval_sig_mode', 'data-sig-mode', mode, [['manual', 'Manual (digambar)'], ['auto', 'Otomatis (dari akun saya)']])}
         </div>
-        <div class="field" style="margin-top:14px;">${signaturePadHtml('approver_signature', 'Tanda Tangan', 'Signature', a.signature)}</div>
+        <div data-sig-panel="manual" ${mode === 'manual' ? '' : 'hidden'}>
+          <div class="form-grid" style="margin-top:14px;">
+            <div class="field"><label>Nama Approver</label><input type="text" name="approver_name" value="${esc(a.name)}"></div>
+            <div class="field"><label>Jabatan <span class="en">tercetak di bawah nama</span></label><input type="text" name="approver_title" value="${esc(a.title)}" placeholder="mis. Technical Manager"></div>
+          </div>
+          <div class="field" style="margin-top:14px;">${signaturePadHtml('approver_signature', 'Tanda Tangan', 'Signature', mode === 'manual' ? a.signature : '')}</div>
+        </div>
+        <div data-sig-panel="auto" ${mode === 'auto' ? '' : 'hidden'}>
+          ${autoSigPanelHtml(a, mode)}
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <label class="check-inline"><input type="checkbox" name="approval_stamp" value="1" ${stampOn ? 'checked' : ''} ${AUTH.company_stamp || a.stamp_image ? '' : 'disabled'}> Bubuhkan stempel perusahaan pada LHU</label>
+          ${AUTH.company_stamp || a.stamp_image
+            ? `<img class="stamp-preview" src="${a.stamp && a.stamp_image ? a.stamp_image : '/api/company-stamp?v=' + Date.now()}" alt="Stempel perusahaan">`
+            : '<span class="muted">Stempel perusahaan belum diunggah. Administrator mengunggahnya di Pengaturan &rsaquo; Stempel Perusahaan.</span>'}
+        </div>
         <div class="field" style="margin-top:14px;"><label>Catatan Approval</label><textarea name="approval_notes">${esc(a.notes)}</textarea></div>
       </div>`;
   }
@@ -4042,6 +4145,11 @@
     });
     form.addEventListener('submit', onWoTaskSubmit);
 
+    form.querySelectorAll('input[data-sig-mode]').forEach(r => r.addEventListener('change', () => {
+      form.querySelectorAll('[data-sig-panel]').forEach(p => { p.hidden = p.dataset.sigPanel !== r.value; });
+    }));
+    form.querySelectorAll('[data-open-account]').forEach(b => b.addEventListener('click', openAccountModal));
+
     const revokeBtn = document.getElementById('btnRevokeLhu');
     if (revokeBtn) revokeBtn.addEventListener('click', async () => {
       const t = state.woTask;
@@ -5006,6 +5114,26 @@
     });
   }
 
+  function bindStampCard() {
+    const file = document.getElementById('stampFile');
+    if (!file) return;
+    const show = () => {
+      document.getElementById('stampBox').innerHTML = AUTH.company_stamp ? `<img class="stamp-preview" src="/api/company-stamp?v=${Date.now()}" alt="Stempel perusahaan">` : '<span class="muted">Belum diunggah.</span>';
+      document.getElementById('stampDelete').hidden = !AUTH.company_stamp;
+    };
+    document.getElementById('stampUpload').addEventListener('click', () => file.click());
+    file.addEventListener('change', async () => {
+      const f = file.files[0]; file.value = '';
+      if (!f) return;
+      try { await uploadPng('/api/company-stamp', f, document.getElementById('stampWhite').checked); AUTH.company_stamp = true; show(); toast('Stempel disimpan', 'success'); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+    document.getElementById('stampDelete').addEventListener('click', async () => {
+      try { await api('/api/company-stamp', { method: 'DELETE' }); AUTH.company_stamp = false; show(); toast('Stempel dihapus', 'success'); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+  }
+
   async function renderSettings() {
     pageTitle.textContent = 'Pengaturan';
     pageSubtitle.textContent = 'Pengaturan aplikasi DETECH LIMS';
@@ -5027,8 +5155,21 @@
       </div>` : '';
 
     const auditCard = await auditCardHtml();
+    const stampCard = `
+      <div class="card">
+        <p class="card-title">Stempel Perusahaan</p>
+        <p class="card-desc">Dibubuhkan pada LHU bila approver mencentang &ldquo;Bubuhkan stempel perusahaan&rdquo; di Review &amp; Approval, menimpa sebagian tanda tangan. LHU yang sudah terbit tetap memakai stempel saat disetujui.</p>
+        <div id="stampBox" style="margin:10px 0;">${AUTH.company_stamp ? `<img class="stamp-preview" src="/api/company-stamp?v=${Date.now()}" alt="Stempel perusahaan">` : '<span class="muted">Belum diunggah.</span>'}</div>
+        <label class="check-inline"><input type="checkbox" id="stampWhite" checked> Buang latar putih (untuk hasil scan / foto cap di kertas)</label>
+        <div class="ac-row" style="margin-top:8px;">
+          <input type="file" id="stampFile" accept="image/png,image/jpeg,image/webp" hidden>
+          <button type="button" class="btn btn-primary" id="stampUpload" ${can('pengaturan', 'edit') ? '' : 'disabled'}>Unggah stempel</button>
+          <button type="button" class="btn btn-danger" id="stampDelete" ${AUTH.company_stamp && can('pengaturan', 'edit') ? '' : 'hidden'}>Hapus stempel</button>
+        </div>
+      </div>`;
     contentEl.innerHTML = `
       ${authCard}
+      ${stampCard}
       ${auditCard}
       <div class="card">
         <p class="card-title" style="color: var(--danger);">Reset Data</p>
@@ -5049,6 +5190,7 @@
       </div>`;
 
     bindAuditTable();
+    bindStampCard();
     const toggleAuth = document.getElementById('btnToggleAuth');
     if (toggleAuth) toggleAuth.addEventListener('click', async () => {
       const turnOn = !authInfo.enforced;

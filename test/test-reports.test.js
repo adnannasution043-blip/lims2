@@ -32,6 +32,19 @@ const MAP = { 'Bend Root': 'bending', 'Bend Face': 'bending', 'Tensile Test': 't
   ['X-CP1', 'X-CP2', '506.71', '510.7', 'DE.1/TR/16/PRESS'].forEach(t => assert.ok(html.includes(t), 'cetak memuat ' + t));
 }
 
+// ---- tanda tangan approval di LHU: nama & jabatan ikut approver, stempel menimpa tanda tangan ----
+{
+  const base = { test_request: { job_number: 'DE.1.26.0042' }, coupon: {}, report_no: 'DE.1/1026/0001', test_name: 'Tensile Test', template: 'tn-red', rows: [{ marking_specimen: 'A-TS1' }] };
+  const sig = 'data:image/png;base64,SIG', stamp = 'data:image/png;base64,STAMP';
+  let html = renderTestReportPrintHtml({ ...base, approved_signatory: { status: 'approved', name: 'Danang Antok Prabroro', title: 'Quality Manager', signature: sig, stamp } });
+  ['Danang Antok Prabroro', 'Quality Manager', 'base64,SIG', 'class="rt-stamp"', 'base64,STAMP'].forEach(t => assert.ok(html.includes(t), 'LHU memuat ' + t));
+  assert.ok(!html.includes('Pangestu') && !html.includes('Technical Manager'), 'nama bawaan form diganti approver');
+  html = renderTestReportPrintHtml({ ...base, approved_signatory: { status: 'approved', name: 'Danang', title: '', signature: sig, stamp: null } });
+  assert.ok(!html.includes('class="rt-stamp"'), 'tanpa stempel bila tidak dipilih');
+  html = renderTestReportPrintHtml({ ...base, approved_signatory: { status: '', name: 'Draft', signature: null, stamp: null } });
+  assert.ok(html.includes('Pangestu'), 'belum disetujui: nama bawaan form tetap');
+}
+
 // ---- reportTitle ----
 assert.strictEqual(reportTitle('bending', 'Bend Root'), 'Root Bend Test');
 assert.strictEqual(reportTitle('bending', 'Unknown'), 'BENDING TEST (TRANSVERSE WELDING)');

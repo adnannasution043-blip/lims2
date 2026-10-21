@@ -272,6 +272,13 @@ async function initSchema() {
     );
 
     CREATE INDEX IF NOT EXISTS idx_wo_tasks_wo ON work_order_tasks(work_order_id);
+    -- Tanda tangan approval: manual (digambar) atau otomatis (gambar tersimpan di akun approver), plus stempel perusahaan.
+    -- Gambar tanda tangan & stempel disalin ke sini saat disimpan, supaya LHU yang sudah terbit tidak ikut berubah bila
+    -- gambar di akun / Pengaturan diganti kemudian.
+    ALTER TABLE work_order_tasks ADD COLUMN IF NOT EXISTS approval_sig_mode TEXT;
+    ALTER TABLE work_order_tasks ADD COLUMN IF NOT EXISTS approver_title TEXT;
+    ALTER TABLE work_order_tasks ADD COLUMN IF NOT EXISTS approval_stamp BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE work_order_tasks ADD COLUMN IF NOT EXISTS approval_stamp_image BYTEA;
 
     -- Foto / dokumen evidence (mis. kondisi sampel sebelum & sesudah marking di tahap Receiving).
     -- Disimpan langsung di Postgres (BYTEA) karena disk server bersifat sementara. coupon_row_no
@@ -443,6 +450,18 @@ async function initSchema() {
       active BOOLEAN NOT NULL DEFAULT TRUE,
       last_login_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
+    -- Jabatan & gambar tanda tangan (PNG) milik tiap akun, untuk tanda tangan otomatis di Review & Approval / LHU
+    ALTER TABLE app_users ADD COLUMN IF NOT EXISTS job_title TEXT;
+    ALTER TABLE app_users ADD COLUMN IF NOT EXISTS signature_image BYTEA;
+
+    -- Berkas aplikasi tunggal (mis. stempel perusahaan 'company_stamp'), diunggah Administrator di Pengaturan
+    CREATE TABLE IF NOT EXISTS app_files (
+      key TEXT PRIMARY KEY,
+      mime_type TEXT NOT NULL,
+      data BYTEA NOT NULL,
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 

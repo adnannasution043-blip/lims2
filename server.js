@@ -30,7 +30,7 @@ const auth = createAuth(pool);
 app.use(auth.middleware());
 // Jejak aktivitas: semua perubahan data (termasuk login & yang ditolak kunci) dicatat setelah selesai (lib/audit.js).
 app.use(auditTrail(pool));
-auth.registerRoutes(app);
+auth.registerRoutes(app, { rawBody: express.raw({ type: () => true, limit: '2mb' }) });
 registerAuditRoutes(app, { pool });
 // Setelah LHU terbit, Permintaan Uji / Work Order / hasil uji / pengecekan spesimen terkunci (lihat lib/integrity.js).
 app.use(lockGuard(pool));

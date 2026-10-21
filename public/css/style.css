@@ -1926,3 +1926,13 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 .seg-opt.seg-accepted input:checked + span { background: var(--success); color: #fff; }
 .seg-opt.seg-revision input:checked + span { background: #d68910; color: #fff; }
 .seg-opt.seg-rejected input:checked + span { background: var(--danger); color: #fff; }
+
+/* Tanda tangan otomatis & stempel perusahaan */
+.check-inline { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; }
+.sig-preview { display: block; max-width: 280px; max-height: 110px; object-fit: contain; background: #fff; border: 1px dashed var(--border); border-radius: 6px; padding: 6px; }
+.stamp-preview { display: block; width: 120px; height: 120px; object-fit: contain; background: #fff; border: 1px dashed var(--border); border-radius: 6px; padding: 6px; margin-top: 8px; }
+.auto-sig { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+.ac-sig { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 4px; display: grid; gap: 10px; }
+.ac-sig-title { font-weight: 700; margin: 0; }
+.ac-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ac-row input[type="text"] { flex: 1 1 200px; min-width: 0; }

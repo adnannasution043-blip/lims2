@@ -14,7 +14,8 @@ const roles = [
 let users = [];
 let uid = 0;
 const addUser = (username, password, roleId, active = true) => { const u = { id: ++uid, name: username.toUpperCase(), username, email: '', password_hash: U.hashPassword(password), role_id: roleId, active, last_login_at: null }; users.push(u); return u; };
-const row = u => { const r = roles.find(x => x.id === u.role_id); return { ...u, role_name: r && r.name, permissions: r && r.permissions, is_system: r && r.is_system }; };
+const row = u => { const r = roles.find(x => x.id === u.role_id); return { ...u, role_name: r && r.name, permissions: r && r.permissions, is_system: r && r.is_system, has_signature: !!u.signature_image }; };
+const files = {};
 const pool = {
   query: async (sql, p = []) => {
     sql = sql.replace(/\s+/g, ' ').trim();
@@ -27,6 +28,14 @@ const pool = {
     if (/^UPDATE app_users SET last_login_at/.test(sql)) { users.find(u => u.id === Number(p[0])).last_login_at = 'now'; return { rows: [] }; }
     if (/^UPDATE app_users SET password_hash = \$1, updated_at = NOW\(\) WHERE id = \$2/.test(sql)) { users.find(u => u.id === Number(p[1])).password_hash = p[0]; return { rows: [] }; }
     if (/^SELECT COUNT\(\*\) AS n FROM app_users u JOIN roles r/.test(sql)) return { rows: [{ n: String(users.filter(u => u.active && roles.find(r => r.id === u.role_id).is_system).length) }] };
+    if (/^SELECT 1 FROM app_files WHERE key = 'company_stamp'/.test(sql)) return { rows: files.company_stamp ? [{}] : [] };
+    if (/^SELECT data FROM app_files WHERE key = 'company_stamp'/.test(sql)) return { rows: files.company_stamp ? [{ data: files.company_stamp }] : [] };
+    if (/^INSERT INTO app_files/.test(sql)) { files.company_stamp = p[0]; return { rows: [] }; }
+    if (/^DELETE FROM app_files/.test(sql)) { delete files.company_stamp; return { rows: [] }; }
+    if (/^UPDATE app_users SET job_title = \$1/.test(sql)) { users.find(u => u.id === Number(p[1])).job_title = p[0]; return { rows: [] }; }
+    if (/^UPDATE app_users SET signature_image = \$1/.test(sql)) { users.find(u => u.id === Number(p[1])).signature_image = p[0]; return { rows: [] }; }
+    if (/^UPDATE app_users SET signature_image = NULL/.test(sql)) { users.find(u => u.id === Number(p[0])).signature_image = null; return { rows: [] }; }
+    if (/^SELECT signature_image FROM app_users WHERE id = \$1/.test(sql)) return { rows: users.filter(u => u.id === Number(p[0])).map(u => ({ signature_image: u.signature_image || null })) };
     if (/^SELECT id FROM roles WHERE is_system = TRUE/.test(sql)) return { rows: roles.filter(r => r.is_system).map(r => ({ id: r.id })) };
     if (/^SELECT id FROM app_users WHERE username = \$1/.test(sql)) return { rows: users.filter(u => u.username === p[0]).map(u => ({ id: u.id })) };
     if (/^UPDATE app_users SET password_hash = \$1, role_id = \$2, active = TRUE/.test(sql)) { const u = users.find(x => x.id === Number(p[2])); Object.assign(u, { password_hash: p[0], role_id: p[1], active: true }); return { rows: [] }; }
@@ -87,9 +96,9 @@ assert.deepStrictEqual(A.parseCookies('a=1; detech_sid=abc.def; x=%20y'), { a: '
 // ---- harness: app palsu + middleware ----
 const auth = A.createAuth(pool);
 const routes = [];
-const reg = method => (p, h) => { routes.push({ method, regex: new RegExp('^' + p.replace(/:[a-z]+/g, '([^/]+)') + '$'), h }); };
+const reg = method => (p, ...hs) => { routes.push({ method, regex: new RegExp('^' + p.replace(/:[a-z]+/g, '([^/]+)') + '$'), h: hs[hs.length - 1] }); };
 const app = { get: reg('GET'), post: reg('POST'), put: reg('PUT'), delete: reg('DELETE') };
-auth.registerRoutes(app);
+auth.registerRoutes(app, { rawBody: (req, res, next) => next() });
 const mw = auth.middleware();
 let counter = 0;
 async function call(method, path, { cookie, body, ip } = {}) {
@@ -134,7 +143,10 @@ const login = async (username, password, ip) => call('POST', '/api/auth/login', 
   let r = await call('GET', '/js/app.js'); assert.strictEqual(r.status, 200);
   r = await call('GET', '/api/requests'); assert.strictEqual(r.status, 401); assert.strictEqual(r.body.code, 'AUTH_REQUIRED');
   r = await call('GET', '/test-reports/1/print'); assert.strictEqual(r.status, 401); assert.ok(/login/i.test(r.body));
-  r = await call('GET', '/api/auth/me'); assert.deepStrictEqual([r.status, r.body.enforced, r.body.user], [200, true, null]);
+  r = await call('GET', '/api/auth/me'); assert.deepStrictEqual([r.status, r.body.enforced, r.body.user, r.body.company_stamp], [200, true, null, false]);
+  // tanda tangan sendiri butuh login; stempel boleh dilihat, tidak boleh diubah tanpa login
+  assert.strictEqual((await call('GET', '/api/auth/signature')).status, 401);
+  assert.strictEqual((await call('POST', '/api/company-stamp')).status, 401);
   // huruf besar tidak boleh melewati pemeriksaan login (Express 4 tidak peka huruf secara bawaan)
   for (const p of ['/API/requests', '/Api/work-orders/1', '/TEST-REPORTS/1/print', '/Requests/1/print']) { r = await call('GET', p); assert.strictEqual(r.status, 401, p); }
 
@@ -252,5 +264,22 @@ const login = async (username, password, ip) => call('POST', '/api/auth/login', 
   for (let i = 0; i < 15; i++) { r = await login('master', 'tebak-' + i, '5.5.5.' + i); assert.strictEqual(r.status, 401, 'gagal ke-' + (i + 6)); }
   r = await login('master', 'master-pass-1', '4.4.4.4'); assert.strictEqual(r.status, 429, 'username terkunci lintas IP');
   r = await login('citra', 'penguji-pass-1', '4.4.4.4'); assert.strictEqual(r.status, 200, 'username lain tidak terpengaruh');
+  // ---- Akun Saya: jabatan & tanda tangan (PNG); stempel perusahaan (hanya pengaturan) ----
+  const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+  const ckSig = cookieOf(await login('citra', 'penguji-pass-1'));
+  r = await call('PUT', '/api/auth/profile', { cookie: ckSig, body: { job_title: 'Technical Manager' } });
+  assert.strictEqual(r.body.user.job_title, 'Technical Manager');
+  r = await call('POST', '/api/auth/signature', { cookie: ckSig, body: Buffer.from('GIF89a') });
+  assert.strictEqual(r.status, 400, 'bukan PNG ditolak');
+  r = await call('POST', '/api/auth/signature', { cookie: ckSig, body: PNG });
+  assert.strictEqual(r.status, 201); assert.strictEqual(r.body.user.has_signature, true);
+  r = await call('GET', '/api/auth/signature', { cookie: ckSig }); assert.strictEqual(r.status, 200);
+  r = await call('DELETE', '/api/auth/signature', { cookie: ckSig }); assert.strictEqual(r.body.user.has_signature, false);
+  assert.strictEqual((await call('POST', '/api/company-stamp', { cookie: ckSig, body: PNG })).status, 403, 'non-admin tidak boleh mengganti stempel');
+  const ackS = cookieOf(await login('admin', 'admin-pass-123'));
+  assert.strictEqual((await call('POST', '/api/company-stamp', { cookie: ackS, body: PNG })).status, 201);
+  r = await call('GET', '/api/auth/me', { cookie: ckSig }); assert.strictEqual(r.body.company_stamp, true);
+  assert.strictEqual((await call('GET', '/api/company-stamp', { cookie: ckSig })).status, 200, 'semua pengguna bisa melihat stempel');
+
   console.log('AUTH OK');
 })().catch(e => { console.error(e); process.exit(1); });

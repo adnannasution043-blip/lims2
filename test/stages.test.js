@@ -65,4 +65,12 @@ assert.deepStrictEqual(rep2.items.map(i => i.result), ['accepted', 'accepted']);
 assert.strictEqual(rep2.extra.report_nos[0].preliminary_url, '/work-orders/2/preliminary/1');
 assert.strictEqual(rep2.extra.customer.label, 'Diterima customer');
 
+// Review & Approval: Disetujui wajib ada tanda tangan (manual / otomatis) dan nama approver
+const revCtx = { sheets: [], codes: {}, testReports: [], statuses: { preparation: 'final', testing: 'final', reporting: 'final' }, tasks: {} };
+const checks = { identity_ok: 'Y', signatures_complete: 'Y', ready_to_send: 'Y' };
+const revProbs = t => evalStage('review', wo2, { data: { checks }, ...t }, revCtx).problems;
+assert.ok(revProbs({ approval_status: 'approved', approver_name: 'Danang' }).some(p => /Tanda tangan approver belum ada/.test(p)));
+assert.ok(revProbs({ approval_status: 'approved', approver_signature: Buffer.from('x') }).some(p => /Nama approver/.test(p)));
+assert.ok(!revProbs({ approval_status: 'approved', approver_name: 'Danang', approver_signature: Buffer.from('x') }).some(p => /approver/i.test(p)));
+
 console.log('stages OK');
