@@ -37,6 +37,7 @@ const pool = {
     if (/^SELECT COUNT\(\*\) AS n FROM lhu_revocations/.test(q)) return { rows: [{ n: '1' }] };
     if (/^INSERT INTO lhu_distributions/.test(q)) { state.inserted.push(p); return { rows: [{ id: 9, work_order_id: p[0] }] }; }
     if (/^SELECT id FROM test_reports WHERE test_request_id = \$1 AND coupon_row_no = \$2 AND status = 'final'/.test(q)) return { rows: state.reports.filter(r => r.coupon_row_no === p[1] && r.status === 'final').map(r => ({ id: r.id })) };
+    if (/^SELECT id FROM test_reports WHERE test_request_id = \$1 AND coupon_row_no = \$2 ORDER BY/.test(q)) return { rows: state.reports.filter(r => r.coupon_row_no === p[1]).map(r => ({ id: r.id })) };
     throw new Error('query tidak dikenal: ' + q.slice(0, 120));
   }
 };
@@ -90,6 +91,18 @@ const call = (key, params, body) => new Promise(resolve => {
   assert.deepStrictEqual(printed, [5]);
   assert.ok(r.body.includes('Laporan Hasil Uji DE.1/1026/0001'));
   assert.ok(r.body.includes('1 of 1'));
+
+  // Preliminary Report: semua Lembar coupon (termasuk Draft), tanpa logo & tanda tangan, dengan watermark
+  printed.length = 0;
+  r = await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '1' });
+  assert.strictEqual(r.status, 200);
+  assert.deepStrictEqual(printed, [5, 6]);
+  assert.ok(r.body.includes('PRELIMINARY REPORT'));
+  assert.ok(!r.body.includes('class="rt-img"'), 'logo DETECH & KAN tidak dicetak');
+  assert.ok(!/Approved Signatory|Technical Manager|Pangestu/.test(r.body), 'blok tanda tangan approval kosong');
+  const official = await call('GET /lhu-reports/:id/print', { id: '1-1' });
+  assert.ok(official.body.includes('class="rt-img"') && official.body.includes('Approved Signatory') && !official.body.includes('PRELIMINARY'));
+  assert.strictEqual((await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '7' })).status, 404);
 
   console.log('LHU OK');
 })().catch(e => { console.error(e); process.exit(1); });

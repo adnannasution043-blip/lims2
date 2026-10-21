@@ -2449,9 +2449,38 @@
       </div>`;
   }
 
+  // Reporting = Preliminary Report untuk customer (permintaan klien): unduh per coupon, catat tanggapan customer.
+  // Hanya "Diterima" yang membuat tahap ini bisa diselesaikan dan lanjut ke Review & Approval internal.
   function reportingBodyHtml(t) {
     const s = t.stats;
+    const cust = t.extra.customer || {};
     return `
+      <div class="card">
+        <div class="task-card-head">
+          <p class="section-title">Preliminary Report <span class="en">(untuk ditinjau customer &middot; tanpa logo KAN, ada watermark, tanpa tanda tangan approval)</span></p>
+        </div>
+        <div class="task-table-wrap"><table class="task-table">
+          <thead><tr><th>No. Laporan</th><th>Coupon / Sample Marking</th><th></th></tr></thead>
+          <tbody>${(t.extra.report_nos || []).map(r => `
+            <tr>
+              <td><strong>${esc(r.report_no) || '-'}</strong></td>
+              <td>${esc(r.coupon_label)} <span class="marking-chip">${esc(r.sample_marking) || '-'}</span></td>
+              <td style="text-align:right;"><a class="btn btn-sm btn-primary" href="${esc(r.preliminary_url)}" target="_blank" rel="noopener">Unduh Preliminary Report</a></td>
+            </tr>`).join('') || '<tr><td colspan="3" class="muted">Belum ada coupon.</td></tr>'}
+          </tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <p class="section-title">Tanggapan Customer <span class="en">atas Preliminary Report</span></p>
+        <div class="field"><label>Status</label>
+          ${woSeg('customer_status', '', cust.status || '', [['', 'Menunggu'], ['accepted', 'Diterima'], ['revision', 'Revisi'], ['rejected', 'Ditolak']])}
+        </div>
+        <div class="form-grid" style="margin-top:14px;">
+          <div class="field"><label>Tanggal Tanggapan</label><input type="date" name="customer_date" value="${esc(cust.date)}"></div>
+          <div class="field full"><label>Catatan Customer <span class="en">mis. bagian yang diminta direvisi / alasan ditolak</span></label><textarea name="customer_note">${esc(cust.note)}</textarea></div>
+        </div>
+        <p class="muted" style="margin:10px 0 0;">Revisi / Ditolak: perbaiki Lembar Hasil Uji di tahap Testing, unduh ulang Preliminary Report, lalu catat tanggapan customer yang baru. Hanya <strong>Diterima</strong> yang bisa lanjut ke Review &amp; Approval.</p>
+      </div>` + `
       <div class="task-stats">
         <div class="task-stat">${statIcon('flask')}<b>${s.total}</b><span>Total pengujian</span></div>
         <div class="task-stat">${statIcon('clipboardData')}<b>${s.with_result}</b><span>Hasil terisi</span></div>
@@ -2460,20 +2489,20 @@
       </div>
       <div class="card">
         <div class="task-card-head">
-          <p class="section-title">Input Hasil Pengujian <span class="en">(baris otomatis dari Permintaan Uji, tanggal uji dari tahap Testing)</span></p>
+          <p class="section-title">Hasil Pengujian <span class="en">(hanya baca, dari Lembar Hasil Uji)</span></p>
           <button type="button" class="btn btn-sm" id="btnGotoTesting">Buka halaman Testing</button>
         </div>
         <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian</th><th>Tgl. Uji</th><th>Hasil</th><th>Nilai / Ringkasan</th><th>Catatan</th></tr></thead>
+          <thead><tr><th>Coupon / Sample Marking</th><th>Jenis Pengujian</th><th>Tgl. Uji</th><th>Lembar Hasil Uji</th><th>Hasil</th></tr></thead>
           <tbody>${t.items.map(it => `
             <tr data-task-row data-key="${esc(it.key)}">
               <td>${couponCellHtml(it)}</td>
               <td><strong>${esc(it.test_name)}</strong><br><span class="muted">Qty ${esc(it.qty) || '-'}</span></td>
               <td>${it.tested_date ? esc(formatDateOnly(it.tested_date)) : '<span class="muted">-</span>'}</td>
-              <td><select data-f="result">${woSelectOptions(TEST_RESULT_OPTIONS, it.result)}</select></td>
-              <td><input type="text" data-f="result_value" value="${esc(it.result_value)}" placeholder="mis. UTS 512 MPa"></td>
-              <td><input type="text" data-f="note" value="${esc(it.note)}" placeholder="Catatan"></td>
-            </tr>`).join('') || '<tr><td colspan="6" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
+              <td>${it.report_status ? sheetBadge(it.report_status) : '<span class="muted">-</span>'}</td>
+              <td>${it.result ? resultBadge(it.result) : '<span class="muted">lihat Lembar</span>'}
+                <input type="hidden" data-f="result" value="${esc(it.result)}"><input type="hidden" data-f="result_value" value="${esc(it.result_value)}"><input type="hidden" data-f="note" value="${esc(it.note)}"></td>
+            </tr>`).join('') || '<tr><td colspan="5" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
           </tbody>
         </table></div>
       </div>`;

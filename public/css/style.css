@@ -1921,3 +1921,8 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 .report-no-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .report-no-chip { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; background: var(--bg); }
 .locked-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* Tanggapan customer atas Preliminary Report */
+.seg-opt.seg-accepted input:checked + span { background: var(--success); color: #fff; }
+.seg-opt.seg-revision input:checked + span { background: #d68910; color: #fff; }
+.seg-opt.seg-rejected input:checked + span { background: var(--danger); color: #fff; }

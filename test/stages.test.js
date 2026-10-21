@@ -1,6 +1,6 @@
 // Urutan tahap Work Order: tahap tidak bisa dilompati, dan tanggal/status uji diambil dari Lembar Hasil Uji.
 const assert = require('assert');
-const { blockingStage, evalStage } = require('../lib/workOrderTasks');
+const { blockingStage, evalStage, sheetResult } = require('../lib/workOrderTasks');
 
 const all = (v, extra = {}) => ({ receiving: v, preparation: v, testing: v, reporting: v, review: v, released: v, ...extra });
 
@@ -41,5 +41,28 @@ const t2 = evalStage('testing', wo2, null, { sheets: [], codes: {}, tasks: {}, s
   testReports: [{ id: 9, coupon_row_no: 1, test_name: 'Bend Root', status: 'final', date_tested: '2026-10-21' }] });
 assert.deepStrictEqual(t2.items.map(i => [i.test_name, i.report_id, i.status, i.tested_date]),
   [['Bend Root', 9, 'selesai', '2026-10-21'], ['Bend Face', 9, 'selesai', '2026-10-21']]);
+
+// Hasil dari Lembar: Rejected bila ada yang Rejected, Accepted bila semua Accepted
+assert.strictEqual(sheetResult({ rows: [{ result: 'accepted' }, { result: 'accepted' }] }), 'accepted');
+assert.strictEqual(sheetResult({ rows: [{ result: 'accepted' }, { result: 'rejected' }] }), 'rejected');
+assert.strictEqual(sheetResult({ rows: [{ result: 'accepted' }, { result: '' }] }), 'accepted');
+assert.strictEqual(sheetResult({ rows: [{ observation: 'x' }] }), '');
+assert.strictEqual(sheetResult(null), '');
+
+// Reporting = Preliminary Report: hanya tanggapan customer "Diterima" yang boleh diselesaikan
+const repCtx = (customer, reportUpdated) => ({ sheets: [], codes: {}, statuses: { testing: 'final' }, tasks: {},
+  testReports: [{ id: 9, coupon_row_no: 1, test_name: 'Bend Root', status: 'final', updated_at: reportUpdated || '2026-10-20T01:00:00Z', rows: [{ result: 'accepted' }] }] });
+const repTask = customer => ({ data: { items: {}, ...customer } });
+const probs = (customer, upd) => evalStage('reporting', wo2, repTask(customer), repCtx(customer, upd)).problems;
+assert.ok(probs({}).some(p => /belum diterima customer/.test(p)));
+assert.ok(probs({ customer_status: 'revision' }).some(p => /minta revisi/.test(p)), 'revisi tidak bisa lanjut');
+assert.ok(probs({ customer_status: 'rejected' }).some(p => /ditolak customer/.test(p)), 'ditolak menghentikan alur');
+assert.deepStrictEqual(probs({ customer_status: 'accepted', customer_at: '2026-10-21T00:00:00Z' }), []);
+assert.ok(probs({ customer_status: 'accepted', customer_at: '2026-10-21T00:00:00Z' }, '2026-10-21T05:00:00Z').some(p => /diubah setelah customer menerima/.test(p)),
+  'Lembar diubah setelah diterima -> perlu persetujuan ulang');
+const rep2 = evalStage('reporting', wo2, repTask({ customer_status: 'accepted' }), repCtx());
+assert.deepStrictEqual(rep2.items.map(i => i.result), ['accepted', 'accepted']);   // Face ikut Lembar gabungan
+assert.strictEqual(rep2.extra.report_nos[0].preliminary_url, '/work-orders/2/preliminary/1');
+assert.strictEqual(rep2.extra.customer.label, 'Diterima customer');
 
 console.log('stages OK');
