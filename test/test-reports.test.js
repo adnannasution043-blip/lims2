@@ -53,6 +53,8 @@ const WO = {
 
 let reports = [];
 const photoStore = [];
+// Pengecekan Spesimen per coupon+jenis pengujian; default Final supaya Lembar boleh dibuat
+const inspections = { blockedTest: null, status: 'final' };
 let seq = 0;
 const calls = [];
 const pool = {
@@ -100,6 +102,8 @@ const pool = {
       return { rows: [row] };
     }
     const q = sql.trim();
+    if (/^SELECT id FROM test_reports WHERE test_request_id = [$]1 AND coupon_row_no/.test(q)) return { rows: reports.filter(r => r.coupon_row_no === params[1] && r.test_name === params[2]) };
+    if (/^SELECT status FROM specimen_inspections WHERE test_request_id/.test(q)) return { rows: params[2] === inspections.blockedTest ? (inspections.status ? [{ status: inspections.status }] : []) : [{ status: 'final' }] };
     if (/^SELECT COUNT[(][*][)] AS n FROM test_report_photos/.test(q)) return { rows: [{ n: photoStore.filter(p => p.id === Number(params[0])).length }] };
     if (/^SELECT slot FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0])).map(p => ({ slot: p.slot })) };
     if (/^SELECT slot, mime_type, data FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0])) };
@@ -146,6 +150,18 @@ function call(method, path, params, body) {
 }
 
 (async () => {
+  // tidak melompati tahap: Lembar baru ditolak bila Pengecekan Spesimen-nya belum Final / belum dibuat
+  inspections.blockedTest = 'Bend Root'; inspections.status = 'draft';
+  let r0 = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Bend Root' });
+  assert.strictEqual(r0.status, 400);
+  assert.strictEqual(r0.body.code, 'STAGE_ORDER');
+  assert.ok(/belum Final/.test(r0.body.error));
+  inspections.status = null;
+  r0 = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Bend Root' });
+  assert.ok(/belum dibuat/.test(r0.body.error));
+  inspections.blockedTest = null;
+  assert.strictEqual(reports.length, 0);
+
   // buat sheet bending -> rows terisi otomatis ABN.9.1-BR1..3
   let r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Bend Root' });
   assert.strictEqual(r.status, 201);

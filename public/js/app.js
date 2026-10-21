@@ -2399,8 +2399,19 @@
       </div>`;
   }
 
+  // Status uji: dari Lembar Hasil Uji bila sudah ada (tidak bisa diubah di sini). Jenis pengujian yang punya Lembar
+  // tapi belum dibuat hanya bisa ditandai Tidak Perlu; yang belum bisa dibuatkan Lembar (Qty kosong) tetap dipilih manual.
+  function testStatusCellHtml(it) {
+    const label = (TEST_STATUS_OPTIONS.find(o => o[0] === it.status) || TEST_STATUS_OPTIONS[0])[1];
+    const pill = { selesai: 'st-final', proses: 'st-draft', na: 'st-pending' }[it.status] || 'st-pending';
+    if (it.from_sheet) return `<span class="st-pill ${pill}" title="Mengikuti status Lembar Hasil Uji">${esc(label)}</span><input type="hidden" data-f="status" value="${esc(it.status)}">`;
+    const opts = it.has_template ? TEST_STATUS_OPTIONS.filter(o => o[0] === '' || o[0] === 'na' || o[0] === it.status) : TEST_STATUS_OPTIONS;
+    return `<select data-f="status">${woSelectOptions(opts, it.status)}</select>`;
+  }
+
   function testingBodyHtml(t) {
     const s = t.stats;
+    const manualRows = t.items.some(it => !it.from_sheet && !it.has_template);
     return `
       <datalist id="testEquipmentList">${[...new Set([...EQUIPMENT.map(eq => eq.name), ...TEST_EQUIPMENT])].map(m => `<option value="${esc(m)}">`).join('')}</datalist>
       <div class="task-stats">
@@ -2411,10 +2422,10 @@
       </div>
       <div class="card">
         <div class="task-card-head">
-          <p class="section-title">Pelaksanaan Pengujian <span class="en">(baris otomatis dari Jenis Pengujian di Permintaan Uji)</span></p>
+          <p class="section-title">Pelaksanaan Pengujian <span class="en">(tanggal &amp; status uji otomatis dari Lembar Hasil Uji)</span></p>
           <div class="task-head-actions">
             <button type="button" class="btn btn-sm" id="btnGotoSpecimenList">Lihat Pengecekan Spesimen</button>
-            <button type="button" class="btn btn-sm" id="btnMarkAllTested">Tandai semua selesai</button>
+            ${manualRows ? '<button type="button" class="btn btn-sm" id="btnMarkAllTested">Tandai semua selesai</button>' : ''}
           </div>
         </div>
         <div class="task-table-wrap"><table class="task-table">
@@ -2427,8 +2438,9 @@
                 <div class="test-cell-mk">${markingChipsHtml(it)}</div>
                 ${it.sheet_status ? `<div class="test-cell-sheet muted">Spesimen: ${it.sheet_status === 'final' ? 'Final' : 'Draft'}</div>` : ''}
               </td>
-              <td><input type="date" data-f="tested_date" value="${esc(it.tested_date)}"></td>
-              <td><select data-f="status">${woSelectOptions(TEST_STATUS_OPTIONS, it.status)}</select>
+              <td>${it.tested_date ? esc(formatDateOnly(it.tested_date)) : '<span class="muted">-</span>'}
+                <input type="hidden" data-f="tested_date" value="${esc(it.tested_date)}"></td>
+              <td>${testStatusCellHtml(it)}
                 <input type="hidden" data-f="equipment" value="${esc(it.equipment)}"><input type="hidden" data-f="note" value="${esc(it.note)}"></td>
               <td class="test-cell-report">${it.report_status ? `<div>${sheetBadge(it.report_status)}</div>` : ''}${reportActionHtml(it)}</td>
             </tr>`).join('') || '<tr><td colspan="5" class="muted">Belum ada Jenis Pengujian yang dicentang pada Permintaan Uji.</td></tr>'}
@@ -2762,8 +2774,10 @@
     const { stage, extra } = t;
     const lockedBanner = t.locked
       ? `<div class="locked-banner"><span aria-hidden="true">&#128274;</span> Work Order sudah <strong>Complete</strong> &mdash; data tahap ini terkunci, tidak bisa diedit lagi setelah LHU diterbitkan.</div>`
-      : '';
-    const fieldsetOpen = `<fieldset class="task-fieldset"${t.locked ? ' disabled' : ''}>`;
+      : (t.blocked_by
+        ? `<div class="locked-banner"><span aria-hidden="true">&#128274;</span> Tahap <strong>${esc(t.blocked_by)}</strong> belum selesai &mdash; tahap ${esc(stage.label)} baru bisa diisi setelah tahap sebelumnya diselesaikan.</div>`
+        : '');
+    const fieldsetOpen = `<fieldset class="task-fieldset"${t.locked || t.blocked_by ? ' disabled' : ''}>`;
 
     if (stage.key === 'released') {
       // Report Issued: kartu Informasi Penerbitan LHU + Ringkasan Approval/Final Check/Dokumen,
@@ -3068,7 +3082,7 @@
       </table></div>
       <datalist id="tnLocList"><option value="Base Metal"><option value="Weld Metal"><option value="HAZ"><option value="Base Metal/Weld Interface"><option value="BBGM"><option value="BOGM"><option value="Thread"></datalist>
       <datalist id="tnFailList"><option value="Ductile"><option value="Brittle"><option value="Fracture"></datalist>
-      <p class="muted" style="margin:6px 0 0;">Kolom Area dan Tensile strength yang dikosongkan dihitung otomatis saat cetak (Area dari diameter atau tebal &times; lebar; strength = beban / area, dibulatkan ke bilangan bulat); Elongation dihitung dari L0 dan L1 bila diisi. Kolom lain kosong tercetak "-".</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template === 'nickbreak') {
       return `<table class="task-table">
@@ -3085,7 +3099,7 @@
           </tr>`).join('')}</tbody>
       </table>
       <datalist id="nbResultList"><option value="Accepted"><option value="Rejected"></datalist>
-      <p class="muted" style="margin:6px 0 0;">Kolom Depth, Length dan Distance yang dikosongkan tercetak "-"; Result kosong juga "-".</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_hic && hicInfoNow() && hicInfoNow().kind !== 'hic') {
       // SSCC (FPB / PR): satu baris per spesimen = kolom tabel pembebanan + observasi + foto 20X
@@ -3109,7 +3123,7 @@
           </tr>`;
         }).join('')}</tbody>
       </table></div>
-      <p class="muted" style="margin:6px 0 0;">Satu baris = satu spesimen (maks. ${info.max}). ${pr ? 'Cross Section area = 0,25 × 3,14 × D² dan Target Load = Target Stress × area, dihitung otomatis; kolom dimensi tercetak "D x A".' : 'Semua kolom diketik apa adanya (form tidak memuat rumus Target Strain).'} Observation kosong = "No Crack was Observed". Foto 20X langsung tersimpan saat dipilih; foto terikat pada pilihan form (FPB / PR).</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_hic) {
       // HIC: satu baris per spesimen; tiap section (3) berisi W, T, daftar a (panjang retak) dan b (tebal retak)
@@ -3129,7 +3143,7 @@
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
-      <p class="muted" style="margin:6px 0 0;">W = lebar, T = tebal spesimen. a = panjang retak dan b = tebal retak; bila ada beberapa retak, tulis dipisah spasi atau koma (dijumlahkan). Kosongkan a dan b bila tidak ada retak (hasil 0). CSR = (Σa × Σb) ÷ (W × T) × 100, CLR = Σa ÷ W × 100, CTR = Σb ÷ T × 100. Section tanpa W/T dicetak "-".</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_pset) {
       // Foto per spesimen (SEM-EDX, Salt Spray): satu baris per spesimen; jumlah & nama slot gambar dari info form
@@ -3154,7 +3168,7 @@
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
-      <p class="muted" style="margin:6px 0 0;">Satu baris = satu spesimen = satu atau dua halaman cetak (maks. ${state.testReport.template_pset.max} baris). Gambar (foto, atau screenshot dari alat) langsung tersimpan saat dipilih; tidak perlu menekan Simpan. Foto yang tidak diisi tercetak kosong.</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_grain) {
       // Grain Size: 5 field pengamatan tetap; tiap field punya foto (Lampiran) dan tiga garis ukur
@@ -3176,7 +3190,7 @@
           </tr>`;
         }).join('')}</tbody>
       </table></div>
-      <p class="muted" style="margin:6px 0 0;">Field yang terisi (angka atau foto) dicetak sebagai satu halaman Lampiran; field kosong dilewati. Intercept Grain (N) = jumlah tiga garis, Intercept/mm = N ÷ total panjang garis, rata-ratanya dihitung otomatis. Foto langsung tersimpan saat dipilih (tidak perlu menekan Simpan).</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_micro) {
       // Microstructure: satu baris per spesimen (satu halaman cetak); foto 1 atau 2 per baris menurut form
@@ -3205,7 +3219,7 @@
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
-      <p class="muted" style="margin:6px 0 0;">Satu baris = satu halaman cetak (maks. 10 baris). Foto langsung tersimpan saat dipilih (tidak perlu menekan Simpan).${info.thick ? ' Average dihitung dari spot yang terisi.' : ''}</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_macro) {
       // Macro-Etching: satu baris per spesimen (satu halaman cetak + satu foto makro per baris)
@@ -3234,7 +3248,7 @@
         }).join('')}</tbody>
       </table></div>
       <datalist id="macroResultList"><option value="Accepted"><option value="Rejected"></datalist>
-      <p class="muted" style="margin:6px 0 0;">Satu baris = satu halaman cetak dengan foto makronya. Foto langsung tersimpan saat dipilih (tidak perlu menekan Simpan). Kolom kosong memakai teks bawaan form (abu-abu); Result kosong tercetak "-".</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template === 'flat') {
       const cols = [['length', 'Length of Pipe (mm)'], ['od', 'Outside Diameter D (mm)'], ['wt', 'Wall Thickness t (mm)'], ['e', 'Deformation e'], ['h', 'H (mm) — kosong = dihitung'], ['first', 'First Step Test Result'], ['second', 'Second Step Test Result']];
@@ -3247,7 +3261,7 @@
             <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
           </tr>`).join('')}</tbody>
       </table>
-      <p class="muted" style="margin:6px 0 0;">H dihitung otomatis dari D, t dan e (H = (1+e)t / (e + t/D)); isi kolom H hanya bila ingin menimpa. Satu halaman cetak memuat 2 spesimen; spesimen berikutnya dicetak di halaman lanjutan.</p>`;
+      `;
     }
     if (state.testReport && state.testReport.template_fwb) {
       const sel = document.getElementById('testReportTemplate');
@@ -3263,7 +3277,7 @@
             <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
           </tr>`).join('')}</tbody>
       </table>
-      <p class="muted" style="margin:6px 0 0;">Kriteria penerimaan sudah tercetak dari form standar. Remarks yang dikosongkan memakai teks bawaan form (abu-abu).</p>`;
+      `;
     }
     if (state.testReport && state.testReport.category === 'charpy') {
       return `<datalist id="charpyNotchList">${CHARPY_NOTCH_POSITIONS.map(n => `<option value="${esc(n)}">`).join('')}</datalist>
@@ -3279,7 +3293,7 @@
             <td><button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button></td>
           </tr>`).join('')}</tbody>
       </table>
-      <p class="muted" style="margin:6px 0 0;">Baris dengan V-Notch Position yang sama berurutan dicetak sebagai satu blok; Average dihitung otomatis per blok. Form EQT: dari 5 spesimen, nilai tertinggi &amp; terendah dibuang untuk Average.</p>`;
+      `;
     }
     return `<table class="task-table">
       <thead><tr><th>Specimen No.</th><th>Observation</th><th>Result</th><th></th></tr></thead>
@@ -3652,7 +3666,7 @@
     </table>
     ${log.length ? '' : '<p class="muted" style="margin:6px 0;">Belum ada data log.</p>'}
     <button type="button" class="btn btn-sm" data-hlog-add style="margin-top:8px;">+ Tambah Hari</button>
-    <p class="muted" style="margin:6px 0 0;">Tanggal baris baru otomatis satu hari setelah baris terakhir. Kolom yang kosong tercetak "-".</p>`;
+    `;
   }
 
   // Witnessed By: beberapa nama, disimpan digabung koma pada kolom yang sama (data lama satu nama tetap terbaca)
@@ -4068,7 +4082,7 @@
 
     const markAllTested = document.getElementById('btnMarkAllTested');
     if (markAllTested) markAllTested.addEventListener('click', () => {
-      form.querySelectorAll('[data-task-row] select[data-f="status"]').forEach(sel => { sel.value = 'selesai'; });
+      form.querySelectorAll('[data-task-row] select[data-f="status"]').forEach(sel => { if ([...sel.options].some(o => o.value === 'selesai')) sel.value = 'selesai'; });
       markDirty();
     });
 

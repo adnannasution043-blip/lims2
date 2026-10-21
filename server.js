@@ -792,7 +792,7 @@ app.get('/api/work-order-steps', (req, res) => {
 });
 
 // Rute Tasks (Receiving .. Released) + status tahap tiap Work Order.
-const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
+const { loadProgressRows, stageBlocker } = registerWorkOrderTaskRoutes(app, {
   pool, getFullWorkOrder, signatureToBuffer, signatureToDataUrl, TEST_NAME_TO_CATEGORY,
   // upload evidence: body mentah (gambar/PDF), tanpa library multipart
   rawBody: express.raw({ type: () => true, limit: '12mb' })
@@ -800,7 +800,7 @@ const { loadProgressRows } = registerWorkOrderTaskRoutes(app, {
 
 // Lembar Hasil Uji tahap Testing (beda dari Pengecekan Spesimen milik tahap Preparation).
 registerTestReportRoutes(app, {
-  pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl,
+  pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl, stageBlocker,
   rawBody: express.raw({ type: () => true, limit: '8mb' })
 });
 
