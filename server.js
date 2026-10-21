@@ -12,7 +12,7 @@ const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
-const { nextNumber, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard, yearWIB } = require('./lib/integrity');
+const { nextNumber, nextReportNo, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard, yearWIB } = require('./lib/integrity');
 const { auditTrail, registerAuditRoutes } = require('./lib/audit');
 const { specimenSheetProblems } = require('./lib/completeness');
 
@@ -122,19 +122,22 @@ async function getFullWorkOrder(id) {
 
   const couponRows = await serializeCouponRows(wo.test_request_id);
   const { rows: marks } = await pool.query(
-    `SELECT coupon_row_no, sample_marking FROM work_order_sample_marks WHERE work_order_id = $1`,
+    `SELECT coupon_row_no, sample_marking, report_no FROM work_order_sample_marks WHERE work_order_id = $1`,
     [id]
   );
   const markByRow = {};
-  marks.forEach(m => { markByRow[m.coupon_row_no] = m.sample_marking; });
+  const reportByRow = {};
+  marks.forEach(m => { markByRow[m.coupon_row_no] = m.sample_marking; reportByRow[m.coupon_row_no] = m.report_no; });
 
   const missingRowNos = couponRows.map(c => c.row_no).filter(rowNo => !markByRow[rowNo]);
   if (missingRowNos.length) {
     const assigned = await autoAssignSampleMarks(id, wo.test_request, missingRowNos);
     Object.assign(markByRow, assigned);
   }
+  const missingReports = couponRows.map(c => c.row_no).filter(rowNo => !reportByRow[rowNo]);
+  if (missingReports.length) Object.assign(reportByRow, await assignCouponReportNos(id, wo.created_at, missingReports));
 
-  wo.coupon_tests = couponRows.map(c => ({ ...c, sample_marking: markByRow[c.row_no] || '' }));
+  wo.coupon_tests = couponRows.map(c => ({ ...c, sample_marking: markByRow[c.row_no] || '', report_no: reportByRow[c.row_no] || '' }));
 
   return wo;
 }
@@ -373,13 +376,52 @@ async function autoAssignSampleMarks(workOrderId, testRequest, rowNos) {
     await pool.query(
       `INSERT INTO work_order_sample_marks (work_order_id, coupon_row_no, sample_marking)
        VALUES ($1, $2, $3)
-       ON CONFLICT (work_order_id, coupon_row_no) DO NOTHING`,
+       ON CONFLICT (work_order_id, coupon_row_no) DO UPDATE
+         SET sample_marking = COALESCE(NULLIF(work_order_sample_marks.sample_marking, ''), EXCLUDED.sample_marking)`,
       [workOrderId, rowNo, marking]
     );
     assigned[rowNo] = marking;
     next += 1;
   }
   return assigned;
+}
+
+// No. Laporan per coupon (DE.1/MMYY/nnnn, lihat lib/integrity.js): dibuat sekali per coupon Work Order, bulan & tahun
+// mengikuti tanggal Work Order dibuat. Nomor yang keduluan dipakai (simpan bersamaan) diambil ulang.
+async function assignCouponReportNos(workOrderId, createdAt, rowNos) {
+  const assigned = {};
+  for (const rowNo of [...rowNos].sort((a, b) => a - b)) {
+    for (let attempt = 0; ; attempt++) {
+      const reportNo = await nextReportNo(pool, createdAt ? new Date(createdAt) : new Date());
+      try {
+        const { rows } = await pool.query(
+          `INSERT INTO work_order_sample_marks (work_order_id, coupon_row_no, report_no) VALUES ($1, $2, $3)
+           ON CONFLICT (work_order_id, coupon_row_no) DO UPDATE
+             SET report_no = COALESCE(NULLIF(work_order_sample_marks.report_no, ''), EXCLUDED.report_no)
+           RETURNING report_no`,
+          [workOrderId, rowNo, reportNo]
+        );
+        assigned[rowNo] = rows[0].report_no;
+        break;
+      } catch (err) {
+        if (!isUniqueViolation(err) || attempt >= 4) throw err;
+      }
+    }
+  }
+  return assigned;
+}
+
+// Work Order lama (dibuat sebelum No. Laporan per coupon ada): nomornya diisi sekali saat start, urut tanggal Work Order
+// dibuat, supaya urutannya mengikuti waktu (bukan urutan kapan Work Order itu kebetulan dibuka).
+async function backfillCouponReportNos() {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT wo.id, wo.created_at FROM work_orders wo
+     JOIN coupon_tests ct ON ct.test_request_id = wo.test_request_id
+     LEFT JOIN work_order_sample_marks wsm ON wsm.work_order_id = wo.id AND wsm.coupon_row_no = ct.row_no
+     WHERE COALESCE(wsm.report_no, '') = ''
+     ORDER BY wo.created_at ASC, wo.id ASC`);
+  for (const r of rows) await getFullWorkOrder(r.id);
+  if (rows.length) console.log(`[no-laporan] No. Laporan per coupon diisi untuk ${rows.length} Work Order lama`);
 }
 
 // ---------- API routes ----------
@@ -799,7 +841,7 @@ const { loadProgressRows, stageBlocker } = registerWorkOrderTaskRoutes(app, {
 });
 
 // Lembar Hasil Uji tahap Testing (beda dari Pengecekan Spesimen milik tahap Preparation).
-registerTestReportRoutes(app, {
+const { printableReport } = registerTestReportRoutes(app, {
   pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl, stageBlocker,
   rawBody: express.raw({ type: () => true, limit: '8mb' })
 });
@@ -811,7 +853,7 @@ registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, li
 registerUserRoutes(app, { pool });
 
 // Modul Hasil & Laporan (daftar LHU + status distribusi).
-registerLhuReportRoutes(app, { pool, getFullWorkOrder, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
+registerLhuReportRoutes(app, { pool, getFullWorkOrder, printableReport, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
 // Reset Data (halaman Pengaturan) — untuk mengosongkan data uji coba supaya bisa mulai input
 // dari awal saat pengujian end-to-end. Hanya menghapus data transaksional (Permintaan Uji dan
@@ -829,9 +871,9 @@ app.post('/api/admin/reset-data', async (req, res) => {
   }
 });
 
-// "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Report Issued).
+// "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Review & Approval).
 // "status" Work Order tidak difinalisasi manual: 'complete' otomatis setelah semua tahap selesai
-// (tahap terakhir, Report Issued, menerbitkan LHU-nya). Tanggal testing diambil dari Permintaan
+// (tahap terakhir, Review & Approval yang disetujui, menerbitkan LHU per coupon). Tanggal testing diambil dari Permintaan
 // Uji (tanggal "Pelaksanaan pengujian").
 app.get('/api/work-orders', async (req, res) => {
   try {
@@ -1321,6 +1363,7 @@ app.get('/specimen-inspections/:id/print', async (req, res) => {
 initSchema()
   .then(() => ensureUniqueNumbers(pool).catch(err => console.error('[integritas]', err.message)))
   .then(() => ensureAdmin(pool).catch(err => console.error('[auth] Gagal menyiapkan Administrator awal:', err.message)))
+  .then(() => backfillCouponReportNos().catch(err => console.error('[no-laporan]', err.message)))
   .then(() => {
     app.listen(PORT, () => {
       console.log(`DETECH LIMS running on http://localhost:${PORT}`);

@@ -1916,3 +1916,8 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 .mach-job { font-size: 17px; font-weight: 700; margin: 0 0 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .mach-sub { margin: 2px 0; }
 .mach-btn { font-size: 15px; padding: 12px 22px; min-width: 180px; }
+
+/* No. Laporan per coupon (tahap Reporting) */
+.report-no-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-no-chip { border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; background: var(--bg); }
+.locked-banner { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

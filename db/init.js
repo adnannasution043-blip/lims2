@@ -236,6 +236,12 @@ async function initSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_work_orders_request ON work_orders(test_request_id);
     CREATE INDEX IF NOT EXISTS idx_wo_sample_marks_wo ON work_order_sample_marks(work_order_id);
+    -- No. Laporan per coupon (DE.1/MMYY/nnnn), dibuat otomatis sekali per coupon Work Order dan sekaligus menjadi
+    -- No. LHU coupon itu. Unik lewat indeks parsial (lib/integrity.js ensureUniqueNumbers).
+    ALTER TABLE work_order_sample_marks ADD COLUMN IF NOT EXISTS report_no TEXT;
+    -- LHU kini satu per coupon: distribusi & attachment dicatat per coupon (NULL = data lama tingkat Work Order)
+    ALTER TABLE lhu_distributions ADD COLUMN IF NOT EXISTS coupon_row_no INTEGER;
+    ALTER TABLE lhu_attachments ADD COLUMN IF NOT EXISTS coupon_row_no INTEGER;
 
     -- Tahap pengerjaan ("Tasks") per Work Order: Receiving, Testing, Reporting,
     -- Review & Approval, Released. Preparation (= Pengecekan Spesimen) sengaja tidak punya

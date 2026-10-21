@@ -1983,7 +1983,7 @@
     }
   }
 
-  // ---------- work order: tasks (Receiving .. Report Issued) ----------
+  // ---------- work order: tasks (Receiving .. Review & Approval) ----------
   // Enam tahap per Work Order. Baris kerja (coupon, jenis pengujian, qty, sample marking)
   // datang dari server yang menurunkannya dari Permintaan Uji — form tahap hanya mengisi
   // hasil di atasnya, jadi tidak ada data yang diketik ulang. Detail Work Order hanya
@@ -2519,81 +2519,6 @@
       </div>`;
   }
 
-  function releasedBodyHtml(t) {
-    const e = t.extra;
-    const fc = e.final_check || { coupons: 0, test_types: 0, total_specimens: 0, result_sheets: 0, by_test: [] };
-    const woId = t.work_order.id;
-    return `
-      <div class="lhu-layout">
-        <div class="card">
-          <p class="section-title">Ringkasan Approval <span class="en">(hanya baca, dari tahap Review &amp; Approval)</span></p>
-          <div class="info-facts">
-            <div class="info-fact"><span>Disetujui oleh</span><strong>${esc(e.approved_by) || '-'}</strong></div>
-            <div class="info-fact"><span>Tanggal Approval</span><strong>${e.approved_date ? esc(formatDateOnly(e.approved_date)) : '-'}</strong></div>
-            <div class="info-fact"><span>No. Laporan</span><strong>${esc(e.report_no) || '-'}</strong></div>
-          </div>
-          ${e.approval_notes ? `<p class="muted" style="margin-top:10px;"><strong>Catatan Approval:</strong> ${esc(e.approval_notes)}</p>` : ''}
-        </div>
-        <div class="card">
-          <p class="section-title">Dokumen <span class="en">LHU</span></p>
-          <div class="lhu-doc-row">
-            <div>
-              <strong>${e.lhu_number ? esc(e.lhu_number) + '.pdf' : 'Belum diterbitkan'}</strong>
-              <span class="st-pill ${e.lhu_number ? 'st-final' : 'st-pending'}">${e.lhu_number ? 'Diterbitkan' : 'Belum Diterbitkan'}</span>
-              <p class="muted" style="margin:4px 0 0;">Standard Material Test Report</p>
-            </div>
-            <button type="button" class="btn btn-sm" data-open-wo-print="${woId}">Buka Dokumen (PDF)</button>
-          </div>
-          <p class="muted" style="margin-top:10px;">Memakai format cetak Work Order yang sudah ada (DPI-LP-FR-25) &mdash; dokumen LHU tersendiri belum dibangun.</p>
-        </div>
-      </div>
-      <div class="card">
-        <p class="section-title">Ringkasan Hasil Pengujian <span class="en">(Final Check, hanya baca)</span></p>
-        <div class="task-stats">
-          <div class="task-stat">${statIcon('layers')}<b>${fc.coupons}</b><span>Coupon</span></div>
-          <div class="task-stat">${statIcon('flask')}<b>${fc.test_types}</b><span>Jenis Pengujian</span></div>
-          <div class="task-stat ok">${statIcon('beaker')}<b>${fc.total_specimens}</b><span>Total Specimen</span></div>
-          <div class="task-stat ok">${statIcon('fileCheck')}<b>${fc.result_sheets}</b><span>Result Sheet Final</span></div>
-        </div>
-        <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>No.</th><th>Jenis Pengujian</th><th>Jumlah Specimen</th></tr></thead>
-          <tbody>${fc.by_test.map((r, i) => `
-            <tr><td>${i + 1}</td><td>${esc(r.test_name)}</td><td>${r.qty}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Belum ada data.</td></tr>'}
-          </tbody>
-        </table></div>
-      </div>`;
-  }
-
-  function releasedInfoCardHtml(t) {
-    const { stage, extra } = t;
-    const checklist = [
-      'Nomor LHU akan digenerate otomatis',
-      'PDF LHU akan dibuat',
-      'Data hasil pengujian akan dikunci',
-      'Work Order berubah menjadi Complete'
-    ];
-    return `
-      <div class="lhu-layout">
-        <div class="card">
-          <p class="section-title">Informasi Penerbitan LHU</p>
-          <div class="form-grid">
-            <div class="field"><label>Nomor LHU <span class="en">dibuat otomatis</span></label>
-              <input type="text" value="${esc(extra.lhu_number) || 'Belum diterbitkan'}" disabled></div>
-            <div class="field"><label>${esc(stage.date_label)}</label><input type="date" name="task_date" value="${esc(stage.task_date)}"></div>
-            <div class="field"><label>Versi</label><input type="text" value="Rev. 0" disabled></div>
-            <div class="field"><label>PIC Issued</label>${woPicSelect(stage.pic)}</div>
-            <div class="field full"><label>Template Laporan</label>
-              <select disabled><option>Standard Material Test Report</option></select></div>
-            <div class="field full"><label>Catatan Tahap</label><textarea name="notes">${esc(stage.notes)}</textarea></div>
-          </div>
-        </div>
-        <div class="lhu-info-box">
-          <p class="lhu-info-title"><span aria-hidden="true">&#8505;&#65039;</span> Setelah LHU diterbitkan</p>
-          <ul>${checklist.map(c => `<li><span aria-hidden="true">&#10003;</span> ${esc(c)}</li>`).join('')}</ul>
-        </div>
-      </div>`;
-  }
-
   function approvalCardHtml(t) {
     const a = t.approval || {};
     return `
@@ -2772,48 +2697,21 @@
 
   function woTaskFormHtml(t) {
     const { stage, extra } = t;
+    const canRevoke = t.lhu_issued && (!AUTH.enforced || (AUTH.user && AUTH.user.is_admin));
     const lockedBanner = t.locked
-      ? `<div class="locked-banner"><span aria-hidden="true">&#128274;</span> Work Order sudah <strong>Complete</strong> &mdash; data tahap ini terkunci, tidak bisa diedit lagi setelah LHU diterbitkan.</div>`
+      ? `<div class="locked-banner"><span aria-hidden="true">&#128274;</span> <span>LHU sudah <strong>terbit</strong> (otomatis setelah Review &amp; Approval disetujui) &mdash; data Work Order terkunci. Dokumen LHU per coupon ada di menu Hasil &amp; Laporan.</span>
+          ${canRevoke ? '<button type="button" class="btn btn-sm btn-danger" id="btnRevokeLhu" style="margin-left:auto;">Cabut LHU untuk revisi</button>' : '<span class="muted" style="margin-left:auto;">Revisi: minta Administrator mencabut LHU</span>'}</div>`
       : (t.blocked_by
         ? `<div class="locked-banner"><span aria-hidden="true">&#128274;</span> Tahap <strong>${esc(t.blocked_by)}</strong> belum selesai &mdash; tahap ${esc(stage.label)} baru bisa diisi setelah tahap sebelumnya diselesaikan.</div>`
         : '');
     const fieldsetOpen = `<fieldset class="task-fieldset"${t.locked || t.blocked_by ? ' disabled' : ''}>`;
 
-    if (stage.key === 'released') {
-      // Report Issued: kartu Informasi Penerbitan LHU + Ringkasan Approval/Final Check/Dokumen,
-      // beda dari 4 tahap "form" lain (bukan sekadar extraFields di kartu generik).
-      // Setelah terbit, form terkunci; membuka kembali hanya lewat Cabut LHU (Administrator, alasan wajib).
-      const issued = stage.status === 'final';
-      const canRevoke = issued && (!AUTH.enforced || (AUTH.user && AUTH.user.is_admin));
-      const issuedActions = issued ? `
-            <div class="form-actions">
-              <div><span class="muted">LHU sudah diterbitkan${stage.updated_at ? ' · ' + esc(formatDateTimeID(stage.updated_at)) : ''}. Data terkunci.</span></div>
-              <div class="right">${canRevoke ? '<button type="button" class="btn btn-danger" id="btnRevokeLhu">Cabut LHU untuk revisi</button>' : '<span class="muted">Revisi: minta Administrator mencabut LHU</span>'}</div>
-            </div>` : '';
-      return `
-        ${lockedBanner}
-        ${issuedActions}
-        <form id="woTaskForm">
-          ${issued ? '<fieldset class="task-fieldset" disabled>' : fieldsetOpen}
-            ${releasedInfoCardHtml(t)}
-            ${releasedBodyHtml(t)}
-            <div id="woTaskProblems"></div>
-            <div class="form-actions">
-              <div><span class="muted">${stage.updated_at ? 'Terakhir disimpan: ' + esc(formatDateTimeID(stage.updated_at)) : 'Belum pernah disimpan'}</span></div>
-              <div class="right">
-                <button type="submit" class="btn" data-status="draft">Simpan Draft</button>
-                <button type="submit" class="btn btn-primary" data-status="final">Terbitkan LHU</button>
-              </div>
-            </div>
-          </fieldset>
-        </form>`;
-    }
-
     let extraFields = '';
     if (stage.key === 'receiving') {
       extraFields = `<div class="field"><label>Diserahkan oleh <span class="en">Delivered by</span></label><input type="text" name="delivered_by" value="${esc(extra.delivered_by)}" placeholder="Nama pengirim / kurir"></div>`;
     } else if (stage.key === 'reporting') {
-      extraFields = `<div class="field"><label>No. Laporan <span class="en">Report No.</span></label><input type="text" name="report_no" value="${esc(extra.report_no)}"></div>`;
+      extraFields = `<div class="field full"><label>No. Laporan <span class="en">otomatis per coupon &middot; juga No. LHU</span></label>
+        <div class="report-no-list">${(extra.report_nos || []).map(r => `<span class="report-no-chip"><strong>${esc(r.report_no) || '-'}</strong> <span class="muted">${esc(r.sample_marking) || 'Coupon #' + r.coupon_row_no}</span></span>`).join('') || '<span class="muted">-</span>'}</div></div>`;
     }
     const body = { receiving: receivingBodyHtml, testing: testingBodyHtml, reporting: reportingBodyHtml,
       review: reviewBodyHtml }[stage.key](t)
@@ -3783,7 +3681,8 @@
         <div class="card">
           <p class="section-title">Info Laporan</p>
           <div class="form-grid">
-            <div class="field"><label>No. Laporan <span class="en">Report No.</span></label><input type="text" name="report_no" value="${esc(r.report_no)}"></div>
+            <div class="field"><label>No. Laporan <span class="en">otomatis dari coupon</span></label><input type="text" value="${esc(r.report_no) || '-'}" disabled>
+              <input type="hidden" name="report_no" value="${esc(r.report_no)}"></div>
             <div class="field"><label>Tanggal Diuji <span class="en">Date of Tested</span></label><input type="date" name="date_tested" value="${esc(r.date_tested)}"></div>
             <div class="field"><label>Environment Temp</label><input type="text" name="environment_temp" value="${esc(r.environment_temp)}" placeholder="25 &plusmn; 2 &deg;C"></div>
             <div class="field"><label>Test Method</label><input type="text" name="test_method" value="${esc(r.test_method) || esc(r.method)}"></div>
@@ -4058,12 +3957,12 @@
     const revokeBtn = document.getElementById('btnRevokeLhu');
     if (revokeBtn) revokeBtn.addEventListener('click', async () => {
       const t = state.woTask;
-      const reason = prompt(`Cabut LHU ${t.work_order.lhu_number || ''}?\n\nSemua tahap akan terbuka kembali untuk direvisi. No. LHU tetap sama, nomor revisi (Rev.) bertambah, dan pencabutan tercatat.\n\nTulis alasan pencabutan:`);
+      const reason = prompt(`Cabut LHU Work Order ${t.work_order.job_number || ''}?\n\nReview & Approval kembali ke Draft (harus disetujui ulang) dan semua tahap terbuka untuk direvisi. No. Laporan / No. LHU tetap sama, nomor revisi (Rev.) bertambah, dan pencabutan tercatat.\n\nTulis alasan pencabutan:`);
       if (reason === null) return;
       if (reason.trim().length < 5) { toast('Alasan pencabutan minimal 5 karakter', 'error'); return; }
       try {
         state.woTask = await api(`/api/work-orders/${t.work_order.id}/revoke-lhu`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reason: reason.trim() }) });
-        toast('LHU dicabut. Work Order terbuka untuk revisi; terbitkan lagi setelah selesai.', 'success');
+        toast('LHU dicabut. Work Order terbuka untuk revisi; LHU terbit lagi saat Review & Approval disetujui ulang.', 'success');
         state.queueCountsAt = 0;
         render();
       } catch (err) { toast(err.message, 'error'); }
@@ -4150,7 +4049,7 @@
 
   async function renderWoTasks() {
     pageTitle.textContent = 'Progress Tasks';
-    pageSubtitle.textContent = 'Pantau posisi dan progress semua Work Order, Receiving hingga Report Issued';
+    pageSubtitle.textContent = 'Pantau posisi dan progress semua Work Order, Receiving hingga Review & Approval';
     topbarActions.innerHTML = '';
     contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
 
@@ -4540,9 +4439,8 @@
   }
 
   // ---------- hasil & laporan (daftar LHU) ----------
-  // Bukan sumber data baru: hanya membaca Work Order yang lhu_number-nya sudah terisi (dibuat
-  // otomatis di tahap Report Issued). Status distribusi disimpan/diedit di sini, bukan di tahap
-  // Report Issued lagi, sesuai permintaan klien memisahkan penerbitan dari pengiriman LHU.
+  // Satu LHU per coupon, terbit otomatis setelah Review & Approval disetujui (No. LHU = No. Laporan coupon). Status
+  // distribusi dicatat di sini, terpisah dari penerbitan.
 
   const LHU_DIST_LABELS = { belum_dikirim: 'Menunggu Kirim', sent: 'Sent', delivered: 'Delivered' };
   const LHU_DIST_PILL = { belum_dikirim: 'st-pending', sent: 'st-draft', delivered: 'st-final' };
@@ -4567,7 +4465,7 @@
       contentEl.innerHTML = `
         <div class="card empty-state">
           <p class="card-title">Belum ada LHU</p>
-          <p class="card-desc">LHU muncul di sini otomatis setelah tahap Report Issued pada suatu Work Order diselesaikan.</p>
+          <p class="card-desc">LHU muncul di sini otomatis setelah tahap Review &amp; Approval suatu Work Order disetujui &mdash; satu LHU per coupon, nomornya sama dengan No. Laporan coupon itu.</p>
         </div>`;
       return;
     }
@@ -4605,19 +4503,20 @@
         key: 'lhu-reports',
         containerEl: document.getElementById('lhuTableArea'),
         allRows: filtered,
-        searchFields: ['lhu_number', 'job_number', 'company', 'project_name'],
-        searchPlaceholder: 'Cari No. LHU, No. WO, Perusahaan, atau Nama Proyek...',
+        searchFields: ['lhu_number', 'sample_marking', 'job_number', 'company', 'project_name'],
+        searchPlaceholder: 'Cari No. LHU, Sample Marking, No. WO, Perusahaan, atau Nama Proyek...',
         emptyHtml: '<p class="muted">Tidak ada LHU dengan status tersebut.</p>',
         renderTableHtml: (pageRows) => `
           <table class="data-table">
             <thead><tr>
-              <th>No. LHU</th><th>Rev.</th><th>No. Work Order</th><th>Perusahaan</th><th>Nama Proyek</th>
+              <th>No. LHU</th><th>Rev.</th><th>Coupon</th><th>No. Work Order</th><th>Perusahaan</th><th>Nama Proyek</th>
               <th>Tanggal Terbit</th><th>Status Distribusi</th><th></th>
             </tr></thead>
             <tbody>${pageRows.map(r => `
               <tr>
                 <td><strong>${esc(r.lhu_number)}</strong></td>
                 <td>${r.revision}</td>
+                <td>${esc(r.sample_marking) || 'Coupon #' + r.coupon_row_no}</td>
                 <td>${esc(r.job_number)}</td>
                 <td>${esc(r.company)}</td>
                 <td>${esc(r.project_name)}</td>
@@ -4663,7 +4562,8 @@
       return;
     }
 
-    document.getElementById('btnLhuDownload').addEventListener('click', () => window.open(`/work-orders/${r.id}/print`, '_blank'));
+    const lhuPrintUrl = `/lhu-reports/${encodeURIComponent(r.id)}/print`;
+    document.getElementById('btnLhuDownload').addEventListener('click', () => window.open(lhuPrintUrl, '_blank'));
 
     const wo = r.work_order;
     const a = r.approval;
@@ -4678,6 +4578,7 @@
             <p class="lhu-hero-title">${esc(r.lhu_number)} <span class="lhu-hero-rev">Rev. ${r.revision}</span></p>
             <p class="lhu-hero-sub">
               <span aria-hidden="true">&#128295;</span> Work Order: ${esc(wo.job_number)} &nbsp;
+              <span aria-hidden="true">&#127991;</span> ${esc(r.coupon.sample_marking) || 'Coupon #' + r.coupon.row_no} &nbsp;
               <span aria-hidden="true">&#127970;</span> ${esc(wo.project_name)} &nbsp;
               <span aria-hidden="true">&#128100;</span> ${esc(wo.company)}
             </p>
@@ -4696,7 +4597,9 @@
             <p class="section-title">Informasi LHU</p>
             <div class="info-facts">
               <div class="info-fact"><span>No. LHU</span><strong>${esc(r.lhu_number)}</strong></div>
+              <div class="info-fact"><span>Coupon</span><strong>${esc(r.coupon.sample_marking) || '-'} &middot; Coupon #${r.coupon.row_no}${r.coupon.label ? ' (' + esc(r.coupon.label) + ')' : ''}</strong></div>
               <div class="info-fact"><span>Versi</span><strong>Rev. ${r.revision}</strong></div>
+              ${r.legacy_lhu_number ? `<div class="info-fact"><span>No. LHU lama</span><strong>${esc(r.legacy_lhu_number)}</strong></div>` : ''}
               <div class="info-fact"><span>Tanggal Terbit</span><strong>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</strong></div>
               <div class="info-fact"><span>Template Laporan</span><strong>${esc(r.template)}</strong></div>
             </div>
@@ -4746,8 +4649,8 @@
               </div>
               <button type="button" class="btn btn-sm" id="btnLhuOpenPrint2">Buka Dokumen (PDF)</button>
             </div>
-            <p class="muted" style="margin:8px 0 14px;">Memakai format cetak Work Order yang sudah ada (DPI-LP-FR-25) &mdash; dokumen LHU tersendiri belum dibangun.</p>
-            <p class="muted" style="margin:0 0 10px;">Foto kondisi sampel saat penerimaan: <a href="/work-orders/${r.id}/evidence/print" target="_blank" rel="noopener">Cetak Lampiran Foto Penerimaan</a></p>
+            <p class="muted" style="margin:8px 0 14px;">Berisi semua Lembar Hasil Uji Final coupon ini dalam satu dokumen, dengan nomor halaman berurutan.</p>
+            <p class="muted" style="margin:0 0 10px;">Foto kondisi sampel saat penerimaan: <a href="/work-orders/${r.work_order_id}/evidence/print" target="_blank" rel="noopener">Cetak Lampiran Foto Penerimaan</a></p>
             <p class="lhu-sub-title">Attachment Pendukung</p>
             <input type="file" id="lhuAttInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.zip,.xlsx,.xls,.docx,.doc" hidden>
             <div id="lhuAttList"><p class="muted">Memuat attachment...</p></div>
@@ -4779,8 +4682,8 @@
         </div>
       </div>`;
 
-    document.getElementById('btnLhuOpenPrint2').addEventListener('click', () => window.open(`/work-orders/${r.id}/print`, '_blank'));
-    document.getElementById('btnLhuOpenWo').addEventListener('click', () => openWorkOrderForm(r.id));
+    document.getElementById('btnLhuOpenPrint2').addEventListener('click', () => window.open(lhuPrintUrl, '_blank'));
+    document.getElementById('btnLhuOpenWo').addEventListener('click', () => openWorkOrderForm(r.work_order_id));
 
     initLhuAttachments(r.id);
     initLhuDistributions(r.id);

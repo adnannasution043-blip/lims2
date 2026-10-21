@@ -12,7 +12,7 @@ const db = {
     if (/^SELECT job_number AS v FROM test_requests WHERE job_number LIKE \$1/.test(sql)) return { rows: this.requests.filter(r => r.job_number.startsWith(p[0].slice(0, -1))).map(r => ({ v: r.job_number })) };
     if (/^SELECT lhu_number AS v FROM work_orders WHERE lhu_number LIKE \$1/.test(sql)) return { rows: this.wos.filter(w => (w.lhu_number || '').startsWith(p[0].slice(0, -1))).map(w => ({ v: w.lhu_number })) };
     if (/^SELECT 1 FROM work_orders w JOIN work_order_tasks t/.test(sql)) {
-      const ok = this.wos.some(w => w.test_request_id === Number(p[0]) && this.tasks.some(t => t.work_order_id === w.id && t.task_key === 'released' && t.status === 'final'));
+      const ok = this.wos.some(w => w.test_request_id === Number(p[0]) && this.tasks.some(t => t.work_order_id === w.id && t.task_key === 'review' && t.status === 'final' && t.approval_status === 'approved'));
       return { rows: ok ? [{}] : [] };
     }
     if (/^SELECT id FROM work_orders WHERE test_request_id = \$1/.test(sql)) return { rows: this.wos.filter(w => w.test_request_id === Number(p[0])).map(w => ({ id: w.id })) };
@@ -27,6 +27,11 @@ const db = {
     if (/^CREATE UNIQUE INDEX/.test(sql)) { if (this.indexFails) throw new Error('could not create unique index'); return { rows: [] }; }
     if (/^SELECT job_number AS v, COUNT\(\*\) AS n/.test(sql)) return { rows: [{ v: 'DE.1.26.0002', n: '2' }] };
     if (/^SELECT lhu_number AS v, COUNT\(\*\) AS n/.test(sql)) return { rows: [] };
+    if (/^SELECT report_no AS v, COUNT\(\*\) AS n/.test(sql)) return { rows: [] };
+    if (/^SELECT report_no AS v FROM work_order_sample_marks WHERE report_no LIKE \$1/.test(sql)) {
+      const re = new RegExp('^' + p[0].replace(/[.]/g, '[.]').replace(/_/g, '.').replace(/%/g, '.*') + '$');
+      return { rows: (this.reportNos || []).filter(v => re.test(v)).map(v => ({ v })) };
+    }
     throw new Error('query tidak dikenal: ' + sql);
   }
 };
@@ -38,11 +43,20 @@ const db = {
   db.wos = [{ id: 1, test_request_id: 1, lhu_number: 'LHU-26-00001' }, { id: 2, test_request_id: 2, lhu_number: 'LHU-26-00004' }, { id: 3, test_request_id: 3, lhu_number: null }];
   assert.strictEqual(await I.nextNumber(db, 'work_orders', 'lhu_number', 'LHU-26-', 5), 'LHU-26-00005');
   assert.strictEqual(await I.nextNumber(db, 'work_orders', 'lhu_number', 'LHU-27-', 5), 'LHU-27-00001', 'tahun baru mulai dari 1');
+  // No. Laporan per coupon: DE.1/MMYY/nnnn, urut sepanjang tahun (WIB), mulai lagi saat tahun berganti
+  assert.deepStrictEqual(I.monthYearWIB(new Date('2026-10-20T03:00:00Z')), { mm: '10', yy: '26' });
+  assert.deepStrictEqual(I.monthYearWIB(new Date('2026-12-31T18:30:00Z')), { mm: '01', yy: '27' }, '01.30 WIB 1 Jan sudah tahun baru');
+  assert.strictEqual(I.maxReportSeq(['DE.1/0926/0007', 'DE.1/1026/0012', 'DE.1/1025/0099', 'X', null, 'DE.1/1026/12a'], '26'), 12);
+  db.reportNos = ['DE.1/0926/0007', 'DE.1/1026/0012', 'DE.1/1225/0099'];
+  assert.strictEqual(await I.nextReportNo(db, new Date('2026-10-21T03:00:00Z')), 'DE.1/1026/0013', 'urutan lanjut lintas bulan');
+  assert.strictEqual(await I.nextReportNo(db, new Date('2027-01-05T03:00:00Z')), 'DE.1/0127/0001', 'tahun baru mulai 0001');
+  db.reportNos = [];
+  assert.strictEqual(await I.nextReportNo(db, new Date('2026-03-02T03:00:00Z')), 'DE.1/0326/0001');
   assert.ok(I.isUniqueViolation({ code: '23505' }) && !I.isUniqueViolation({ code: '23503' }) && !I.isUniqueViolation(null));
   // indeks unik: berhasil diam; gagal -> log berisi nomor ganda, tidak melempar
   let logs = []; await I.ensureUniqueNumbers(db, m => logs.push(m)); assert.strictEqual(logs.length, 0);
   db.indexFails = true; logs = []; await I.ensureUniqueNumbers(db, m => logs.push(m)); db.indexFails = false;
-  assert.ok(logs.some(l => l.includes('DE.1.26.0002 (2x)')) && logs.length === 2);
+  assert.ok(logs.some(l => l.includes('DE.1.26.0002 (2x)')) && logs.length === 3);
 
   // ---- coupon setelah Work Order dibuat ----
   db.coupons = [1, 2, 3].map(n => ({ test_request_id: 1, row_no: n }));
@@ -81,14 +95,17 @@ const db = {
   db.requests.push({ id: 4, job_number: 'DE.1.26.0007' });
   assert.strictEqual((await run('DELETE', '/api/requests/4')).status, 'next', 'tanpa Work Order boleh dihapus');
   // setelah terbit: semua jalur ubah/hapus milik Permintaan Uji 1 terkunci; GET tetap boleh; Permintaan lain tidak terpengaruh
+  // Report Issued lama tidak lagi berarti terbit; yang dihitung: Review & Approval Final + Disetujui
   db.tasks = [{ work_order_id: 1, task_key: 'released', status: 'final' }];
+  assert.strictEqual((await run('PUT', '/api/requests/1')).status, 'next');
+  db.tasks = [{ work_order_id: 1, task_key: 'review', status: 'final', approval_status: 'approved' }];
   const lockedPaths = [['PUT', '/api/requests/1'], ['DELETE', '/api/requests/1'], ['POST', '/api/requests/1/specimen-inspections'],
     ['PUT', '/api/work-orders/1'], ['DELETE', '/api/work-orders/1'], ['POST', '/api/work-orders/1/test-reports'], ['POST', '/api/work-orders/1/files'],
     ['PUT', '/api/test-reports/10'], ['DELETE', '/api/test-reports/10'], ['POST', '/api/test-reports/10/photos'], ['DELETE', '/api/test-reports/10/photo'],
     ['PUT', '/api/specimen-inspections/20'], ['DELETE', '/api/specimen-inspections/20'], ['DELETE', '/api/work-order-files/30'], ['PUT', '/API/Requests/1']];
   db.sheets[0].test_request_id = 1;
   for (const [m, p] of lockedPaths) { r = await run(m, p); assert.strictEqual(r.status, 409, m + ' ' + p); assert.strictEqual(r.body.code, 'LHU_LOCKED'); }
-  for (const [m, p] of [['GET', '/api/requests/1'], ['GET', '/api/test-reports/10'], ['PUT', '/api/requests/2'], ['PUT', '/api/work-orders/2'], ['POST', '/api/lhu-reports/1/attachments'], ['PUT', '/api/work-orders/1/tasks/released'], ['GET', '/index.html'], ['PUT', '/api/test-reports/999']]) {
+  for (const [m, p] of [['GET', '/api/requests/1'], ['GET', '/api/test-reports/10'], ['PUT', '/api/requests/2'], ['PUT', '/api/work-orders/2'], ['POST', '/api/lhu-reports/1/attachments'], ['PUT', '/api/work-orders/1/tasks/review'], ['GET', '/index.html'], ['PUT', '/api/test-reports/999']]) {
     assert.strictEqual((await run(m, p)).status, 'next', m + ' ' + p);
   }
   console.log('INTEGRITY OK');

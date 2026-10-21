@@ -48,6 +48,10 @@ const WO = {
       ref_code: 'AWS D1.1',
       charpy_temp: '-20', charpy_wm: '3', charpy_haz: '2',
       other_tests: [{ test_name: 'Compression Test (ASTM E9)', checked: true, qty: '2' }, { test_name: 'Flaring test', checked: true, qty: '3' }, { test_name: 'Uji Geser Las', checked: true, qty: '2' }, { test_name: 'Peel test', checked: true, qty: '2' }, { test_name: 'Grain size test', checked: true, qty: '1' }, { test_name: 'SEM-EDX examination', checked: true, qty: '2' }, { test_name: 'Salt spray test', checked: true, qty: '2' }, { test_name: 'HIC test', checked: true, qty: '3' }, { test_name: 'SCC test', checked: true, qty: '2' }, { test_name: 'SSCC FPB test', checked: true, qty: '3' }, { test_name: 'SSCC PR test', checked: true, qty: '2' }] }
+  ,
+    // Coupon 2: Root & Face Bend -> satu Lembar gabungan
+    { row_no: 2, coupon_type: ['Plate'], material_type_grade: 'A36', thickness: '12', no_wps: 'WPS-2', ref_code: 'ASME IX',
+      test_items: [{ test_name: 'Bend Root', checked: true, qty: '2' }, { test_name: 'Bend Face', checked: true, qty: '2' }], other_tests: [] }
   ]
 };
 
@@ -102,8 +106,18 @@ const pool = {
       return { rows: [row] };
     }
     const q = sql.trim();
+    if (/^SELECT report_no FROM work_order_sample_marks WHERE work_order_id/.test(q)) return { rows: [{ report_no: params[1] === 1 ? 'DE.1/1026/0001' : '' }] };
     if (/^SELECT id FROM test_reports WHERE test_request_id = [$]1 AND coupon_row_no/.test(q)) return { rows: reports.filter(r => r.coupon_row_no === params[1] && r.test_name === params[2]) };
-    if (/^SELECT status FROM specimen_inspections WHERE test_request_id/.test(q)) return { rows: params[2] === inspections.blockedTest ? (inspections.status ? [{ status: inspections.status }] : []) : [{ status: 'final' }] };
+    if (/^SELECT test_name, status FROM specimen_inspections WHERE test_request_id/.test(q)) {
+      return { rows: params[2].flatMap(n => (n === inspections.blockedTest ? (inspections.status ? [{ test_name: n, status: inspections.status }] : []) : [{ test_name: n, status: 'final' }])) };
+    }
+    if (/^SELECT ti[.]test_name FROM test_items ti JOIN coupon_tests ct/.test(q)) {
+      const cp = WO.coupon_tests.find(c => c.row_no === params[1]);
+      return { rows: (cp ? cp.test_items : []).filter(t => t.checked && params[2].includes(t.test_name)).map(t => ({ test_name: t.test_name })) };
+    }
+    if (/^SELECT test_name FROM test_reports WHERE test_request_id = [$]1 AND coupon_row_no = [$]2 AND test_name = ANY/.test(q)) {
+      return { rows: reports.filter(r => r.coupon_row_no === params[1] && params[2].includes(r.test_name)).map(r => ({ test_name: r.test_name })) };
+    }
     if (/^SELECT COUNT[(][*][)] AS n FROM test_report_photos/.test(q)) return { rows: [{ n: photoStore.filter(p => p.id === Number(params[0])).length }] };
     if (/^SELECT slot FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0])).map(p => ({ slot: p.slot })) };
     if (/^SELECT slot, mime_type, data FROM test_report_photos/.test(q)) return { rows: photoStore.filter(p => p.id === Number(params[0])) };
@@ -131,7 +145,7 @@ const computeMarkingInfo = async (reqId, testName, couponRowNo) => {
   const cp = WO.coupon_tests.find(c => c.row_no === couponRowNo);
   const item = cp.test_items.concat(cp.other_tests).find(t => t.test_name === testName);
   const qty = parseInt(item.qty, 10) || 0;
-  const code = /Compression/.test(testName) ? 'CP' : /Flaring/.test(testName) ? 'FL' : /Geser/.test(testName) ? 'GL' : /Peel/i.test(testName) ? 'PL' : /Grain/i.test(testName) ? 'GS' : /EDX/i.test(testName) ? 'SE' : /Salt/i.test(testName) ? 'SP' : /HIC/i.test(testName) ? 'HC' : /SSCC/i.test(testName) ? 'SS' : /SCC/i.test(testName) ? 'SC' : testName === 'Bend Root' ? 'BR' : (testName === 'Charpy Impact Test' ? 'CH' : 'TS');
+  const code = /Compression/.test(testName) ? 'CP' : /Flaring/.test(testName) ? 'FL' : /Geser/.test(testName) ? 'GL' : /Peel/i.test(testName) ? 'PL' : /Grain/i.test(testName) ? 'GS' : /EDX/i.test(testName) ? 'SE' : /Salt/i.test(testName) ? 'SP' : /HIC/i.test(testName) ? 'HC' : /SSCC/i.test(testName) ? 'SS' : /SCC/i.test(testName) ? 'SC' : testName === 'Bend Root' ? 'BR' : testName === 'Bend Face' ? 'BF' : (testName === 'Charpy Impact Test' ? 'CH' : 'TS');
   return { sample_marking: 'ABN.9.1', code, qty, markings: Array.from({ length: qty }, (_, i) => `ABN.9.1-${code}${i + 1}`) };
 };
 
@@ -169,6 +183,7 @@ function call(method, path, params, body) {
   assert.deepStrictEqual(r.body.rows.map(x => x.marking_specimen), ['ABN.9.1-BR1', 'ABN.9.1-BR2', 'ABN.9.1-BR3']);
   assert.strictEqual(r.body.rows[0].observation, 'No Open Discontinuity was Observed');
   assert.strictEqual(r.body.title, 'Root Bend Test');
+  assert.strictEqual(r.body.report_no, 'DE.1/1026/0001');   // No. Laporan otomatis dari coupon
   assert.strictEqual(r.body.testing_pic, 'Budi');
   assert.strictEqual(r.body.approved_signatory.name, 'Citra');
   const id = r.body.id;
@@ -754,6 +769,26 @@ function call(method, path, params, body) {
   const sph = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(spid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual(sph.split('class="paper"').length - 1, 4, 'kondisi + pembebanan + 2 halaman hasil (1 per halaman)');
   ['500 mL', '>11.64<', '>4188.84<', '3.85 x 25.43', '>360<', '>196<', 'Crack observed', 'No Crack was Observed', '>CT2<', 'DE.1/TR/31'].forEach(t => assert.ok(sph.includes(t), 'pr memuat ' + t));
+
+  // ---- Root & Face Bend: satu Lembar gabungan per coupon ----
+  inspections.blockedTest = 'Bend Face'; inspections.status = 'draft';
+  r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 2, test_name: 'Bend Root' });
+  assert.strictEqual(r.status, 400, 'Face belum Final -> Lembar gabungan belum bisa dibuat');
+  assert.ok(/Bend Face/.test(r.body.error));
+  inspections.blockedTest = null;
+  r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 2, test_name: 'Bend Face' });
+  assert.strictEqual(r.status, 201);
+  const bid = r.body.id;
+  assert.strictEqual(r.body.test_name, 'Bend Root', 'disimpan atas nama pengujian pertama');
+  assert.strictEqual(r.body.title, 'Root & Face Bend Test');
+  assert.deepStrictEqual(r.body.combined_tests, ['Bend Root', 'Bend Face']);
+  assert.deepStrictEqual(r.body.rows.map(x => x.marking_specimen), ['ABN.9.1-BR1', 'ABN.9.1-BR2', 'ABN.9.1-BF1', 'ABN.9.1-BF2']);
+  r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 2, test_name: 'Bend Root' });
+  assert.strictEqual(r.body.id, bid, 'Root membuka Lembar yang sama');
+  r = await call('PUT', '/api/test-reports/:id', { id: String(bid) }, { status: 'draft', template: 'bend-sec', rows: r.body.rows.map((x, i) => ({ ...x, result: 'accepted', observation: 'OK' + i })) });
+  const bh = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(bid) } }, { setHeader() {}, send: resolve }));
+  ['Type of Bend: Root Bend Test', 'Type of Bend: Face Bend Test', 'ABN.9.1-BR2', 'ABN.9.1-BF2'].forEach(t => assert.ok(bh.includes(t), 'gabungan memuat ' + t));
+  assert.ok(bh.indexOf('ABN.9.1-BR1') < bh.indexOf('ABN.9.1-BF1'));
 
   // DELETE
   r = await call('DELETE', '/api/test-reports/:id', { id: String(id) });
