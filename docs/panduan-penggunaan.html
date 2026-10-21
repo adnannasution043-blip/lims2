@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Panduan Penggunaan DETECH LIMS</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm 16mm 15mm; }
+  :root { --navy: #0E3270; --red: #AA0000; --ink: #26313f; --muted: #6b7788; --line: #dfe3ea; --soft: #f4f6fa; --ok: #1f7a46; --warn: #8a5a00; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Inter, Arial, sans-serif; color: var(--ink); font-size: 10.2pt; line-height: 1.45; margin: 0; }
+  h1 { font-size: 25pt; color: var(--navy); margin: 0 0 4px; letter-spacing: -.3px; }
+  h2 { font-size: 13.5pt; color: var(--navy); margin: 17px 0 7px; padding-bottom: 5px; border-bottom: 2px solid var(--navy); break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 14px 0 4px; color: var(--ink); break-after: avoid; }
+  p { margin: 4px 0 8px; }
+  .cover { padding: 6px 0 14px; border-bottom: 4px solid var(--red); margin-bottom: 14px; }
+  .brand { font-size: 10pt; letter-spacing: 3px; text-transform: uppercase; color: var(--red); font-weight: 700; }
+  .sub { color: var(--muted); font-size: 11.5pt; margin: 2px 0 0; }
+  .meta { color: var(--muted); font-size: 9pt; margin-top: 8px; }
+  /* alur */
+  .flow { display: flex; align-items: stretch; gap: 0; margin: 10px 0 6px; }
+  .flow .st { flex: 1; min-width: 0; text-align: center; padding: 8px 4px; background: var(--soft); border: 1px solid var(--line); border-right: none; font-size: 8.8pt; font-weight: 600; color: var(--navy); position: relative; }
+  .flow .st:first-child { border-radius: 8px 0 0 8px; }
+  .flow .st:last-child { border-right: 1px solid var(--line); border-radius: 0 8px 8px 0; background: #e8f5ee; color: var(--ok); }
+  .flow .st b { display: block; font-size: 13pt; color: var(--red); line-height: 1.1; }
+  .flow .st:last-child b { color: var(--ok); }
+  .flow-cap { font-size: 9pt; color: var(--muted); }
+  /* langkah */
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 6px 0; }
+  ol.steps > li { counter-increment: s; position: relative; padding: 4px 0 7px 38px; break-inside: avoid; }
+  ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 3px; width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff; font-weight: 700; font-size: 10pt; display: flex; align-items: center; justify-content: center; }
+  ol.steps ul { margin: 3px 0 0; padding-left: 18px; }
+  ol.steps ul li { margin: 1px 0; }
+  .tag { display: inline-block; font-size: 8.3pt; font-weight: 700; padding: 1px 8px; border-radius: 9px; background: var(--soft); color: var(--navy); border: 1px solid var(--line); margin-left: 6px; vertical-align: 1px; }
+  .btn { display: inline-block; font-size: 9.4pt; font-weight: 600; padding: 0 7px; border-radius: 5px; background: #fff; border: 1px solid #b8c0cc; color: var(--ink); white-space: nowrap; }
+  .btn.p { background: var(--red); border-color: var(--red); color: #fff; }
+  .menu { font-weight: 700; color: var(--navy); }
+  .note { border-left: 4px solid var(--navy); background: var(--soft); padding: 8px 12px; margin: 8px 0; border-radius: 0 6px 6px 0; break-inside: avoid; }
+  .note.warn { border-color: #d19a1e; background: #fff8e6; }
+  .note.ok { border-color: var(--ok); background: #eef8f2; }
+  table { border-collapse: collapse; width: 100%; margin: 6px 0 10px; font-size: 9.6pt; break-inside: auto; }
+  th { background: var(--navy); color: #fff; text-align: left; padding: 5px 8px; font-weight: 600; }
+  td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr { break-inside: avoid; }
+  tbody tr:nth-child(even) td { background: #fafbfd; }
+  code { font-family: Consolas, "Courier New", monospace; background: var(--soft); padding: 0 4px; border-radius: 3px; font-size: 9.4pt; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  footer { margin-top: 18px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8.8pt; }
+  .pb { break-before: page; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="brand">DETECH Material Testing Laboratory</div>
+  <h1>Panduan Penggunaan DETECH LIMS</h1>
+  <p class="sub">Dari Permintaan Uji sampai Laporan Hasil Uji (LHU) terbit &mdash; langkah demi langkah</p>
+  <div class="meta">Versi 1.1 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
+</div>
+
+<div class="note ok"><b>Yang baru di versi 1.1</b> (revisi klien Rev 1): tahap <i>Report Issued</i> dihapus &mdash; LHU terbit otomatis setelah Review &amp; Approval disetujui, <b>satu LHU per coupon</b>; No. Laporan otomatis per coupon <code>DE.1/MMYY/nnnn</code>; tahap <b>Reporting</b> kini berisi <b>Preliminary Report</b> dan tanggapan customer; tahap tidak bisa dilompati; data wajib lengkap sebelum Finalisasi; menu <b>Machining</b> untuk tim machining; Root &amp; Face Bend satu Lembar; Witnessed By lebih dari satu orang; lampiran hasil mesin uji; Perusahaan dipilih dari Master Customer.</div>
+
+<h2>Gambaran alur</h2>
+<div class="flow">
+  <div class="st"><b>1</b>Permintaan Uji</div>
+  <div class="st"><b>2</b>Work Order</div>
+  <div class="st"><b>3</b>Receiving</div>
+  <div class="st"><b>4</b>Preparation</div>
+  <div class="st"><b>5</b>Testing</div>
+  <div class="st"><b>6</b>Reporting (Preliminary)</div>
+  <div class="st"><b>7</b>Review &amp; Approval &rarr; LHU</div>
+</div>
+<p class="flow-cap">Langkah 1&ndash;2 dikerjakan di menu masing-masing; langkah 3&ndash;7 adalah <b>lima tahap Tasks</b> pada satu Work Order. <b>Tahap tidak bisa dilompati:</b> suatu tahap baru bisa diisi setelah semua tahap sebelumnya selesai (halaman tahap yang belum boleh diisi menampilkan gembok dan alasannya). Begitu Review &amp; Approval disetujui, LHU terbit otomatis dan seluruh data Work Order terkunci.</p>
+
+<h2>0. Persiapan (sekali saja)</h2>
+<ol class="steps">
+  <li><b>Login.</b> Buka alamat aplikasi, masukkan username dan kata sandi. Klik nama Anda di bagian bawah sidebar untuk <span class="menu">mengganti kata sandi</span> atau keluar. Sesi berlaku 12 jam dan diperpanjang selama dipakai.</li>
+  <li><b>Master Data &rarr; Customer.</b> Isi <b>Nama Perusahaan</b>, <b>ID Perusahaan</b>, <b>Atas Nama Perusahaan</b>, alamat, dan telepon. Perusahaan di Permintaan Uji <b>hanya bisa dipilih dari daftar ini</b> (tidak bisa diketik). Customer lama yang belum punya Nama Perusahaan dilengkapi lewat tombol <span class="btn">Ubah</span>.</li>
+  <li><b>Master Data lain.</b> Daftar <b>PIC</b> (nama petugas tiap tahap), <b>Tipe Spesimen</b> (mengisi kolom Code di Pengecekan Spesimen), <b>Kode Jenis Pengujian</b> (dipakai marking spesimen), dan <b>Equipment</b> (opsional; menjadi saran kolom alat uji).</li>
+  <li><b>Pengguna &amp; Role</b> (khusus Administrator). Tab <i>Role &amp; Hak Akses</i> mengatur apa yang boleh dilakukan tiap role (Lihat/Tambah/Ubah/Hapus per menu); tab <i>Pengguna</i> untuk membuat akun dan memilihkan role.</li>
+</ol>
+
+<h2>A. Permintaan Uji</h2>
+<ol class="steps">
+  <li>Menu <span class="menu">Permintaan Uji</span> &rarr; <span class="btn p">+ Buat Permintaan Baru</span>. Pilih <b>Perusahaan</b> dari daftar Master Customer; ID Perusahaan dan Atas Nama Perusahaan terisi otomatis (terkunci), alamat dan telepon terisi tetapi masih bisa disesuaikan.</li>
+  <li>Tambahkan <b>Coupon</b> (jenis spesimen, material/grade, WPS, posisi las, dan lain-lain). <b>Welder&rsquo;s Name</b> diisi di sini, sekali per coupon; tidak perlu ditulis lagi di Lembar Hasil Uji.</li>
+  <li>Pada tiap coupon, centang <b>Jenis Pengujian</b> dan isi <b>Qty</b> (jumlah spesimen). Qty membentuk <b>marking spesimen</b> otomatis, mis. <code>ABC.9.1-TS1</code>, <code>ABC.9.1-TS2</code>.</li>
+  <li>Pengujian yang tidak ada di daftar tetap (Compression, HIC, SEM-EDX, dan lain-lain) <b>diketik di kolom <i>Other Test</i></b> sesuai penulisan pada tabel di bagian akhir, lalu isi Qty-nya.</li>
+  <li>Klik <span class="btn p">Simpan &amp; Finalisasi</span> (Perusahaan wajib sudah dipilih). Hanya Permintaan berstatus <b>Final</b> yang bisa dibuatkan Work Order.</li>
+</ol>
+
+<h2>B. Work Order</h2>
+<ol class="steps" style="counter-reset: s 5;">
+  <li>Di daftar Permintaan Uji, pada baris yang sudah Final klik ikon <b>Buat Work Order</b>, lengkapi data, lalu simpan.</li>
+  <li><b>No. Laporan dibuat otomatis per coupon</b> dengan format <code>DE.1/MMYY/nnnn</code> (mis. <code>DE.1/1026/0001</code> = Oktober 2026, urutan 1). Urutan berjalan sepanjang tahun dan mulai lagi dari 0001 saat tahun berganti. Nomor ini tercetak di Lembar Hasil Uji dan sekaligus menjadi <b>No. LHU</b> coupon itu.</li>
+</ol>
+<div class="note warn">Setelah Work Order dibuat, coupon tidak boleh dihapus atau diubah urutannya (hasil uji, marking, dan No. Laporan menempel pada nomor coupon). Coupon baru hanya boleh ditambahkan di bagian bawah.</div>
+
+<h2>C. Tasks &mdash; lima tahap pada satu Work Order</h2>
+<p>Buka menu <span class="menu">Tasks</span>, cari Work Order, lalu klik <span class="btn p">Kerjakan</span> atau langsung lingkaran status tahapnya. Tiap tahap berisi PIC, tanggal, catatan, dan tombol <span class="btn">Simpan sebagai Draft</span> / <span class="btn p">Simpan &amp; Selesaikan Tahap</span>. Bila tahap belum bisa diselesaikan, daftar kekurangannya muncul di bawah form.</p>
+<ol class="steps" style="counter-reset: s 7;">
+  <li><b>Receiving</b> <span class="tag">penerimaan sampel</span><br>
+    Pilih PIC dan tanggal penerimaan. Untuk <b>setiap coupon</b> isi status diterima dan kondisi (Baik / Cacat-Rusak / Perlu Klarifikasi). Foto kondisi sampel bisa diunggah sebagai bukti.</li>
+  <li><b>Preparation</b> <span class="tag">machining &amp; Pengecekan Spesimen</span><br>
+    Tidak ada form; tahap selesai sendiri bila machining selesai dan semua sheet Pengecekan Spesimen berstatus Final.
+    <ul>
+      <li><b>Machining:</b> tim machining membuka menu <span class="menu">Machining</span>, menekan <span class="btn p">Mulai Machining</span> saat mulai membuat spesimen dan <span class="btn p">Selesai Machining</span> bila semua spesimen jadi. Machining baru bisa dimulai setelah Receiving selesai.</li>
+      <li><b>Pengecekan Spesimen:</b> setelah machining selesai, buat sheet lewat <span class="menu">Pengecekan Spesimen</span> (tombol <b>Buat Pengecekan</b>) atau <span class="menu">Preparation Queue</span>. Isi marking dan ukuran spesimen.</li>
+      <li><b>Wajib lengkap sebelum Final:</b> tanggal pemeriksaan, nama pemeriksa, dan untuk tiap spesimen: Marking Specimen, semua ukuran <b>Actual</b> sesuai jenisnya, serta Accepted Y/N (Tensile: juga 3 Point Measurement; Charpy: juga Location dan Center V-Notch). Bila belum lengkap, daftar kekurangannya tampil di atas form; Draft tetap bisa disimpan.</li>
+    </ul></li>
+  <li><b>Testing</b> <span class="tag">Lembar Hasil Uji</span><br>
+    Baru bisa diisi setelah Preparation selesai. Untuk tiap baris pengujian klik <b>+ Buat Sheet</b> untuk membuka <b>Lembar Hasil Uji</b>.
+    <ul>
+      <li><b>Root Bend dan Face Bend</b> pada coupon yang sama memakai <b>satu Lembar gabungan</b> (Root di kolom kiri, Face di kolom kanan pada form Bend Weld).</li>
+      <li>Pilih bentuk form di dropdown bila ada beberapa (mis. Tensile: Reduced Section / Full Section / Bolt; SSCC: FPB / Proof Ring).</li>
+      <li>Isi tabel hasil; kolom yang bisa dihitung terisi otomatis (Area, kekuatan, rata-rata, dan sebagainya). No. Laporan dan Welder&rsquo;s Name tampil otomatis.</li>
+      <li><b>Witnessed By</b> bisa lebih dari satu orang: tekan <span class="btn">+ Tambah saksi</span>.</li>
+      <li>Foto (bila form menyediakan slot foto) dan <b>Lampiran Hasil Mesin Uji</b> (PDF, gambar, CSV/TXT, Excel, ZIP dari mesin uji; maks. 8 MB per file) tersimpan langsung saat dipilih. Lampiran hanya referensi, tidak dicetak.</li>
+      <li><b>Wajib lengkap sebelum Final:</b> Date of Tested, Test Conducted By, ada data hasil uji, dan hasil tiap spesimen (Bend/Flaring/Nick Break/Fillet Weld Break: Result; Charpy: Impact; Tensile: beban atau kekuatan).</li>
+      <li><span class="btn">Simpan sebagai Draft</span> lalu <span class="btn p">Simpan &amp; Finalisasi</span>.</li>
+    </ul>
+    Di halaman tahap Testing, <b>tanggal uji dan status diambil otomatis dari Lembar</b> (Lembar Final = Selesai, Draft = Sedang Diuji); tidak perlu diisi lagi. Setelah semua Lembar Final, selesaikan tahap.</li>
+  <li><b>Reporting</b> <span class="tag">Preliminary Report</span><br>
+    <ul>
+      <li>Klik <span class="btn p">Unduh Preliminary Report</span> untuk tiap coupon, lalu serahkan ke customer untuk ditinjau. Isinya sama dengan laporan asli, tetapi <b>tanpa logo DETECH dan KAN</b>, <b>tanpa tanda tangan approval</b>, dan dengan watermark <i>PRELIMINARY REPORT</i>.</li>
+      <li>Catat <b>Tanggapan Customer</b>: <i>Diterima</i>, <i>Revisi</i>, atau <i>Ditolak</i>, beserta tanggal dan catatan.</li>
+      <li>Hanya <b>Diterima</b> yang membuat tahap ini bisa diselesaikan. <i>Revisi</i>: perbaiki Lembar Hasil Uji, unduh ulang Preliminary, lalu catat tanggapan baru. <i>Ditolak</i>: alur berhenti sampai status diubah.</li>
+      <li>Bila Lembar diubah <b>setelah</b> customer menyatakan Diterima, persetujuan itu batal dan harus diminta ulang.</li>
+    </ul></li>
+  <li><b>Review &amp; Approval</b> <span class="tag">LHU terbit otomatis</span><br>
+    Syarat otomatis (Pengecekan Spesimen, Testing, Reporting selesai) harus hijau. Centang checklist manual, pilih keputusan <b>Disetujui</b> (atau <i>Ditolak / Revisi</i>), isi nama approver dan tanggal, lalu <b>tanda tangan</b>. Tanda tangan ini muncul di kolom <i>Approved Signatory</i> pada LHU.<br>
+    Saat tahap ini diselesaikan dengan keputusan Disetujui, <b>LHU langsung terbit</b> (satu per coupon) di menu Hasil &amp; Laporan, dan seluruh data Work Order <b>terkunci</b>.</li>
+</ol>
+
+<div class="note warn"><b>Perlu revisi setelah LHU terbit?</b> Administrator menekan <span class="btn">Cabut LHU untuk revisi</span> pada banner gembok di halaman tahap dan menulis alasannya. Review &amp; Approval kembali ke Draft (harus disetujui ulang), data terbuka untuk diperbaiki, No. LHU tetap sama, dan nomor revisi (Rev.) bertambah.</div>
+
+<h2>D. Hasil &amp; Laporan</h2>
+<ol class="steps" style="counter-reset: s 12;">
+  <li>Menu <span class="menu">Hasil &amp; Laporan</span> menampilkan <b>satu baris per coupon</b> yang LHU-nya sudah terbit; <b>No. LHU = No. Laporan coupon</b>. Buka detailnya lalu <span class="btn p">Download PDF</span>: dokumen berisi semua Lembar Hasil Uji Final coupon itu, dengan nomor halaman berurutan.</li>
+  <li>Unggah <b>attachment</b> pendukung bila perlu, dan catat <b>Distribusi</b> (pengiriman LHU ke customer beserta bukti kirim). Keduanya dicatat per coupon.</li>
+</ol>
+
+<h2>Menu Machining (role Machining)</h2>
+<p>Akun dengan role <b>Machining</b> hanya melihat menu <span class="menu">Machining</span>: daftar Work Order yang sampelnya sudah diterima, dengan spesimen yang harus dibuat (coupon, jenis pengujian, Qty, Specimen Marking) dan satu tombol <span class="btn p">Mulai Machining</span> / <span class="btn p">Selesai Machining</span>. Work Order yang selesai machining tetap tampil 7 hari.</p>
+
+<h2>Penamaan pengujian dan kode marking</h2>
+<p>Pengujian di daftar tetap tinggal dicentang. Pengujian lain diketik di <i>Other Test</i>; sistem mengenali penulisan di kolom tengah (huruf besar/kecil bebas) dan memakai form yang sesuai. Kode dipakai untuk marking spesimen (<code>{Sample Marking}-{kode}{nomor}</code>).</p>
+<div class="two">
+<table>
+  <thead><tr><th>Daftar tetap (dicentang)</th><th>Kode</th></tr></thead>
+  <tbody>
+    <tr><td>Tensile Test</td><td>TS</td></tr>
+    <tr><td>Bend Root / Face / Side</td><td>BR / BF / BS</td></tr>
+    <tr><td>Hardness Test</td><td>HD</td></tr>
+    <tr><td>Nick Break Test</td><td>NB</td></tr>
+    <tr><td>Charpy Impact Test</td><td>CI</td></tr>
+    <tr><td>Macro-etching &amp; Examination</td><td>MC</td></tr>
+    <tr><td>Fillet Weld Break</td><td>FW</td></tr>
+    <tr><td>Flattening Test</td><td>FT</td></tr>
+    <tr><td>Chemical Composition Test</td><td>CA</td></tr>
+    <tr><td>Microstructure / Metallography</td><td>MS</td></tr>
+    <tr><td>Ferrite Point Count / Content</td><td>FP</td></tr>
+    <tr><td>Intergranular / Pitting Corrosion</td><td>IC</td></tr>
+    <tr><td>Through Thickness</td><td>TT</td></tr>
+  </tbody>
+</table>
+<table>
+  <thead><tr><th>Diketik di <i>Other Test</i></th><th>Kode</th></tr></thead>
+  <tbody>
+    <tr><td>Compression Test <span class="tag">atau &ldquo;Uji Tekan&rdquo;</span></td><td>CP</td></tr>
+    <tr><td>Flaring Test</td><td>FL</td></tr>
+    <tr><td>Geser Las Test <span class="tag">&ldquo;Uji Geser Las&rdquo;</span></td><td>GL</td></tr>
+    <tr><td>Peel Test</td><td>PL</td></tr>
+    <tr><td>Grain Size Test <span class="tag">&ldquo;Apparent Grain Size&rdquo;</span></td><td>GS</td></tr>
+    <tr><td>SEM-EDX Test</td><td>SE</td></tr>
+    <tr><td>Salt Spray Test <span class="tag">&ldquo;Salt Fog&rdquo;</span></td><td>SP</td></tr>
+    <tr><td>HIC Test <span class="tag">&ldquo;Hydrogen Induced Cracking&rdquo;</span></td><td>HC</td></tr>
+    <tr><td>SCC Test <span class="tag">&ldquo;Stress Corrosion Cracking&rdquo;</span></td><td>SC</td></tr>
+    <tr><td>SSCC Test <span class="tag">&ldquo;Sulfide Stress Corrosion Cracking&rdquo;</span></td><td>SS</td></tr>
+    <tr><td>PMI</td><td>(memakai form Chemical Composition)</td></tr>
+  </tbody>
+</table>
+</div>
+<p style="font-size:9.4pt;color:var(--muted)">SSCC memakai form <b>FPB</b> (four-point bend) secara bawaan; bila nama pengujian menyebut &ldquo;proof ring&rdquo;, &ldquo;PR&rdquo;, atau &ldquo;tensile&rdquo;, form <b>Proof Ring</b> yang dipilih. Keduanya bisa diganti lewat dropdown di Lembar Hasil Uji.</p>
+
+<h2>Bila tahap tidak bisa diselesaikan</h2>
+<table>
+  <thead><tr><th style="width:34%">Pesan / gejala</th><th>Penyebab</th><th style="width:30%">Yang dilakukan</th></tr></thead>
+  <tbody>
+    <tr><td>Perusahaan tidak ada di pilihan</td><td>Belum ada di Master Customer</td><td>Tambahkan di Master Data &rarr; Customer</td></tr>
+    <tr><td>Marking spesimen tidak terbentuk</td><td>Qty pada pengujian kosong</td><td>Isi Qty di Permintaan Uji</td></tr>
+    <tr><td>Tombol Buat Work Order tidak ada</td><td>Permintaan masih Draft</td><td>Buka lalu <i>Simpan &amp; Finalisasi</i></td></tr>
+    <tr><td>Gembok &ldquo;Tahap &hellip; belum selesai&rdquo;</td><td>Tahap sebelumnya belum diselesaikan (tidak boleh melompati tahap)</td><td>Selesaikan tahap sebelumnya dulu</td></tr>
+    <tr><td>&ldquo;Machining spesimen belum selesai&rdquo;</td><td>Tim machining belum menekan Selesai Machining</td><td>Selesaikan di menu Machining</td></tr>
+    <tr><td>&ldquo;Belum bisa Finalisasi &mdash; lengkapi data berikut&rdquo;</td><td>Data Pengecekan Spesimen / Lembar Hasil Uji belum lengkap</td><td>Isi semua yang tercantum di daftar merah</td></tr>
+    <tr><td>&ldquo;Pengecekan Spesimen &hellip; belum Final / belum dibuat&rdquo; saat Buat Sheet</td><td>Lembar Hasil Uji dibuat sebelum Preparation selesai</td><td>Finalkan Pengecekan Spesimen</td></tr>
+    <tr><td>&ldquo;N pengujian belum selesai&rdquo;</td><td>Ada Lembar Hasil Uji yang belum Final</td><td>Finalkan Lembarnya</td></tr>
+    <tr><td>&ldquo;Preliminary Report belum diterima customer&rdquo; / &ldquo;minta revisi&rdquo; / &ldquo;ditolak&rdquo;</td><td>Tanggapan customer belum Diterima</td><td>Perbaiki bila perlu, lalu catat tanggapan Diterima</td></tr>
+    <tr><td>&ldquo;Lembar Hasil Uji diubah setelah customer menerima&rdquo;</td><td>Ada perubahan Lembar sesudah persetujuan</td><td>Unduh ulang Preliminary, minta persetujuan lagi</td></tr>
+    <tr><td>&ldquo;Approval belum berstatus Disetujui&rdquo;</td><td>Keputusan masih Menunggu / Ditolak</td><td>Pilih Disetujui dan tanda tangani</td></tr>
+    <tr><td>&ldquo;Data ini terkunci karena LHU sudah diterbitkan&rdquo;</td><td>Review &amp; Approval sudah disetujui</td><td>Minta Administrator <i>Cabut LHU</i></td></tr>
+    <tr><td>Pesan &ldquo;Anda tidak punya akses&rdquo;</td><td>Role akun tidak mengizinkan aksi itu</td><td>Minta Administrator menyesuaikan role</td></tr>
+    <tr><td>Kembali ke halaman login tiba-tiba</td><td>Sesi berakhir (12 jam) atau kata sandi diganti</td><td>Login ulang</td></tr>
+  </tbody>
+</table>
+
+<h2>Role bawaan</h2>
+<table>
+  <thead><tr><th style="width:24%">Role</th><th>Untuk siapa / hak akses utama</th></tr></thead>
+  <tbody>
+    <tr><td>Administrator</td><td>Akses penuh, termasuk Pengguna, Pengaturan, dan Cabut LHU (tidak bisa dihapus atau dikurangi)</td></tr>
+    <tr><td>Supervisor Lab</td><td>Seluruh alur lab dan Master Data; tanpa Pengguna &amp; Pengaturan</td></tr>
+    <tr><td>Receiving</td><td>Melihat Permintaan Uji; mengisi tahap Tasks; melihat Pengecekan Spesimen</td></tr>
+    <tr><td>Preparation / Machining</td><td>Mengisi tahap Tasks; membuat dan mengubah Pengecekan Spesimen</td></tr>
+    <tr><td>Machining</td><td>Hanya menu Machining: melihat spesimen yang harus dibuat, Mulai / Selesai Machining</td></tr>
+    <tr><td>Analis Pengujian</td><td>Mengisi tahap Tasks (Testing, Reporting); hanya melihat menu lain</td></tr>
+    <tr><td>Reviewer / Approver</td><td>Mengisi tahap Tasks (Review &amp; Approval); mengubah Hasil &amp; Laporan (distribusi, attachment)</td></tr>
+    <tr><td>Viewer</td><td>Hanya melihat, tidak bisa menambah atau mengubah data</td></tr>
+  </tbody>
+</table>
+<p style="font-size:9.4pt;color:var(--muted)">Role bisa diubah di <b>Pengguna &rarr; Role &amp; Hak Akses</b>. Hak akses per menu: Lihat, Tambah, Ubah, Hapus. Role lain yang perlu melihat menu Machining cukup dicentang hak <i>Machining (tim machining)</i>-nya.</p>
+
+<h2>Tips</h2>
+<div class="note ok"><b>Uji coba dulu.</b> Jalankan satu pekerjaan percobaan dari awal sampai LHU terbit. Setelah selesai, <span class="menu">Pengaturan</span> &rarr; <b>Reset Data</b> (ketik <code>HAPUS</code>) mengosongkan semua data transaksi tanpa menyentuh Master Data dan Pengguna.</div>
+<ul>
+  <li><b>Memantau posisi:</b> menu <span class="menu">Tasks</span> menampilkan tahap tiap Work Order; klik salah satu tahap di bagian atas untuk menyaring daftar. Antrian per tahap ada di bagian <span class="menu">Antrian Kerja</span>.</li>
+  <li><b>Mencetak ke PDF:</b> gunakan tombol <i>Print / Simpan sebagai PDF</i> pada halaman cetak. Header tabel gelap dan baris selang-seling ikut tercetak.</li>
+  <li><b>Mengecek hasil cetak:</b> bandingkan tampilan cetak/PDF dengan form Excel klien, terutama angka hasil perhitungan (Area, kekuatan, CSR/CLR/CTR, dan sebagainya).</li>
+  <li><b>Riwayat perubahan:</b> Administrator dapat melihat siapa mengubah apa di <span class="menu">Pengaturan</span> &rarr; <i>Jejak Aktivitas</i>.</li>
+  <li><b>Keamanan:</b> jangan membagikan akun. Administrator dapat menonaktifkan akun yang tidak dipakai di menu Pengguna.</li>
+</ul>
+
+<footer>DETECH LIMS &middot; Panduan Penggunaan v1.1 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
+
+</body>
+</html>
