@@ -106,6 +106,15 @@ const pool = {
       return { rows: [row] };
     }
     const q = sql.trim();
+    if (/test_report_files/.test(q)) {
+      const F = global.__mfiles = global.__mfiles || [];
+      if (/^SELECT id FROM test_reports WHERE id/.test(q)) return { rows: reports.filter(r => r.id === Number(params[0])).map(r => ({ id: r.id })) };
+      if (/^SELECT COUNT/.test(q)) return { rows: [{ n: F.filter(f => f.test_report_id === Number(params[0])).length }] };
+      if (/^INSERT INTO test_report_files/.test(q)) { const f = { id: F.length + 1, test_report_id: Number(params[0]), filename: params[1], mime_type: params[2], size_bytes: params[3], data: params[4], created_at: 'now' }; F.push(f); return { rows: [f] }; }
+      if (/^SELECT id, test_report_id/.test(q)) return { rows: F.filter(f => f.test_report_id === Number(params[0])) };
+      if (/^SELECT filename, mime_type, data/.test(q)) return { rows: F.filter(f => f.id === Number(params[0])) };
+      if (/^DELETE FROM test_report_files/.test(q)) { const i = F.findIndex(f => f.id === Number(params[0])); if (i >= 0) F.splice(i, 1); return { rowCount: i >= 0 ? 1 : 0 }; }
+    }
     if (/^SELECT report_no FROM work_order_sample_marks WHERE work_order_id/.test(q)) return { rows: [{ report_no: params[1] === 1 ? 'DE.1/1026/0001' : '' }] };
     if (/^SELECT id FROM test_reports WHERE test_request_id = [$]1 AND coupon_row_no/.test(q)) return { rows: reports.filter(r => r.coupon_row_no === params[1] && r.test_name === params[2]) };
     if (/^SELECT test_name, status FROM specimen_inspections WHERE test_request_id/.test(q)) {
@@ -789,6 +798,25 @@ function call(method, path, params, body) {
   const bh = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(bid) } }, { setHeader() {}, send: resolve }));
   ['Type of Bend: Root Bend Test', 'Type of Bend: Face Bend Test', 'ABN.9.1-BR2', 'ABN.9.1-BF2'].forEach(t => assert.ok(bh.includes(t), 'gabungan memuat ' + t));
   assert.ok(bh.indexOf('ABN.9.1-BR1') < bh.indexOf('ABN.9.1-BF1'));
+
+  // ---- Lampiran hasil mesin uji ----
+  const upFile = (rid, type, name, buf) => new Promise(resolve => {
+    const res = { statusCode: 200, status(c) { this.statusCode = c; return this; }, json(o) { resolve({ status: this.statusCode, body: o }); } };
+    routes['POST /api/test-reports/:id/files']({ params: { id: String(rid) }, headers: { 'content-type': type, 'x-filename': encodeURIComponent(name) }, body: buf }, res);
+  });
+  r = await upFile(bid, 'application/pdf', 'UTM run 1.pdf', Buffer.from('%PDF-1'));
+  assert.strictEqual(r.status, 201);
+  assert.strictEqual(r.body.filename, 'UTM run 1.pdf');
+  r = await upFile(bid, 'application/octet-stream', 'data.csv', Buffer.from('a,b'));
+  assert.strictEqual(r.body.mime_type, 'text/csv', 'CSV tanpa tipe dikenali dari nama file');
+  assert.strictEqual((await upFile(bid, 'application/x-msdownload', 'x.exe', Buffer.from('MZ'))).status, 400);
+  assert.strictEqual((await upFile(bid, 'application/pdf', 'kosong.pdf', Buffer.alloc(0))).status, 400);
+  assert.strictEqual((await upFile(9999, 'application/pdf', 'a.pdf', Buffer.from('x'))).status, 404);
+  r = await call('GET', '/api/test-reports/:id/files', { id: String(bid) });
+  assert.deepStrictEqual(r.body.items.map(f => f.filename), ['UTM run 1.pdf', 'data.csv']);
+  r = await call('DELETE', '/api/test-report-files/:fileId', { fileId: '1' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual((await call('GET', '/api/test-reports/:id/files', { id: String(bid) })).body.items.length, 1);
 
   // DELETE
   r = await call('DELETE', '/api/test-reports/:id', { id: String(id) });

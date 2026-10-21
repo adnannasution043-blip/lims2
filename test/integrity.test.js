@@ -24,6 +24,7 @@ const db = {
     if (/^SELECT test_request_id FROM test_reports WHERE id = \$1/.test(sql)) return { rows: this.reports.filter(r => r.id === Number(p[0])) };
     if (/^SELECT test_request_id FROM specimen_inspections WHERE id = \$1/.test(sql)) return { rows: this.sheets.filter(r => r.id === Number(p[0])) };
     if (/^SELECT w\.test_request_id FROM work_order_files f JOIN work_orders w/.test(sql)) { const f = this.files.find(x => x.id === Number(p[0])); return { rows: f ? this.wos.filter(w => w.id === f.work_order_id) : [] }; }
+    if (/^SELECT r.test_request_id FROM test_report_files f JOIN test_reports r/.test(sql)) return { rows: Number(p[0]) === 40 ? this.reports.filter(r => r.id === 10) : [] };
     if (/^CREATE UNIQUE INDEX/.test(sql)) { if (this.indexFails) throw new Error('could not create unique index'); return { rows: [] }; }
     if (/^SELECT job_number AS v, COUNT\(\*\) AS n/.test(sql)) return { rows: [{ v: 'DE.1.26.0002', n: '2' }] };
     if (/^SELECT lhu_number AS v, COUNT\(\*\) AS n/.test(sql)) return { rows: [] };
@@ -102,7 +103,8 @@ const db = {
   const lockedPaths = [['PUT', '/api/requests/1'], ['DELETE', '/api/requests/1'], ['POST', '/api/requests/1/specimen-inspections'],
     ['PUT', '/api/work-orders/1'], ['DELETE', '/api/work-orders/1'], ['POST', '/api/work-orders/1/test-reports'], ['POST', '/api/work-orders/1/files'],
     ['PUT', '/api/test-reports/10'], ['DELETE', '/api/test-reports/10'], ['POST', '/api/test-reports/10/photos'], ['DELETE', '/api/test-reports/10/photo'],
-    ['PUT', '/api/specimen-inspections/20'], ['DELETE', '/api/specimen-inspections/20'], ['DELETE', '/api/work-order-files/30'], ['PUT', '/API/Requests/1']];
+    ['PUT', '/api/specimen-inspections/20'], ['DELETE', '/api/specimen-inspections/20'], ['DELETE', '/api/work-order-files/30'], ['PUT', '/API/Requests/1'],
+    ['POST', '/api/test-reports/10/files'], ['DELETE', '/api/test-report-files/40']];
   db.sheets[0].test_request_id = 1;
   for (const [m, p] of lockedPaths) { r = await run(m, p); assert.strictEqual(r.status, 409, m + ' ' + p); assert.strictEqual(r.body.code, 'LHU_LOCKED'); }
   for (const [m, p] of [['GET', '/api/requests/1'], ['GET', '/api/test-reports/10'], ['PUT', '/api/requests/2'], ['PUT', '/api/work-orders/2'], ['POST', '/api/lhu-reports/1/attachments'], ['PUT', '/api/work-orders/1/tasks/review'], ['GET', '/index.html'], ['PUT', '/api/test-reports/999']]) {

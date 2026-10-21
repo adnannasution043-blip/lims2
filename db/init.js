@@ -343,6 +343,19 @@ async function initSchema() {
 
     -- Foto pada Lembar Hasil Uji (mis. foto sampel sebelum/sesudah uji korosi); satu foto per slot, slot = "<template>/<id>"
     -- sesuai kotak foto di form (disimpan sebagai BYTEA seperti file lain, karena disk server bersifat sementara).
+    -- Lampiran hasil pengukuran langsung dari mesin uji (PDF/foto/CSV/Excel dari UTM, Charpy, OES, dll) pada Lembar Hasil Uji,
+    -- sebagai referensi data mentah; tidak dicetak di laporan. Disimpan sebagai BYTEA seperti file lain.
+    CREATE TABLE IF NOT EXISTS test_report_files (
+      id SERIAL PRIMARY KEY,
+      test_report_id INTEGER NOT NULL REFERENCES test_reports(id) ON DELETE CASCADE,
+      filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      data BYTEA NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_test_report_files_report ON test_report_files(test_report_id);
+
     CREATE TABLE IF NOT EXISTS test_report_photos (
       test_report_id INTEGER NOT NULL REFERENCES test_reports(id) ON DELETE CASCADE,
       slot TEXT NOT NULL,

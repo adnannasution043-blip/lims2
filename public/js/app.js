@@ -3596,6 +3596,54 @@
     `;
   }
 
+  // Lampiran hasil pengukuran mesin uji pada Lembar Hasil Uji (unggah, unduh, hapus)
+  function initMachineFiles(reportId) {
+    const listEl = document.getElementById('machineFileList');
+    const input = document.getElementById('machineFileInput');
+    const btn = document.getElementById('btnMachineFileUpload');
+    if (!listEl || !input || !btn) return;
+    const fmt = b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
+    const draw = items => {
+      listEl.innerHTML = items.length
+        ? `<ul class="lhu-att-list">${items.map(f => `
+            <li>
+              <span class="lhu-att-icon" aria-hidden="true">&#128206;</span>
+              <div class="lhu-att-meta"><strong>${esc(f.filename)}</strong><span class="muted">${fmt(f.size_bytes)} &middot; ${esc(formatDateTimeID(f.created_at))}</span></div>
+              <a href="/api/test-report-files/${f.id}" class="btn btn-sm" download>Unduh</a>
+              <button type="button" class="btn btn-sm btn-danger" data-mf-del="${f.id}">Hapus</button>
+            </li>`).join('')}</ul>`
+        : '<p class="muted">Belum ada lampiran.</p>';
+      listEl.querySelectorAll('[data-mf-del]').forEach(b => b.addEventListener('click', async () => {
+        if (!confirm('Hapus lampiran ini?')) return;
+        try { await api(`/api/test-report-files/${b.dataset.mfDel}`, { method: 'DELETE' }); load(); } catch (err) { toast(err.message, 'error'); }
+      }));
+    };
+    const load = async () => {
+      try { draw((await api(`/api/test-reports/${reportId}/files`)).items); }
+      catch (err) { listEl.innerHTML = `<p class="muted">Gagal memuat lampiran: ${esc(err.message)}</p>`; }
+    };
+    btn.addEventListener('click', () => input.click());
+    input.addEventListener('change', async () => {
+      const files = [...input.files];
+      input.value = '';
+      let ok = 0;
+      for (const file of files) {
+        if (file.size > 8 * 1024 * 1024) { toast(`${file.name}: ukuran maksimal 8 MB`, 'error'); continue; }
+        try {
+          await api(`/api/test-reports/${reportId}/files`, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
+            body: file
+          });
+          ok++;
+        } catch (err) { toast(`${file.name}: ${err.message}`, 'error'); }
+      }
+      if (ok) toast(`${ok} lampiran diunggah`, 'success');
+      load();
+    });
+    load();
+  }
+
   // Witnessed By: beberapa nama, disimpan digabung koma pada kolom yang sama (data lama satu nama tetap terbaca)
   function witnessNames(v) {
     const list = String(v || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
@@ -3805,6 +3853,16 @@
         </div>
 
         <div class="card">
+          <div class="task-card-head">
+            <p class="section-title">Lampiran Hasil Mesin Uji <span class="en">(file langsung dari mesin, sebagai referensi &middot; tidak dicetak di laporan)</span></p>
+            <button type="button" class="btn btn-sm" id="btnMachineFileUpload">+ Unggah file</button>
+          </div>
+          <input type="file" id="machineFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.txt,.xls,.xlsx,.zip" multiple hidden>
+          <div id="machineFileList"><p class="muted">Memuat lampiran...</p></div>
+          <p class="muted" style="margin:8px 0 0;">PDF, gambar, CSV/TXT, Excel, atau ZIP, maks. 8 MB per file. File langsung tersimpan saat dipilih.</p>
+        </div>
+
+        <div class="card">
           <p class="section-title">Approval <span class="en">diisi otomatis dari tahap Review &amp; Approval</span></p>
           ${sig ? `
             <div class="info-facts">
@@ -3852,6 +3910,7 @@
     bindTestReportElementEvents();
     bindTestReportHicLogEvents();
     bindWitnessEvents();
+    initMachineFiles(state.testReport.id);
     bindTestReportFerriteEvents();
     bindTestReportHardEvents();
     bindTestReportCorrEvents();
@@ -4890,6 +4949,8 @@
       [/^\/api\/work-orders\/(\d+)\/files$/, m => `Unggah file bukti (WO #${m[1]})`],
       [/^\/api\/work-orders\/(\d+)$/, m => `${verb} Work Order #${m[1]}`],
       [/^\/api\/test-reports\/(\d+)\/photos?$/, m => `${method === 'DELETE' ? 'Hapus' : 'Unggah'} foto Lembar Hasil Uji #${m[1]}`],
+      [/^\/api\/test-reports\/(\d+)\/files$/, m => `Unggah lampiran hasil mesin Lembar Hasil Uji #${m[1]}`],
+      [/^\/api\/test-report-files\/(\d+)$/, m => `Hapus lampiran hasil mesin #${m[1]}`],
       [/^\/api\/test-reports\/(\d+)$/, m => `${verb} Lembar Hasil Uji #${m[1]}`],
       [/^\/api\/specimen-inspections\/(\d+)$/, m => `${verb} Pengecekan Spesimen #${m[1]}`],
       [/^\/api\/work-order-files\/(\d+)$/, m => `Hapus file bukti #${m[1]}`],
