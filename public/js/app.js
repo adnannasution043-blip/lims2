@@ -1114,7 +1114,7 @@
             </div>
             <div class="field">
               <label>Perusahaan <span class="en">Company &middot; pilih dari Master Customer</span></label>
-              ${customerSelectHtml(f)}
+              ${companySelectHtml(f)}
               <input type="hidden" name="company" id="companyInput" value="${esc(f.company)}">
             </div>
             <div class="field">
@@ -1127,11 +1127,12 @@
             </div>
             <div class="field">
               <label>ID Perusahaan <span class="en">Cust. ID</span></label>
-              <input type="text" id="customerIdInput" name="customer_id" value="${esc(f.customer_id)}" readonly title="Terisi dari Perusahaan yang dipilih">
+              <input type="text" id="customerIdInput" name="customer_id" value="${esc(f.customer_id)}" readonly title="Terisi dari Atas Nama Perusahaan yang dipilih">
             </div>
             <div class="field">
               <label>Atas Nama Perusahaan <span class="en">On Behalf Owner</span></label>
-              <input type="text" id="onBehalfOwnerInput" name="on_behalf_owner" value="${esc(f.on_behalf_owner)}" readonly title="Terisi dari Perusahaan yang dipilih">
+              ${ownerSelectHtml(f)}
+              <input type="hidden" id="onBehalfOwnerInput" name="on_behalf_owner" value="${esc(f.on_behalf_owner)}">
             </div>
             <div class="field">
               <label>Nama Projek <span class="en">Project Name</span></label>
@@ -1548,16 +1549,21 @@
     document.getElementById('couponRows').addEventListener('input', handleCouponInput);
     document.getElementById('couponRows').addEventListener('change', handleCouponInput);
 
-    // Perusahaan dipilih dari Master Customer (tidak diketik); ID Perusahaan, Atas Nama Perusahaan, alamat & telepon
-    // ikut terisi. Alamat & telepon masih bisa disesuaikan per permintaan.
-    document.getElementById('customerPick').addEventListener('change', e => {
+    // Perusahaan dan Atas Nama Perusahaan dipilih terpisah dari Master Customer (keduanya tidak bisa diketik):
+    // Perusahaan mengisi alamat & telepon (masih bisa disesuaikan); Atas Nama Perusahaan mengisi ID Perusahaan.
+    document.getElementById('companyPick').addEventListener('change', e => {
+      const name = e.target.value;
+      if (!name) return;
+      document.getElementById('companyInput').value = name;
+      const c = CUSTOMERS.find(x => customerCompany(x) === name && (x.address || x.phone)) || CUSTOMERS.find(x => customerCompany(x) === name);
+      if (c && c.address) document.getElementById('addressInput').value = c.address;
+      if (c && c.phone) document.getElementById('phoneInput').value = c.phone;
+    });
+    document.getElementById('ownerPick').addEventListener('change', e => {
       const c = CUSTOMERS.find(x => String(x.id) === e.target.value);
       if (!c) return;
-      document.getElementById('companyInput').value = customerCompany(c);
       document.getElementById('customerIdInput').value = c.customer_id || '';
       document.getElementById('onBehalfOwnerInput').value = c.on_behalf_owner || '';
-      if (c.address) document.getElementById('addressInput').value = c.address;
-      if (c.phone) document.getElementById('phoneInput').value = c.phone;
     });
 
     const delBtn = document.getElementById('btnDelete');
@@ -1616,6 +1622,10 @@
 
     if (payload.status === 'final' && !String(payload.company || '').trim()) {
       toast('Pilih Perusahaan dari Master Customer terlebih dahulu sebelum Finalisasi', 'error');
+      return;
+    }
+    if (payload.status === 'final' && !String(payload.on_behalf_owner || '').trim()) {
+      toast('Pilih Atas Nama Perusahaan dari Master Customer terlebih dahulu sebelum Finalisasi', 'error');
       return;
     }
     if (payload.status === 'final' && !payload.confirmation_agreed) {
@@ -7364,22 +7374,27 @@
 
   // Nama perusahaan di master; data lama yang belum diisi memakai Atas Nama Perusahaan
   function customerCompany(c) { return String(c.company || '').trim() || String(c.on_behalf_owner || '').trim(); }
-  function customerLabel(c) {
-    const name = customerCompany(c), owner = String(c.on_behalf_owner || '').trim();
-    return `${name}${owner && owner !== name ? ' — a.n. ' + owner : ''} (${c.customer_id})`;
-  }
-  function customerSelectHtml(f) {
-    const list = [...CUSTOMERS].sort((a, b) => customerLabel(a).localeCompare(customerLabel(b), 'id'));
-    const cur = list.find(c => c.customer_id === f.customer_id && c.on_behalf_owner === f.on_behalf_owner
-      && (!f.company || customerCompany(c) === f.company))
-      || list.find(c => c.customer_id === f.customer_id && c.on_behalf_owner === f.on_behalf_owner);
+  // Perusahaan: daftar nama perusahaan di Master Customer (tanpa duplikat)
+  function companySelectHtml(f) {
+    const names = [...new Set(CUSTOMERS.map(customerCompany).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+    const cur = String(f.company || '').trim();
     // permintaan lama yang perusahaannya tidak ada di master tetap tampil apa adanya sampai diganti
-    const legacy = !cur && f.company ? `<option value="" selected>${esc(f.company)} (data lama, belum ada di Master Customer)</option>` : '';
-    return `<select id="customerPick">
+    const legacy = cur && !names.includes(cur) ? `<option value="${esc(cur)}" selected>${esc(cur)} (data lama, belum ada di Master Customer)</option>` : '';
+    return `<select id="companyPick">
       ${legacy || `<option value="" ${cur ? '' : 'selected'} disabled>— Pilih perusahaan —</option>`}
-      ${list.map(c => `<option value="${c.id}" ${cur === c ? 'selected' : ''}>${esc(customerLabel(c))}</option>`).join('')}
+      ${names.map(n => `<option value="${esc(n)}" ${n === cur ? 'selected' : ''}>${esc(n)}</option>`).join('')}
     </select>
     <span class="muted" style="font-size:12px;">Belum ada di daftar? Tambahkan dulu di Master Data &rsaquo; Customer.</span>`;
+  }
+  // Atas Nama Perusahaan: pasangan ID Perusahaan + Atas Nama di Master Customer
+  function ownerSelectHtml(f) {
+    const list = [...CUSTOMERS].sort((a, b) => String(a.on_behalf_owner).localeCompare(String(b.on_behalf_owner), 'id'));
+    const cur = list.find(c => c.customer_id === f.customer_id && c.on_behalf_owner === f.on_behalf_owner);
+    const legacy = !cur && f.on_behalf_owner ? `<option value="" selected>${esc(f.on_behalf_owner)} (data lama, belum ada di Master Customer)</option>` : '';
+    return `<select id="ownerPick">
+      ${legacy || `<option value="" ${cur ? '' : 'selected'} disabled>— Pilih atas nama perusahaan —</option>`}
+      ${list.map(c => `<option value="${c.id}" ${cur === c ? 'selected' : ''}>${esc(c.on_behalf_owner)} (${esc(c.customer_id)})</option>`).join('')}
+    </select>`;
   }
 
   async function init() {
