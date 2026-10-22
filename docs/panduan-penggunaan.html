@@ -54,10 +54,12 @@
   <div class="brand">DETECH Material Testing Laboratory</div>
   <h1>Panduan Penggunaan DETECH LIMS</h1>
   <p class="sub">Dari Permintaan Uji sampai Laporan Hasil Uji (LHU) terbit &mdash; langkah demi langkah</p>
-  <div class="meta">Versi 1.1 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
+  <div class="meta">Versi 1.2 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
 </div>
 
-<div class="note ok"><b>Yang baru di versi 1.1</b> (revisi klien Rev 1): tahap <i>Report Issued</i> dihapus &mdash; LHU terbit otomatis setelah Review &amp; Approval disetujui, <b>satu LHU per coupon</b>; No. Laporan otomatis per coupon <code>DE.1/MMYY/nnnn</code>; tahap <b>Reporting</b> kini berisi <b>Preliminary Report</b> dan tanggapan customer; tahap tidak bisa dilompati; data wajib lengkap sebelum Finalisasi; menu <b>Machining</b> untuk tim machining; Root &amp; Face Bend satu Lembar; Witnessed By lebih dari satu orang; lampiran hasil mesin uji; Perusahaan dipilih dari Master Customer.</div>
+<div class="note ok"><b>Yang baru di versi 1.2</b>: <b>Dashboard</b> manajemen baru (KPI, tren, Turn Around Time, klien teratas); <b>Perusahaan</b> dan <b>Atas Nama Perusahaan</b> dipilih terpisah; <b>Testing Machine Used</b> dipilih dari Master Equipment; <b>tanda tangan otomatis</b> dari akun approver dan <b>stempel perusahaan</b> pada LHU.</div>
+
+<div class="note"><b>Di versi 1.1</b> (revisi klien Rev 1): tahap <i>Report Issued</i> dihapus &mdash; LHU terbit otomatis setelah Review &amp; Approval disetujui, <b>satu LHU per coupon</b>; No. Laporan otomatis per coupon <code>DE.1/MMYY/nnnn</code>; tahap <b>Reporting</b> kini berisi <b>Preliminary Report</b> dan tanggapan customer; tahap tidak bisa dilompati; data wajib lengkap sebelum Finalisasi; menu <b>Machining</b> untuk tim machining; Root &amp; Face Bend satu Lembar; Witnessed By lebih dari satu orang; lampiran hasil mesin uji; Perusahaan dipilih dari Master Customer.</div>
 
 <h2>Gambaran alur</h2>
 <div class="flow">
@@ -74,14 +76,16 @@
 <h2>0. Persiapan (sekali saja)</h2>
 <ol class="steps">
   <li><b>Login.</b> Buka alamat aplikasi, masukkan username dan kata sandi. Klik nama Anda di bagian bawah sidebar untuk <span class="menu">mengganti kata sandi</span> atau keluar. Sesi berlaku 12 jam dan diperpanjang selama dipakai.</li>
-  <li><b>Master Data &rarr; Customer.</b> Isi <b>Nama Perusahaan</b>, <b>ID Perusahaan</b>, <b>Atas Nama Perusahaan</b>, alamat, dan telepon. Perusahaan di Permintaan Uji <b>hanya bisa dipilih dari daftar ini</b> (tidak bisa diketik). Customer lama yang belum punya Nama Perusahaan dilengkapi lewat tombol <span class="btn">Ubah</span>.</li>
-  <li><b>Master Data lain.</b> Daftar <b>PIC</b> (nama petugas tiap tahap), <b>Tipe Spesimen</b> (mengisi kolom Code di Pengecekan Spesimen), <b>Kode Jenis Pengujian</b> (dipakai marking spesimen), dan <b>Equipment</b> (opsional; menjadi saran kolom alat uji).</li>
+  <li><b>Master Data &rarr; Customer.</b> Isi <b>Nama Perusahaan</b>, <b>ID Perusahaan</b>, <b>Atas Nama Perusahaan</b>, alamat, dan telepon. Di Permintaan Uji, <b>Perusahaan</b> dan <b>Atas Nama Perusahaan</b> hanya bisa dipilih dari daftar ini (tidak bisa diketik). Customer lama yang belum punya Nama Perusahaan dilengkapi lewat tombol <span class="btn">Ubah</span>; selama kosong, namanya tampil memakai Atas Nama.</li>
+  <li><b>Master Data &rarr; Equipment.</b> Daftarkan semua alat uji lengkap dengan <b>model</b>, <b>nomor seri</b>, status, dan tanggal kalibrasi berikutnya. <i>Testing Machine Used</i> di Lembar Hasil Uji hanya bisa dipilih dari daftar ini.</li>
+  <li><b>Master Data lain.</b> Daftar <b>PIC</b> (nama petugas tiap tahap), <b>Tipe Spesimen</b> (mengisi kolom Code di Pengecekan Spesimen), dan <b>Kode Jenis Pengujian</b> (dipakai marking spesimen).</li>
+  <li><b>Tanda tangan &amp; stempel</b> (sekali saja). Tiap approver: klik nama di sidebar &rarr; <span class="menu">Akun Saya</span>, isi <b>Jabatan</b> lalu <span class="btn">Unggah gambar tanda tangan</span> (foto/scan tanda tangan di kertas putih; centang <i>Buang latar putih</i>). Administrator: <span class="menu">Pengaturan</span> &rarr; <b>Stempel Perusahaan</b> &rarr; <span class="btn">Unggah stempel</span>. Tanda tangan di akun hanya bisa dipakai pemiliknya.</li>
   <li><b>Pengguna &amp; Role</b> (khusus Administrator). Tab <i>Role &amp; Hak Akses</i> mengatur apa yang boleh dilakukan tiap role (Lihat/Tambah/Ubah/Hapus per menu); tab <i>Pengguna</i> untuk membuat akun dan memilihkan role.</li>
 </ol>
 
 <h2>A. Permintaan Uji</h2>
 <ol class="steps">
-  <li>Menu <span class="menu">Permintaan Uji</span> &rarr; <span class="btn p">+ Buat Permintaan Baru</span>. Pilih <b>Perusahaan</b> dari daftar Master Customer; ID Perusahaan dan Atas Nama Perusahaan terisi otomatis (terkunci), alamat dan telepon terisi tetapi masih bisa disesuaikan.</li>
+  <li>Menu <span class="menu">Permintaan Uji</span> &rarr; <span class="btn p">+ Buat Permintaan Baru</span>. Pilih <b>Perusahaan</b> (yang mengajukan; alamat dan telepon ikut terisi dan masih bisa disesuaikan) dan <b>Atas Nama Perusahaan</b> (pemilik pekerjaan; <b>ID Perusahaan</b> ikut terisi dan terkunci). Keduanya dipilih terpisah dari Master Customer dan wajib diisi sebelum Finalisasi.</li>
   <li>Tambahkan <b>Coupon</b> (jenis spesimen, material/grade, WPS, posisi las, dan lain-lain). <b>Welder&rsquo;s Name</b> diisi di sini, sekali per coupon; tidak perlu ditulis lagi di Lembar Hasil Uji.</li>
   <li>Pada tiap coupon, centang <b>Jenis Pengujian</b> dan isi <b>Qty</b> (jumlah spesimen). Qty membentuk <b>marking spesimen</b> otomatis, mis. <code>ABC.9.1-TS1</code>, <code>ABC.9.1-TS2</code>.</li>
   <li>Pengujian yang tidak ada di daftar tetap (Compression, HIC, SEM-EDX, dan lain-lain) <b>diketik di kolom <i>Other Test</i></b> sesuai penulisan pada tabel di bagian akhir, lalu isi Qty-nya.</li>
@@ -113,6 +117,7 @@
       <li><b>Root Bend dan Face Bend</b> pada coupon yang sama memakai <b>satu Lembar gabungan</b> (Root di kolom kiri, Face di kolom kanan pada form Bend Weld).</li>
       <li>Pilih bentuk form di dropdown bila ada beberapa (mis. Tensile: Reduced Section / Full Section / Bolt; SSCC: FPB / Proof Ring).</li>
       <li>Isi tabel hasil; kolom yang bisa dihitung terisi otomatis (Area, kekuatan, rata-rata, dan sebagainya). No. Laporan dan Welder&rsquo;s Name tampil otomatis.</li>
+      <li><b>Testing Machine Used</b>: pilih alat dari Master Equipment; tekan <span class="btn">+ Tambah alat</span> bila memakai lebih dari satu alat. Di laporan tercetak <code>Nama Model, S/N : nomor seri</code>. Alat <i>Out of Service</i> tidak bisa dipilih; muncul peringatan kuning bila alat sedang perawatan atau kalibrasinya lewat jatuh tempo pada tanggal uji.</li>
       <li><b>Witnessed By</b> bisa lebih dari satu orang: tekan <span class="btn">+ Tambah saksi</span>.</li>
       <li>Foto (bila form menyediakan slot foto) dan <b>Lampiran Hasil Mesin Uji</b> (PDF, gambar, CSV/TXT, Excel, ZIP dari mesin uji; maks. 8 MB per file) tersimpan langsung saat dipilih. Lampiran hanya referensi, tidak dicetak.</li>
       <li><b>Wajib lengkap sebelum Final:</b> Date of Tested, Test Conducted By, ada data hasil uji, dan hasil tiap spesimen (Bend/Flaring/Nick Break/Fillet Weld Break: Result; Charpy: Impact; Tensile: beban atau kekuatan).</li>
@@ -127,7 +132,13 @@
       <li>Bila Lembar diubah <b>setelah</b> customer menyatakan Diterima, persetujuan itu batal dan harus diminta ulang.</li>
     </ul></li>
   <li><b>Review &amp; Approval</b> <span class="tag">LHU terbit otomatis</span><br>
-    Syarat otomatis (Pengecekan Spesimen, Testing, Reporting selesai) harus hijau. Centang checklist manual, pilih keputusan <b>Disetujui</b> (atau <i>Ditolak / Revisi</i>), isi nama approver dan tanggal, lalu <b>tanda tangan</b>. Tanda tangan ini muncul di kolom <i>Approved Signatory</i> pada LHU.<br>
+    Syarat otomatis (Pengecekan Spesimen, Testing, Reporting selesai) harus hijau. Centang checklist manual, pilih keputusan <b>Disetujui</b> (atau <i>Ditolak / Revisi</i>) dan tanggal approval, lalu pilih <b>Cara Tanda Tangan</b>:
+    <ul>
+      <li><b>Manual (digambar)</b>: isi nama dan jabatan approver, lalu tanda tangan di kotak.</li>
+      <li><b>Otomatis (dari akun saya)</b>: tanda tangan, nama, dan jabatan diambil dari akun yang sedang login (diatur di Akun Saya).</li>
+      <li>Centang <b>Bubuhkan stempel perusahaan pada LHU</b> (aktif secara bawaan) bila LHU perlu distempel.</li>
+    </ul>
+    Pada LHU, tanda tangan dicetak di kolom <i>Approved Signatory</i> dengan stempel menimpa sebagian tanda tangan, dan nama serta jabatan di bawahnya mengikuti approver. Gambar disalin saat approval disimpan, jadi LHU yang sudah terbit tidak berubah bila tanda tangan atau stempel diganti kemudian.<br>
     Saat tahap ini diselesaikan dengan keputusan Disetujui, <b>LHU langsung terbit</b> (satu per coupon) di menu Hasil &amp; Laporan, dan seluruh data Work Order <b>terkunci</b>.</li>
 </ol>
 
@@ -138,6 +149,22 @@
   <li>Menu <span class="menu">Hasil &amp; Laporan</span> menampilkan <b>satu baris per coupon</b> yang LHU-nya sudah terbit; <b>No. LHU = No. Laporan coupon</b>. Buka detailnya lalu <span class="btn p">Download PDF</span>: dokumen berisi semua Lembar Hasil Uji Final coupon itu, dengan nomor halaman berurutan.</li>
   <li>Unggah <b>attachment</b> pendukung bila perlu, dan catat <b>Distribusi</b> (pengiriman LHU ke customer beserta bukti kirim). Keduanya dicatat per coupon.</li>
 </ol>
+
+<h2>Dashboard</h2>
+<p>Menu <span class="menu">Dashboard</span> berisi ringkasan untuk manajemen. Pilih periode di kanan atas (3, 6, 12, atau 24 bulan terakhir).</p>
+<table>
+  <thead><tr><th style="width:30%">Bagian</th><th>Isi</th></tr></thead>
+  <tbody>
+    <tr><td>Kartu KPI</td><td>Permintaan Uji, Work Order, Spesimen Diuji (spesimen di Lembar Hasil Uji Final), dan LHU Terbit (per coupon), masing-masing dengan persentase naik/turun dibanding periode sebelumnya. <b>Perlu Tindak Lanjut</b> bisa diklik untuk melihat daftarnya (Permintaan tanpa Work Order, machining selesai tanpa Pengecekan Spesimen, Preliminary direvisi/ditolak customer, approval ditolak).</td></tr>
+    <tr><td>Tren Permintaan Uji</td><td>Jumlah Permintaan Uji (batang) dan LHU terbit (garis) per bulan.</td></tr>
+    <tr><td>Status Work Order &amp; Pengecekan Spesimen</td><td>Komposisi Berjalan / Selesai / Menunggu Receiving, serta sheet Final / Dalam Proses / Belum dibuat.</td></tr>
+    <tr><td>Jumlah Pengujian per Jenis</td><td>Total Qty spesimen per jenis pengujian.</td></tr>
+    <tr><td>Turn Around Time</td><td>Rata-rata hari dari sampel diterima sampai LHU terbit, per bulan (6 bulan terakhir), dengan garis target 5 hari.</td></tr>
+    <tr><td>Top 5 Client</td><td>Perusahaan dengan Permintaan Uji terbanyak.</td></tr>
+    <tr><td>Work Order Durasi Terlama</td><td>Lima Work Order berjalan paling lama sejak sampel diterima; klik baris untuk membuka tahapnya.</td></tr>
+    <tr><td>Aktivitas Laboratorium</td><td>Jumlah tahap / sheet yang diselesaikan per bulan (6 bulan terakhir).</td></tr>
+  </tbody>
+</table>
 
 <h2>Menu Machining (role Machining)</h2>
 <p>Akun dengan role <b>Machining</b> hanya melihat menu <span class="menu">Machining</span>: daftar Work Order yang sampelnya sudah diterima, dengan spesimen yang harus dibuat (coupon, jenis pengujian, Qty, Specimen Marking) dan satu tombol <span class="btn p">Mulai Machining</span> / <span class="btn p">Selesai Machining</span>. Work Order yang selesai machining tetap tampil 7 hari.</p>
@@ -186,7 +213,11 @@
 <table>
   <thead><tr><th style="width:34%">Pesan / gejala</th><th>Penyebab</th><th style="width:30%">Yang dilakukan</th></tr></thead>
   <tbody>
-    <tr><td>Perusahaan tidak ada di pilihan</td><td>Belum ada di Master Customer</td><td>Tambahkan di Master Data &rarr; Customer</td></tr>
+    <tr><td>Perusahaan / Atas Nama tidak ada di pilihan</td><td>Belum ada di Master Customer</td><td>Tambahkan di Master Data &rarr; Customer</td></tr>
+    <tr><td>Alat uji tidak ada di pilihan Testing Machine Used</td><td>Belum ada di Master Equipment, atau berstatus Out of Service</td><td>Tambahkan / ubah status di Master Data &rarr; Equipment</td></tr>
+    <tr><td>&ldquo;Akun Anda belum punya gambar tanda tangan&rdquo;</td><td>Memilih tanda tangan Otomatis tanpa gambar di akun</td><td>Unggah di Akun Saya, atau pilih Manual</td></tr>
+    <tr><td>&ldquo;Stempel perusahaan belum diunggah&rdquo;</td><td>Centang stempel aktif, stempel belum ada</td><td>Administrator mengunggah di Pengaturan, atau hapus centang</td></tr>
+    <tr><td>&ldquo;Tanda tangan approver belum ada&rdquo;</td><td>Disetujui tanpa tanda tangan</td><td>Gambar tanda tangan, atau pilih Otomatis</td></tr>
     <tr><td>Marking spesimen tidak terbentuk</td><td>Qty pada pengujian kosong</td><td>Isi Qty di Permintaan Uji</td></tr>
     <tr><td>Tombol Buat Work Order tidak ada</td><td>Permintaan masih Draft</td><td>Buka lalu <i>Simpan &amp; Finalisasi</i></td></tr>
     <tr><td>Gembok &ldquo;Tahap &hellip; belum selesai&rdquo;</td><td>Tahap sebelumnya belum diselesaikan (tidak boleh melompati tahap)</td><td>Selesaikan tahap sebelumnya dulu</td></tr>
@@ -222,6 +253,7 @@
 <h2>Tips</h2>
 <div class="note ok"><b>Uji coba dulu.</b> Jalankan satu pekerjaan percobaan dari awal sampai LHU terbit. Setelah selesai, <span class="menu">Pengaturan</span> &rarr; <b>Reset Data</b> (ketik <code>HAPUS</code>) mengosongkan semua data transaksi tanpa menyentuh Master Data dan Pengguna.</div>
 <ul>
+  <li><b>Ringkasan kinerja:</b> menu <span class="menu">Dashboard</span> untuk laporan manajemen per periode.</li>
   <li><b>Memantau posisi:</b> menu <span class="menu">Tasks</span> menampilkan tahap tiap Work Order; klik salah satu tahap di bagian atas untuk menyaring daftar. Antrian per tahap ada di bagian <span class="menu">Antrian Kerja</span>.</li>
   <li><b>Mencetak ke PDF:</b> gunakan tombol <i>Print / Simpan sebagai PDF</i> pada halaman cetak. Header tabel gelap dan baris selang-seling ikut tercetak.</li>
   <li><b>Mengecek hasil cetak:</b> bandingkan tampilan cetak/PDF dengan form Excel klien, terutama angka hasil perhitungan (Area, kekuatan, CSR/CLR/CTR, dan sebagainya).</li>
@@ -229,7 +261,7 @@
   <li><b>Keamanan:</b> jangan membagikan akun. Administrator dapat menonaktifkan akun yang tidak dipakai di menu Pengguna.</li>
 </ul>
 
-<footer>DETECH LIMS &middot; Panduan Penggunaan v1.1 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
+<footer>DETECH LIMS &middot; Panduan Penggunaan v1.2 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
 
 </body>
 </html>
