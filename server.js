@@ -14,6 +14,7 @@ const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
 const { nextNumber, nextReportNo, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem, lockGuard, yearWIB } = require('./lib/integrity');
 const { auditTrail, registerAuditRoutes } = require('./lib/audit');
+const { registerDashboardRoutes } = require('./lib/dashboard');
 const { specimenSheetProblems } = require('./lib/completeness');
 
 const app = express();
@@ -853,6 +854,9 @@ registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, li
 registerUserRoutes(app, { pool });
 
 // Modul Hasil & Laporan (daftar LHU + status distribusi).
+// Dashboard manajemen laboratorium (ringkasan dari data yang ada)
+registerDashboardRoutes(app, { pool, loadProgressRows });
+
 registerLhuReportRoutes(app, { pool, getFullWorkOrder, printableReport, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
 // Reset Data (halaman Pengaturan) — untuk mengosongkan data uji coba supaya bisa mulai input

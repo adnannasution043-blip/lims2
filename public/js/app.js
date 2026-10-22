@@ -436,238 +436,229 @@
 
   // ---------- dashboard ----------
 
+  // ---------- dashboard (laporan manajemen) ----------
+  // Data dari /api/dashboard (lib/dashboard.js). Grafik digambar sebagai SVG ringan tanpa library.
+  const DASH_COLORS = { red: '#9B1B1B', navy: '#1E3A7A', pink: '#EFA3A3', sky: '#C6D2EE', grey: '#D7DBE2', blue: '#5B79C4' };
+  const DASH_ICONS = {
+    request: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 11h6M9 15h6"/>',
+    wo: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/>',
+    flask: '<path d="M9 3h6"/><path d="M10 3v6.2L4.6 18.4A2 2 0 0 0 6.3 21.5h11.4a2 2 0 0 0 1.7-3.1L14 9.2V3"/><path d="M7.5 15h9"/>',
+    doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',
+    alert: '<path d="M12 3 2 21h20z"/><path d="M12 10v5M12 18h.01"/>',
+    calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+  };
+  const dashIcon = (k, size = 22) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${DASH_ICONS[k]}</svg>`;
+  const monthShort = k => { const [y, m] = k.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('id-ID', { month: 'short' }).replace('.', ''); };
+  const monthLong = k => { const [y, m] = k.split('-').map(Number); return `${monthShort(k)} ${y}`; };
+  const niceMax = v => { if (v <= 5) return 5; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 2 ? 2 : n <= 5 ? 5 : 10) * p; };
+  const pctOf = (v, total) => (total ? Math.round((v / total) * 100) : 0);
+
+  function dashKpi(icon, label, k, sub, alert) {
+    const ch = k.change;
+    const chip = k.change === undefined ? `<span class="d2-chip">saat ini</span>`
+      : (ch === null ? `<span class="d2-chip up">baru</span>`
+        : `<span class="d2-chip ${ch > 0 ? 'up' : ch < 0 ? 'down' : ''}">${ch > 0 ? '&#8593;' : ch < 0 ? '&#8595;' : ''} ${Math.abs(ch)}%</span>`);
+    return `<div class="d2-kpi${alert ? ' alert' : ''}"${alert ? ' role="button" tabindex="0" id="d2FollowToggle"' : ''}>
+      <span class="d2-kpi-ico">${dashIcon(icon)}</span>
+      <div><p class="d2-kpi-label">${esc(label)}</p>
+        <p class="d2-kpi-value">${k.value.toLocaleString('id-ID')} ${chip}</p>
+        <p class="d2-kpi-sub">${sub}</p></div>
+    </div>`;
+  }
+
+  // Batang (Permintaan Uji) + garis (LHU terbit) per bulan
+  function dashTrendSvg(trend) {
+    const W = 380, H = 250, L = 28, R = 6, T = 12, B = 36;
+    const max = niceMax(Math.max(1, ...trend.map(t => Math.max(t.requests, t.lhu))));
+    const step = (W - L - R) / trend.length, bw = Math.min(26, step * 0.5);
+    const y = v => T + (H - T - B) * (1 - v / max);
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(f => { const v = Math.round(max * f), yy = y(v); return `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" class="d2-grid"/><text x="${L - 6}" y="${yy + 3}" class="d2-axis" text-anchor="end">${v}</text>`; }).join('');
+    const cx = i => L + step * i + step / 2;
+    const bars = trend.map((t, i) => `<rect x="${cx(i) - bw / 2}" y="${y(t.requests)}" width="${bw}" height="${Math.max(0, H - B - y(t.requests))}" rx="2" fill="${DASH_COLORS.sky}"><title>${monthLong(t.month)}: ${t.requests} Permintaan Uji</title></rect>`).join('');
+    const pts = trend.map((t, i) => `${cx(i)},${y(t.lhu)}`).join(' ');
+    const dots = trend.map((t, i) => `<circle cx="${cx(i)}" cy="${y(t.lhu)}" r="${i === trend.length - 1 ? 4 : 3}" fill="${DASH_COLORS.red}"><title>${monthLong(t.month)}: ${t.lhu} LHU terbit</title></circle>`).join('');
+    const labels = trend.map((t, i) => `<text x="${cx(i)}" y="${H - B + 15}" class="d2-axis" text-anchor="middle">${monthShort(t.month)}</text><text x="${cx(i)}" y="${H - B + 27}" class="d2-axis" text-anchor="middle">${t.month.slice(0, 4)}</text>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" class="d2-svg" role="img" aria-label="Tren Permintaan Uji dan LHU terbit per bulan">${grid}${bars}<polyline points="${pts}" fill="none" stroke="${DASH_COLORS.red}" stroke-width="2"/>${dots}${labels}</svg>`;
+  }
+
+  // Donat: segmen [{label, value, color}]
+  function dashDonut(segs, centerValue, centerLabel) {
+    const total = segs.reduce((s, x) => s + x.value, 0);
+    const r = 52, c = 2 * Math.PI * r;
+    let off = 0;
+    const arcs = total ? segs.filter(s => s.value).map(s => {
+      const len = (s.value / total) * c;
+      const el = `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${s.color}" stroke-width="22" stroke-dasharray="${len} ${c - len}" stroke-dashoffset="${-off}" transform="rotate(-90 70 70)"><title>${esc(s.label)}: ${s.value}</title></circle>`;
+      off += len; return el;
+    }).join('') : `<circle cx="70" cy="70" r="${r}" fill="none" stroke="${DASH_COLORS.grey}" stroke-width="22"/>`;
+    return `<div class="d2-donut">
+      <svg viewBox="0 0 140 140" class="d2-donut-svg" role="img" aria-label="${esc(centerLabel)}">${arcs}
+        <text x="70" y="70" text-anchor="middle" class="d2-donut-num">${centerValue.toLocaleString('id-ID')}</text>
+        <text x="70" y="88" text-anchor="middle" class="d2-donut-cap">${esc(centerLabel)}</text></svg>
+      <ul class="d2-legend">${segs.map(s => `<li><i style="background:${s.color}"></i><span>${esc(s.label)}</span><b>${s.value.toLocaleString('id-ID')}</b><em>(${pctOf(s.value, total)}%)</em></li>`).join('')}</ul>
+    </div>`;
+  }
+
+  // Batang vertikal TAT dengan garis target
+  function dashTatSvg(tat) {
+    const W = 360, H = 220, L = 26, R = 46, T = 18, B = 34;
+    const vals = tat.months.map(m => m.days || 0);
+    const max = niceMax(Math.max(tat.target * 1.6, ...vals, 1));
+    const step = (W - L - R) / tat.months.length, bw = Math.min(30, step * 0.6);
+    const y = v => T + (H - T - B) * (1 - v / max);
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(f => { const v = Math.round(max * f), yy = y(v); return `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" class="d2-grid"/><text x="${L - 5}" y="${yy + 3}" class="d2-axis" text-anchor="end">${v}</text>`; }).join('');
+    const cx = i => L + step * i + step / 2;
+    const bars = tat.months.map((m, i) => m.days === null ? `<text x="${cx(i)}" y="${H - B - 4}" class="d2-axis" text-anchor="middle">-</text>` :
+      `<rect x="${cx(i) - bw / 2}" y="${y(m.days)}" width="${bw}" height="${Math.max(0, H - B - y(m.days))}" rx="2" fill="url(#d2TatGrad)"><title>${monthLong(m.month)}: ${String(m.days).replace('.', ',')} hari (${m.count} WO)</title></rect>
+       <text x="${cx(i)}" y="${y(m.days) - 5}" class="d2-val" text-anchor="middle">${String(m.days).replace('.', ',')}</text>`).join('');
+    const ty = y(tat.target);
+    const labels = tat.months.map((m, i) => `<text x="${cx(i)}" y="${H - B + 14}" class="d2-axis" text-anchor="middle">${monthShort(m.month)}</text><text x="${cx(i)}" y="${H - B + 25}" class="d2-axis" text-anchor="middle">${m.month.slice(0, 4)}</text>`).join('');
+    return `<svg viewBox="0 0 ${W} ${H}" class="d2-svg" role="img" aria-label="Turn Around Time per bulan">
+      <defs><linearGradient id="d2TatGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${DASH_COLORS.navy}"/><stop offset="1" stop-color="${DASH_COLORS.blue}" stop-opacity=".55"/></linearGradient></defs>
+      ${grid}${bars}<line x1="${L}" x2="${W - R}" y1="${ty}" y2="${ty}" stroke="${DASH_COLORS.red}" stroke-dasharray="5 4" stroke-width="1.5"/>
+      <text x="${W - R + 4}" y="${ty - 2}" class="d2-target">Target</text><text x="${W - R + 4}" y="${ty + 10}" class="d2-target">${tat.target} hari</text>${labels}</svg>`;
+  }
+
+  // Batang bertumpuk aktivitas per tahap per bulan
+  function dashActivitySvg(act) {
+    const colors = [DASH_COLORS.grey, DASH_COLORS.pink, DASH_COLORS.navy, DASH_COLORS.red, DASH_COLORS.sky, '#E8C9C9'];
+    const W = 560, H = 210, L = 30, R = 8, T = 10, B = 32;
+    const totals = act.months.map((_, i) => act.series.reduce((s, se) => s + se.values[i], 0));
+    const max = niceMax(Math.max(1, ...totals));
+    const step = (W - L - R) / act.months.length, bw = Math.min(34, step * 0.55);
+    const y = v => T + (H - T - B) * (1 - v / max);
+    const grid = [0, 0.25, 0.5, 0.75, 1].map(f => { const v = Math.round(max * f), yy = y(v); return `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" class="d2-grid"/><text x="${L - 5}" y="${yy + 3}" class="d2-axis" text-anchor="end">${v}</text>`; }).join('');
+    const cx = i => L + step * i + step / 2;
+    const bars = act.months.map((m, i) => {
+      let acc = 0;
+      return act.series.map((se, si) => {
+        const v = se.values[i]; if (!v) return '';
+        const y1 = y(acc + v), h = y(acc) - y1; acc += v;
+        return `<rect x="${cx(i) - bw / 2}" y="${y1}" width="${bw}" height="${h}" fill="${colors[si]}"><title>${monthLong(m)} · ${esc(se.label)}: ${v}</title></rect>`;
+      }).join('');
+    }).join('');
+    const labels = act.months.map((m, i) => `<text x="${cx(i)}" y="${H - B + 14}" class="d2-axis" text-anchor="middle">${monthShort(m)}</text><text x="${cx(i)}" y="${H - B + 25}" class="d2-axis" text-anchor="middle">${m.slice(0, 4)}</text>`).join('');
+    const legend = act.series.map((se, si) => `<li><i style="background:${colors[si]}"></i>${esc(se.label)}</li>`).join('');
+    return `<ul class="d2-legend-row">${legend}</ul><svg viewBox="0 0 ${W} ${H}" class="d2-svg" role="img" aria-label="Aktivitas laboratorium per tahap per bulan">${grid}${bars}${labels}</svg>`;
+  }
+
   async function renderDashboard() {
     pageTitle.textContent = 'Dashboard';
     pageSubtitle.textContent = 'Ringkasan aktivitas laboratorium — DETECH LIMS';
-    topbarActions.innerHTML = '';
+    const months = state.dashMonths || 12;
+    topbarActions.innerHTML = `<label class="d2-period">${dashIcon('calendar', 18)}
+      <select id="d2Period" aria-label="Periode">${[3, 6, 12, 24].map(n => `<option value="${n}" ${n === months ? 'selected' : ''}>${n} bulan terakhir</option>`).join('')}</select></label>`;
+    document.getElementById('d2Period').addEventListener('change', e => { state.dashMonths = Number(e.target.value); renderDashboard(); });
 
-    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat data...</p></div>`;
-
-    let requests = [], workOrders = [], specimens = [];
+    contentEl.innerHTML = `<div class="card"><p class="muted">Memuat dashboard...</p></div>`;
+    let d;
     try {
-      [requests, workOrders, specimens] = await Promise.all([
-        api('/api/requests'),
-        api('/api/work-orders'),
-        api('/api/specimen-inspections')
-      ]);
+      d = await api(`/api/dashboard?months=${months}`);
     } catch (e) {
-      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat data: ${esc(e.message)}</p></div>`;
+      contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat dashboard: ${esc(e.message)}</p></div>`;
       return;
     }
-
-    const draftRequests = requests.filter(r => r.status !== 'final').length;
-    const finalRequests = requests.length - draftRequests;
-    const draftWO = workOrders.filter(w => w.status !== 'complete').length;
-    const finalWO = workOrders.length - draftWO;
-    const draftSpecimens = specimens.filter(s => s.status !== 'final').length;
-    const finalSpecimens = specimens.length - draftSpecimens;
-
-    const specimenRequestIds = new Set(specimens.map(s => s.test_request_id));
-    const needsWO = requests.filter(r => r.status === 'final' && !r.work_order_id);
-    // Sheet Pengecekan Spesimen baru bisa dibuat setelah machining selesai.
-    const needsSpecimen = workOrders.filter(w => w.stage && w.stage.statuses && w.stage.statuses.preparation === 'draft'
-      && w.machining_status === 'selesai' && !specimenRequestIds.has(w.test_request_id));
-    const actionCount = needsWO.length + needsSpecimen.length;
-
-    // Status machining tiap Work Order: menunggu (sampel sudah diterima, belum dimachining), sedang, atau selesai
-    // tetapi inspeksi spesimen belum selesai.
-    const machiningRows = workOrders.map(w => {
-      const st = (w.stage && w.stage.statuses) || {};
-      let group = null;
-      if (st.preparation === 'final' || st.preparation === 'na') group = null;
-      else if (w.machining_status === 'proses') group = 'proses';
-      else if (w.machining_status === 'selesai') group = 'selesai';
-      else if (st.receiving === 'final') group = 'menunggu';
-      return group ? { ...w, group } : null;
-    }).filter(Boolean);
-    const machiningOrder = { proses: 0, menunggu: 1, selesai: 2 };
-    machiningRows.sort((a, b) => machiningOrder[a.group] - machiningOrder[b.group]);
-    const machiningCount = g => machiningRows.filter(r => r.group === g).length;
-    const machiningGroupHtml = {
-      proses: '<span class="st-pill st-draft">Sedang machining</span>',
-      menunggu: '<span class="st-pill st-pending">Menunggu machining</span>',
-      selesai: '<span class="st-pill st-final">Machining selesai &middot; siap inspeksi</span>'
-    };
-
-    const totalRequests = requests.length;
-    const funnelStages = [
-      { label: 'Permintaan Uji', count: requests.length, pct: 100 },
-      { label: 'Work Order', count: workOrders.length, pct: totalRequests ? Math.min(100, Math.round(workOrders.length / totalRequests * 100)) : 0 },
-      { label: 'Pengecekan Spesimen', count: specimenRequestIds.size, pct: totalRequests ? Math.min(100, Math.round(specimenRequestIds.size / totalRequests * 100)) : 0 }
-    ];
+    if (state.view !== 'dashboard') return;
 
     const now = new Date();
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      months.push({ key, label: d.toLocaleDateString('id-ID', { month: 'short' }), count: 0 });
-    }
-    requests.forEach(r => {
-      const bucket = months.find(m => m.key === (r.received_date || '').slice(0, 7));
-      if (bucket) bucket.count += 1;
-    });
-    const maxMonthCount = Math.max(1, ...months.map(m => m.count));
-
-    const ACTIVITY_ICON = { request: '&#128203;', wo: '&#128295;', specimen: '&#9879;' };
-    const activity = [
-      ...requests.map(r => ({ type: 'request', label: `Permintaan Uji ${r.job_number}`, sub: r.company, status: r.status, created_at: r.created_at })),
-      ...workOrders.map(w => ({ type: 'wo', label: `Work Order ${w.job_number}`, sub: w.company, status: w.status, created_at: w.created_at, badgeHtml: w.stage ? stageBadgeHtml(w.stage.label, w.stage.status) : '' })),
-      ...specimens.map(s => ({ type: 'specimen', label: `Pengecekan Spesimen ${s.job_number}`, sub: s.test_name || SPECIMEN_CATEGORY_LABELS[s.category] || s.category, status: s.status, created_at: s.created_at }))
-    ].filter(a => a.created_at).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 6);
-
-    const todayLabel = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const dayName = now.toLocaleDateString('id-ID', { weekday: 'long' });
+    const dateLabel = now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    const timeLabel = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }).replace('.', ':');
+    const periodLabel = `${monthLong(d.period.from)} &ndash; ${monthLong(d.period.to)}`;
+    const vs = `<span title="Dibanding ${monthLong(d.period.prev_from)} &ndash; ${monthLong(d.period.prev_to)}">dari periode sebelumnya</span>`;
+    const k = d.kpi;
+    const ws = d.wo_status, ss = d.specimen_status;
+    const woTotal = ws.running + ws.done + ws.waiting;
+    const spTotal = ss.final + ss.draft + ss.waiting;
+    const typeMax = Math.max(1, ...d.tests_by_type.map(t => t.value));
+    const clientTotal = d.top_clients.reduce((s, c) => s + c.value, 0);
+    const clientColors = [DASH_COLORS.red, DASH_COLORS.navy, DASH_COLORS.pink, DASH_COLORS.blue, DASH_COLORS.sky, DASH_COLORS.grey];
+    const stageLabel = l => ({ receiving: 'Receiving', preparation: 'Preparation', testing: 'Testing', reporting: 'Reporting', review: 'Review & Approval' }[l] || l);
 
     contentEl.innerHTML = `
-      <div class="dash-hero">
-        <p class="dash-hero-eyebrow">Selamat datang kembali</p>
-        <h2 class="dash-hero-title">Ringkasan Laboratorium DETECH</h2>
-        <p class="muted">${esc(todayLabel)}</p>
-      </div>
+      <section class="d2-hero">
+        <div>
+          <p class="d2-hero-eyebrow">Laporan Manajemen &middot; ${periodLabel}</p>
+          <h2 class="d2-hero-title">Dashboard Laboratorium DETECH</h2>
+          <p class="d2-hero-sub">Ringkasan kinerja, produktivitas, dan status pekerjaan laboratorium material testing</p>
+        </div>
+        <div class="d2-hero-date"><span>${esc(dayName)}</span><strong>${esc(dateLabel)}</strong><span>${dashIcon('clock', 16)} ${esc(timeLabel)} WIB</span></div>
+      </section>
 
-      <div class="dash-stats">
-        <div class="dash-stat-card">
-          <div class="dash-stat-icon">&#128203;</div>
-          <div>
-            <p class="dash-stat-value">${requests.length}</p>
-            <p class="dash-stat-label">Permintaan Uji</p>
-            <p class="dash-stat-sub">${draftRequests} draft &middot; ${finalRequests} final</p>
-          </div>
-        </div>
-        <div class="dash-stat-card">
-          <div class="dash-stat-icon">&#128295;</div>
-          <div>
-            <p class="dash-stat-value">${workOrders.length}</p>
-            <p class="dash-stat-label">Work Order</p>
-            <p class="dash-stat-sub">${draftWO} berjalan &middot; ${finalWO} selesai</p>
-          </div>
-        </div>
-        <div class="dash-stat-card">
-          <div class="dash-stat-icon">&#9879;</div>
-          <div>
-            <p class="dash-stat-value">${specimens.length}</p>
-            <p class="dash-stat-label">Pengecekan Spesimen</p>
-            <p class="dash-stat-sub">${draftSpecimens} draft &middot; ${finalSpecimens} final</p>
-          </div>
-        </div>
-        <div class="dash-stat-card ${actionCount ? 'is-alert' : ''}">
-          <div class="dash-stat-icon">&#9888;</div>
-          <div>
-            <p class="dash-stat-value">${actionCount}</p>
-            <p class="dash-stat-label">Perlu Tindak Lanjut</p>
-            <p class="dash-stat-sub">${actionCount ? 'Butuh langkah berikutnya' : 'Semua sudah tertangani'}</p>
-          </div>
-        </div>
-      </div>
+      <section class="d2-kpis" aria-label="Indikator utama">
+        ${dashKpi('request', 'Permintaan Uji', k.requests, vs)}
+        ${dashKpi('wo', 'Work Order', k.work_orders, vs)}
+        ${dashKpi('flask', 'Spesimen Diuji', k.specimens, vs)}
+        ${dashKpi('doc', 'LHU Terbit', k.lhu, vs)}
+        ${dashKpi('alert', 'Perlu Tindak Lanjut', k.follow_up, k.follow_up.value ? 'klik untuk melihat' : 'semua tertangani', true)}
+      </section>
+      <section class="card d2-follow" id="d2FollowList" hidden>
+        <p class="d2-card-title">Perlu Tindak Lanjut</p>
+        ${d.follow_ups.length ? `<ul class="d2-follow-list">${d.follow_ups.map((f, i) => `<li><div><strong>${esc(f.label)}</strong><span class="muted">${esc(f.note)}</span></div><button type="button" class="btn btn-sm" data-follow="${i}">Buka</button></li>`).join('')}</ul>` : '<p class="muted">Tidak ada yang perlu ditindaklanjuti.</p>'}
+      </section>
 
-      <div class="card" style="margin-bottom:20px;">
-        <p class="card-title">Status Machining Spesimen</p>
-        <p class="card-desc">${machiningCount('menunggu')} menunggu &middot; ${machiningCount('proses')} sedang machining &middot; ${machiningCount('selesai')} selesai machining (siap diinspeksi)</p>
-        ${machiningRows.length === 0 ? `<p class="dash-empty">Tidak ada spesimen yang sedang menunggu atau dalam proses machining.</p>` : `
-          <div class="dash-action-list">
-            ${machiningRows.slice(0, 8).map(w => `
-              <div class="dash-action-item">
-                <div>
-                  <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
-                  <p class="dash-action-hint">${machiningGroupHtml[w.group]}
-                    ${w.group === 'proses' && w.machining_started_at ? ' &middot; dimulai ' + esc(formatDateTimeID(w.machining_started_at)) + ' &middot; berjalan ' + esc(fmtDurationID(w.machining_started_at)) : ''}
-                    ${w.group === 'selesai' && w.machining_finished_at ? ' &middot; selesai ' + esc(formatDateTimeID(w.machining_finished_at)) + ' &middot; durasi ' + esc(fmtDurationID(w.machining_started_at, w.machining_finished_at)) : ''}</p>
-                </div>
-                <div>
-                  <button class="btn btn-sm" data-machining-open="${w.id}">Buka Preparation</button>
-                  ${w.group === 'selesai' ? `<button class="btn btn-sm btn-primary" data-action-spec="${w.test_request_id}">Inspeksi</button>` : ''}
-                </div>
-              </div>`).join('')}
-            ${machiningRows.length > 8 ? `<p class="muted" style="margin:6px 0 0;">+ ${machiningRows.length - 8} Work Order lainnya &mdash; lihat Preparation Queue.</p>` : ''}
-          </div>`}
-      </div>
-
-      <div class="dash-grid">
-        <div class="card">
-          <p class="card-title">Alur Kerja</p>
-          <p class="card-desc">Permintaan Uji &rarr; Work Order &rarr; Pengecekan Spesimen</p>
-          <div class="dash-funnel">
-            ${funnelStages.map(s => `
-              <div class="dash-funnel-row">
-                <div class="dash-funnel-track"><div class="dash-funnel-fill" style="width:${s.pct}%"></div></div>
-                <div class="dash-funnel-meta"><span class="dash-funnel-name">${esc(s.label)}</span><span class="dash-funnel-count">${s.count}</span></div>
-              </div>
-            `).join('')}
-          </div>
+      <section class="d2-row d2-row-3">
+        <div class="card d2-card">
+          <p class="d2-card-title">Tren Permintaan Uji</p>
+          <ul class="d2-legend-row"><li><i style="background:${DASH_COLORS.sky}"></i>Permintaan Uji</li><li><i class="line" style="background:${DASH_COLORS.red}"></i>LHU Terbit</li></ul>
+          ${dashTrendSvg(d.trend)}
         </div>
-
-        <div class="card">
-          <p class="card-title">Permintaan Uji per Bulan</p>
-          <p class="card-desc">6 bulan terakhir</p>
-          <div class="dash-bars">
-            ${months.map(m => `
-              <div class="dash-bar-col">
-                <div class="dash-bar-track"><div class="dash-bar-fill" style="height:${Math.round(m.count / maxMonthCount * 100)}%"></div></div>
-                <span class="dash-bar-count">${m.count}</span>
-                <span class="dash-bar-label">${esc(m.label)}</span>
-              </div>
-            `).join('')}
-          </div>
+        <div class="card d2-card">
+          <p class="d2-card-title">Status Work Order <span class="d2-card-sub">dibuat dalam periode</span></p>
+          ${dashDonut([{ label: 'Berjalan', value: ws.running, color: DASH_COLORS.red }, { label: 'Selesai', value: ws.done, color: DASH_COLORS.navy }, { label: 'Menunggu Receiving', value: ws.waiting, color: DASH_COLORS.pink }], woTotal, 'Work Order')}
         </div>
-      </div>
-
-      <div class="dash-grid">
-        <div class="card">
-          <p class="card-title">Perlu Tindak Lanjut</p>
-          <p class="card-desc">Langkah berikutnya yang belum diambil</p>
-          ${actionCount === 0 ? `<p class="dash-empty">Semua Permintaan Uji sudah lengkap sampai Pengecekan Spesimen.</p>` : `
-            <div class="dash-action-list">
-              ${needsWO.map(r => `
-                <div class="dash-action-item">
-                  <div>
-                    <strong>${esc(r.job_number)}</strong><span class="muted"> &middot; ${esc(r.company)}</span>
-                    <p class="dash-action-hint">Sudah Final, belum ada Work Order</p>
-                  </div>
-                  <button class="btn btn-sm btn-primary" data-action-wo="${r.id}">+ Work Order</button>
-                </div>`).join('')}
-              ${needsSpecimen.map(w => `
-                <div class="dash-action-item">
-                  <div>
-                    <strong>${esc(w.job_number)}</strong><span class="muted"> &middot; ${esc(w.company)}</span>
-                    <p class="dash-action-hint">Machining selesai, belum ada Pengecekan Spesimen</p>
-                  </div>
-                  <button class="btn btn-sm" data-action-spec="${w.test_request_id}">Buat Sheet</button>
-                </div>`).join('')}
-            </div>
-          `}
+        <div class="card d2-card">
+          <p class="d2-card-title">Status Pengecekan Spesimen</p>
+          ${dashDonut([{ label: 'Selesai (Final)', value: ss.final, color: DASH_COLORS.red }, { label: 'Dalam Proses', value: ss.draft, color: DASH_COLORS.navy }, { label: 'Belum dibuat', value: ss.waiting, color: DASH_COLORS.pink }], spTotal, 'Sheet')}
         </div>
+      </section>
 
-        <div class="card">
-          <p class="card-title">Aktivitas Terbaru</p>
-          <p class="card-desc">6 perubahan terakhir</p>
-          ${activity.length === 0 ? `<p class="dash-empty">Belum ada aktivitas.</p>` : `
-            <div class="dash-activity-list">
-              ${activity.map(a => `
-                <div class="dash-activity-item">
-                  <div class="dash-activity-icon">${ACTIVITY_ICON[a.type]}</div>
-                  <div class="dash-activity-body">
-                    <strong>${esc(a.label)}</strong>
-                    <span class="muted">${esc(a.sub || '')}</span>
-                  </div>
-                  ${a.badgeHtml || `<span class="badge badge-${a.status === 'final' ? 'final' : 'draft'}">${a.status === 'final' ? 'Final' : 'Draft'}</span>`}
-                </div>`).join('')}
-            </div>
-          `}
+      <section class="d2-row d2-row-3">
+        <div class="card d2-card">
+          <p class="d2-card-title">Jumlah Pengujian per Jenis <span class="d2-card-sub">spesimen (Qty)</span></p>
+          ${d.tests_by_type.length ? `<ul class="d2-hbars">${d.tests_by_type.map(t => `<li><span class="d2-hbar-label" title="${esc(t.label)}">${esc(t.label)}</span><span class="d2-hbar-track"><span class="d2-hbar-fill${t.rest ? ' rest' : ''}" style="width:${Math.max(2, Math.round(t.value / typeMax * 100))}%"></span></span><b>${t.value.toLocaleString('id-ID')}</b></li>`).join('')}</ul>` : '<p class="muted">Belum ada pengujian dalam periode ini.</p>'}
         </div>
-      </div>
-    `;
+        <div class="card d2-card">
+          <p class="d2-card-title">Turn Around Time <span class="d2-card-sub">rata-rata hari, sampel diterima &rarr; LHU terbit &middot; 6 bulan terakhir</span></p>
+          ${dashTatSvg(d.tat)}
+        </div>
+        <div class="card d2-card">
+          <p class="d2-card-title">Top 5 Client <span class="d2-card-sub">jumlah Permintaan Uji</span></p>
+          ${dashDonut(d.top_clients.map((c, i) => ({ label: c.label, value: c.value, color: clientColors[c.rest ? 5 : i] })), clientTotal, 'Permintaan Uji')}
+        </div>
+      </section>
 
-    contentEl.querySelectorAll('[data-action-wo]').forEach(btn =>
-      btn.addEventListener('click', () => createWorkOrder(btn.dataset.actionWo)));
-    contentEl.querySelectorAll('[data-machining-open]').forEach(btn =>
-      btn.addEventListener('click', () => openWoTask(btn.dataset.machiningOpen, 'preparation')));
-    contentEl.querySelectorAll('[data-action-spec]').forEach(btn =>
-      btn.addEventListener('click', () => {
-        state.view = 'specimen-list';
-        state.specimenCreatorOpen = true;
-        state.specimenCreatorPrefill = { requestId: btn.dataset.actionSpec };
-        render();
-      }));
+      <section class="d2-row d2-row-2">
+        <div class="card d2-card">
+          <p class="d2-card-title">Work Order Berjalan dengan Durasi Terlama <a href="#" class="d2-link" id="d2AllWo">Lihat semua &rarr;</a></p>
+          <div class="d2-table-wrap"><table class="d2-table">
+            <thead><tr><th>No. Work Order</th><th>Client</th><th>Jenis Pengujian</th><th>Durasi (hari)</th><th>Tahap</th></tr></thead>
+            <tbody>${d.longest.map(w => `<tr data-wo-open="${w.work_order_id}" data-wo-stage="${esc(w.stage_key || 'receiving')}" tabindex="0">
+              <td><strong>${esc(w.job_number)}</strong></td><td class="d2-clip short" title="${esc(w.company)}">${esc(w.company) || '-'}</td><td class="d2-clip" title="${esc(w.tests)}">${esc(w.tests) || '-'}</td>
+              <td><span class="d2-days${w.days > d.tat.target ? ' over' : ''}">${w.days}</span></td>
+              <td><span class="st-pill ${w.stage_status === 'draft' ? 'st-draft' : 'st-pending'}">${esc(stageLabel(w.stage))}</span></td></tr>`).join('') || '<tr><td colspan="5" class="muted">Tidak ada Work Order yang sedang berjalan.</td></tr>'}</tbody>
+          </table></div>
+        </div>
+        <div class="card d2-card">
+          <p class="d2-card-title">Aktivitas Laboratorium <span class="d2-card-sub">tahap / sheet yang selesai per bulan &middot; 6 bulan terakhir</span></p>
+          ${dashActivitySvg(d.activity)}
+        </div>
+      </section>`;
+
+    const toggle = document.getElementById('d2FollowToggle');
+    const list = document.getElementById('d2FollowList');
+    const flip = () => { list.hidden = !list.hidden; if (!list.hidden) list.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); };
+    toggle.addEventListener('click', flip);
+    toggle.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); flip(); } });
+    list.querySelectorAll('[data-follow]').forEach(btn => btn.addEventListener('click', () => {
+      const f = d.follow_ups[Number(btn.dataset.follow)];
+      if (f.kind === 'wo') createWorkOrder(f.request_id);
+      else if (f.kind === 'specimen') { state.view = 'specimen-list'; state.specimenCreatorOpen = true; state.specimenCreatorPrefill = { requestId: f.request_id }; render(); }
+      else openWoTask(f.work_order_id, f.stage);
+    }));
+    contentEl.querySelectorAll('[data-wo-open]').forEach(tr => tr.addEventListener('click', () => openWoTask(tr.dataset.woOpen, tr.dataset.woStage)));
+    document.getElementById('d2AllWo').addEventListener('click', e => { e.preventDefault(); state.view = 'wo-tasks'; render(); });
   }
 
   // ---------- timeline ----------
