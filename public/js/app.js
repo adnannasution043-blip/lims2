@@ -3748,6 +3748,62 @@
     load();
   }
 
+  // Testing Machine Used: alat dipilih dari Master Data Equipment (tidak diketik). Teks yang tersimpan & tercetak di
+  // laporan = "Nama Model, S/N : nomor seri", beberapa alat dipisah "; ". Teks lama yang tidak cocok dengan master tetap
+  // tampil sebagai "data lama" sampai diganti.
+  const equipmentText = eq => `${eq.name}${eq.model ? ' ' + eq.model : ''}${eq.serial_number ? ', S/N : ' + eq.serial_number : ''}`;
+  function machinePartsOf(v) {
+    const parts = String(v || '').split(';').map(x => x.trim()).filter(Boolean);
+    return parts.length ? parts : [''];
+  }
+  function machineRowHtml(text) {
+    const match = EQUIPMENT.find(eq => equipmentText(eq) === text);
+    const legacy = text && !match ? `<option value="legacy" data-text="${esc(text)}" selected>${esc(text)} (data lama, belum ada di Master Equipment)</option>` : '';
+    const opts = EQUIPMENT.map(eq => {
+      const off = eq.status === 'out_of_service';
+      const note = off ? ' — Out of Service' : (eq.status === 'maintenance' ? ' — Under Maintenance' : '');
+      return `<option value="${eq.id}" ${match === eq ? 'selected' : ''} ${off ? 'disabled' : ''}>${esc(equipmentText(eq))}${eq.equipment_id ? ' [' + esc(eq.equipment_id) + ']' : ''}${note}</option>`;
+    }).join('');
+    return `<div class="machine-row"><select data-machine aria-label="Alat uji">${legacy || `<option value="" ${match ? '' : 'selected'}>— Pilih alat —</option>`}${opts}</select><button type="button" class="btn btn-sm btn-danger" data-machine-del aria-label="Hapus alat">&times;</button></div>`;
+  }
+  function bindMachineEvents() {
+    const list = document.getElementById('machineList'), hidden = document.getElementById('testingMachineValue');
+    if (!list || !hidden) return;
+    const warnEl = document.getElementById('machineWarn');
+    const dateEl = document.querySelector('#testReportForm [name="date_tested"]');
+    const sync = () => {
+      const picked = [...list.querySelectorAll('select[data-machine]')].map(sel => {
+        if (sel.value === 'legacy') return { text: sel.selectedOptions[0].dataset.text };
+        const eq = EQUIPMENT.find(x => String(x.id) === sel.value);
+        return eq ? { text: equipmentText(eq), eq } : null;
+      }).filter(Boolean);
+      hidden.value = picked.map(p => p.text).join('; ');
+      // peringatan (tidak memblokir): alat dalam perawatan atau kalibrasinya lewat jatuh tempo pada tanggal uji
+      const day = (dateEl && dateEl.value) || todayISODate();
+      const warns = picked.filter(p => p.eq).map(p => {
+        if (p.eq.status === 'maintenance') return `${p.eq.name}: sedang Under Maintenance`;
+        if (p.eq.next_calibration_due && p.eq.next_calibration_due < day) return `${p.eq.name}: kalibrasi lewat jatuh tempo (${formatDateOnly(p.eq.next_calibration_due)})`;
+        if (p.eq.status === 'calibration_due') return `${p.eq.name}: status Calibration Due`;
+        return '';
+      }).filter(Boolean);
+      warnEl.hidden = !warns.length;
+      warnEl.innerHTML = warns.length ? '&#9888; ' + warns.map(esc).join('<br>&#9888; ') : '';
+    };
+    list.addEventListener('change', () => { sync(); state.testReportDirty = true; });
+    list.addEventListener('click', e => {
+      if (!e.target.closest('[data-machine-del]')) return;
+      const rows = list.querySelectorAll('.machine-row');
+      if (rows.length > 1) e.target.closest('.machine-row').remove(); else rows[0].querySelector('select').value = '';
+      sync(); state.testReportDirty = true;
+    });
+    document.getElementById('btnAddMachine').addEventListener('click', () => {
+      list.insertAdjacentHTML('beforeend', machineRowHtml(''));
+      list.lastElementChild.querySelector('select').focus();
+    });
+    if (dateEl) dateEl.addEventListener('change', sync);
+    sync();
+  }
+
   // Witnessed By: beberapa nama, disimpan digabung koma pada kolom yang sama (data lama satu nama tetap terbaca)
   function witnessNames(v) {
     const list = String(v || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
@@ -3944,7 +4000,12 @@
         <div class="card">
           <p class="section-title">Info Tambahan</p>
           <div class="form-grid">
-            <div class="field"><label>Testing Machine Used</label><input type="text" name="testing_machine" value="${esc(r.testing_machine)}" placeholder="Hydraulic Press Machine, Capacity : 400 Bar"></div>
+            <div class="field"><label>Testing Machine Used <span class="en">pilih dari Master Data Equipment &middot; bisa lebih dari 1 alat</span></label>
+              <div id="machineList">${machinePartsOf(r.testing_machine).map(machineRowHtml).join('')}</div>
+              <button type="button" class="btn btn-sm" id="btnAddMachine" style="align-self:flex-start;margin-top:4px;">+ Tambah alat</button>
+              ${EQUIPMENT.length ? '' : '<span class="muted" style="font-size:12px;">Master Equipment masih kosong. Tambahkan alat di Master Data &rsaquo; Equipment.</span>'}
+              <div id="machineWarn" class="machine-warn" hidden></div>
+              <input type="hidden" name="testing_machine" id="testingMachineValue" value="${esc(r.testing_machine)}"></div>
             <div class="field"><label>Welder's Name <span class="en">dari coupon di Permintaan Uji</span></label><input type="text" value="${esc(((r.coupon || {}).welder_name) || r.welder_name) || '-'}" disabled>
               <input type="hidden" name="welder_name" value="${esc(r.welder_name)}"></div>
             <div class="field"><label>Witnessed By <span class="en">bisa lebih dari 1 orang</span></label>
@@ -4014,6 +4075,7 @@
     bindTestReportElementEvents();
     bindTestReportHicLogEvents();
     bindWitnessEvents();
+    bindMachineEvents();
     initMachineFiles(state.testReport.id);
     bindTestReportFerriteEvents();
     bindTestReportHardEvents();
