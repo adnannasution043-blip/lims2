@@ -66,7 +66,7 @@ const WO = {
       other_tests: [{ test_name: 'Compression Test (ASTM E9)', checked: true, qty: '2' }, { test_name: 'Flaring test', checked: true, qty: '3' }, { test_name: 'Uji Geser Las', checked: true, qty: '2' }, { test_name: 'Peel test', checked: true, qty: '2' }, { test_name: 'Grain size test', checked: true, qty: '1' }, { test_name: 'SEM-EDX examination', checked: true, qty: '2' }, { test_name: 'Salt spray test', checked: true, qty: '2' }, { test_name: 'HIC test', checked: true, qty: '3' }, { test_name: 'SCC test', checked: true, qty: '2' }, { test_name: 'SSCC FPB test', checked: true, qty: '3' }, { test_name: 'SSCC PR test', checked: true, qty: '2' }] }
   ,
     // Coupon 2: Root & Face Bend -> satu Lembar gabungan
-    { row_no: 2, coupon_type: ['Plate'], material_type_grade: 'A36', thickness: '12', no_wps: 'WPS-2', ref_code: 'ASME IX',
+    { row_no: 2, coupon_type: ['Plate'], material_type_grade: 'A36', thickness: '12', no_wps: 'WPS-2', ref_code: 'ASME IX', heat_number: 'HT-777',
       test_items: [{ test_name: 'Bend Root', checked: true, qty: '2' }, { test_name: 'Bend Face', checked: true, qty: '2' }], other_tests: [] }
   ]
 };
@@ -806,6 +806,7 @@ function call(method, path, params, body) {
   const bid = r.body.id;
   assert.strictEqual(r.body.test_name, 'Bend Root', 'disimpan atas nama pengujian pertama');
   assert.strictEqual(r.body.title, 'Root & Face Bend Test');
+  assert.strictEqual(r.body.heat_no, 'HT-777', 'Heat No diambil dari coupon Permintaan Uji');
   assert.deepStrictEqual(r.body.combined_tests, ['Bend Root', 'Bend Face']);
   assert.deepStrictEqual(r.body.rows.map(x => x.marking_specimen), ['ABN.9.1-BR1', 'ABN.9.1-BR2', 'ABN.9.1-BF1', 'ABN.9.1-BF2']);
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 2, test_name: 'Bend Root' });

@@ -3927,7 +3927,8 @@
             <div class="field"><label>Testing Purpose</label><input type="text" name="testing_purpose" value="${esc(r.testing_purpose)}"></div>
             ${(r.template_options || []).length ? `
             <div class="field"><label>PQR No <span class="en">form Weld</span></label><input type="text" name="pqr_no" value="${esc(r.pqr_no)}"></div>
-            <div class="field"><label>Heat No</label><input type="text" name="heat_no" value="${esc(r.heat_no)}"></div>` : ''}
+            <div class="field"><label>Heat No <span class="en">dari coupon di Permintaan Uji</span></label><input type="text" value="${esc(r.heat_no) || '-'}" disabled>
+              <input type="hidden" name="heat_no" value="${esc(r.heat_no)}"></div>` : ''}
           </div>
         </div>
 
