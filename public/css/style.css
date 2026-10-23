@@ -2043,3 +2043,16 @@ table .ss { min-width: 98px; }
 .ss-list li.selected { font-weight: 700; color: var(--navy); }
 .ss-list li.disabled { color: var(--text-muted); cursor: default; opacity: .6; }
 .ss-list li.ss-empty { color: var(--text-muted); cursor: default; }
+
+/* Menu Machining: detail material per coupon & foto Receiving */
+.mach-coupon { min-width: 200px; }
+.mach-facts { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 8px 0; font-size: 12px; }
+.mach-facts dt { color: var(--text-muted); }
+.mach-facts dd { margin: 0; font-weight: 600; color: var(--text); }
+.rf-modal { max-width: 860px; }
+.rf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.rf-tile { display: flex; flex-direction: column; gap: 6px; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px; font-size: 12px; }
+.rf-tile img { width: 100%; height: 130px; object-fit: cover; border-radius: 5px; background: #f1f3f7; }
+.rf-tile span { overflow-wrap: anywhere; }
+.rf-doc .rf-doc-ico { height: 130px; display: grid; place-items: center; background: var(--accent-light); color: var(--accent); font-weight: 800; border-radius: 5px; }
+.rf-sub { font-weight: 700; color: var(--navy); margin: 14px 0 8px; }

@@ -4556,6 +4556,39 @@
 
   // ---------- menu Machining (role Machining) ----------
   // Dibuat sesederhana mungkin: per Work Order hanya spesimen yang harus dibuat dan satu tombol Mulai / Selesai.
+  // Foto / dokumen dari tahap Receiving untuk satu coupon (+ dokumen umum Work Order), hanya lihat
+  async function openReceivingFiles(woId, rowNo, title) {
+    let files = [];
+    try { files = (await api(`/api/work-orders/${woId}/files?task=receiving`)).files || []; }
+    catch (err) { toast(err.message, 'error'); return; }
+    const mine = files.filter(f => f.coupon_row_no === rowNo);
+    const general = files.filter(f => f.coupon_row_no == null);
+    const stateLabel = { before: 'Belum dimarking', after: 'Sudah dimarking' };
+    const tile = f => {
+      const url = `/api/work-order-files/${f.id}`;
+      const cap = `${esc(stateLabel[f.marking_state] || 'Dokumen')} &middot; ${esc(f.filename)}`;
+      return /^image\//.test(f.mime_type)
+        ? `<a class="rf-tile" href="${url}" target="_blank" rel="noopener"><img src="${url}" alt="${esc(f.filename)}" loading="lazy"><span>${cap}</span></a>`
+        : `<a class="rf-tile rf-doc" href="${url}" target="_blank" rel="noopener"><span class="rf-doc-ico">PDF</span><span>${cap}</span></a>`;
+    };
+    closeListModal();
+    const wrap = document.createElement('div');
+    wrap.className = 'list-modal-backdrop';
+    wrap.id = 'listModal';
+    wrap.innerHTML = `<div class="list-modal rf-modal" role="dialog" aria-modal="true" aria-label="Foto Receiving">
+        <div class="list-modal-head"><div><strong>Foto Receiving</strong><div class="muted" style="font-size:12px;">${title}</div></div>
+          <button type="button" class="list-modal-x" aria-label="Tutup" data-lm-close>&times;</button></div>
+        <div class="list-modal-body">
+          ${mine.length ? `<div class="rf-grid">${mine.map(tile).join('')}</div>` : '<p class="muted">Belum ada foto untuk coupon ini.</p>'}
+          ${general.length ? `<p class="rf-sub">Dokumen umum Work Order</p><div class="rf-grid">${general.map(tile).join('')}</div>` : ''}
+        </div>
+        <div class="list-modal-foot"><span class="muted">Klik foto untuk melihat ukuran penuh</span><span><button type="button" class="btn btn-sm btn-primary" data-lm-close>Tutup</button></span></div>
+      </div>`;
+    wrap.addEventListener('click', e => { if (e.target === wrap || e.target.closest('[data-lm-close]')) closeListModal(); });
+    document.body.appendChild(wrap);
+    document.addEventListener('keydown', listModalKey);
+  }
+
   async function renderMachining() {
     pageTitle.textContent = 'Machining';
     pageSubtitle.textContent = 'Spesimen yang harus dibuat — tekan Mulai saat mengerjakan, Selesai bila semua spesimen sudah jadi';
@@ -4595,11 +4628,19 @@
           <div>${button(r)}</div>
         </div>
         <div class="task-table-wrap"><table class="task-table">
-          <thead><tr><th>Coupon</th><th>Jenis Pengujian</th><th>Qty</th><th>Specimen Marking</th></tr></thead>
+          <thead><tr><th>Coupon &amp; Material</th><th>Jenis Pengujian &amp; Test Method</th><th>Qty</th><th>Specimen Marking</th></tr></thead>
           <tbody>${r.coupons.map(c => c.tests.map((t, i) => `
             <tr>
-              ${i === 0 ? `<td rowspan="${c.tests.length}"><strong>${esc(c.sample_marking) || '#' + c.coupon_row_no}</strong><br><span class="muted">${esc(c.coupon_label)}</span></td>` : ''}
-              <td>${esc(t.test_name)}</td>
+              ${i === 0 ? `<td rowspan="${c.tests.length}" class="mach-coupon">
+                <strong>${esc(c.sample_marking) || '#' + c.coupon_row_no}</strong><br><span class="muted">${esc(c.coupon_label)}</span>
+                <dl class="mach-facts">
+                  <dt>Material Grade</dt><dd>${esc(c.material_type_grade) || '-'}</dd>
+                  <dt>Material Size</dt><dd>${esc(c.material_size) || '-'}</dd>
+                  <dt>Ref. Code</dt><dd>${esc(c.ref_code) || '-'}</dd>
+                </dl>
+                <button type="button" class="btn btn-sm" data-mach-files="${r.work_order_id}" data-row="${c.coupon_row_no}" data-title="${esc(c.sample_marking || 'Coupon #' + c.coupon_row_no)} · ${esc(r.job_number)}" ${c.files || r.general_files ? '' : 'disabled'}>Foto Receiving (${c.files + (r.general_files || 0)})</button>
+              </td>` : ''}
+              <td>${esc(t.test_name)}${t.method ? `<br><span class="muted">${esc(t.method)}</span>` : ''}</td>
               <td>${esc(t.qty) || '-'}</td>
               <td>${markingChipsHtml({ ...t, job_number: r.job_number, sample_marking: c.sample_marking })}</td>
             </tr>`).join('')).join('') || '<tr><td colspan="4" class="muted">Belum ada Jenis Pengujian pada Permintaan Uji.</td></tr>'}</tbody>
@@ -4612,6 +4653,8 @@
         <div class="task-stat ok">${statIcon('checkCircle')}<b>${count('selesai')}</b><span>Selesai (7 hari)</span></div>
       </div>
       ${rows.length ? rows.map(card).join('') : '<div class="card"><p class="dash-empty">Tidak ada spesimen yang perlu dikerjakan. Work Order muncul di sini setelah sampelnya diterima (Receiving selesai).</p></div>'}`;
+    contentEl.querySelectorAll('[data-mach-files]').forEach(btn => btn.addEventListener('click', () =>
+      openReceivingFiles(btn.dataset.machFiles, Number(btn.dataset.row), btn.dataset.title)));
     contentEl.querySelectorAll('[data-mach]').forEach(btn => btn.addEventListener('click', async () => {
       const action = btn.dataset.mach;
       if (action === 'finish' && !confirm('Semua spesimen untuk Work Order ini sudah selesai dibuat?')) return;

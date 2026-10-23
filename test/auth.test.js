@@ -80,6 +80,11 @@ assert.ok(!can(mach, 'GET', '/api/requests'));
 assert.ok(can(tech, 'POST', '/api/work-orders/5/machining'));
 assert.ok(can(tech, 'GET', '/api/machining'));
 assert.ok(!can(viewer, 'POST', '/api/work-orders/5/machining'));
+// foto Receiving: Machining boleh melihat, tidak boleh mengunggah / menghapus
+assert.ok(can(mach, 'GET', '/api/work-orders/5/files'));
+assert.ok(can(mach, 'GET', '/api/work-order-files/12'));
+assert.ok(!can(mach, 'POST', '/api/work-orders/5/files'));
+assert.ok(!can(mach, 'DELETE', '/api/work-order-files/12'));
 
 // ---- token ----
 const secret = 'rahasia-uji-yang-cukup-panjang';
