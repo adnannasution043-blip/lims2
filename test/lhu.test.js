@@ -92,16 +92,18 @@ const call = (key, params, body) => new Promise(resolve => {
   assert.ok(r.body.includes('Laporan Hasil Uji DE.1/1026/0001'));
   assert.ok(r.body.includes('1 of 1'));
 
-  // Preliminary Report: semua Lembar coupon (termasuk Draft), tanpa logo & tanda tangan, dengan watermark
+  // Preliminary Report: semua Lembar coupon (termasuk Draft), tanpa logo KAN & tanda tangan, dengan watermark
   printed.length = 0;
   r = await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '1' });
   assert.strictEqual(r.status, 200);
   assert.deepStrictEqual(printed, [5, 6]);
   assert.ok(r.body.includes('PRELIMINARY REPORT'));
-  assert.ok(!r.body.includes('class="rt-img"'), 'logo DETECH & KAN tidak dicetak');
+  const imgs = body => (body.match(/class="rt-img" style="left:\d+px/g) || []).map(m => Number(m.match(/left:(\d+)/)[1]));
+  assert.ok(imgs(r.body).some(x => x < 300), 'logo DETECH tetap dicetak');
+  assert.ok(!imgs(r.body).some(x => x >= 300), 'logo KAN tidak dicetak');
   assert.ok(!/Approved Signatory|Technical Manager|Pangestu/.test(r.body), 'blok tanda tangan approval kosong');
   const official = await call('GET /lhu-reports/:id/print', { id: '1-1' });
-  assert.ok(official.body.includes('class="rt-img"') && official.body.includes('Approved Signatory') && !official.body.includes('PRELIMINARY'));
+  assert.ok(imgs(official.body).some(x => x >= 300) && official.body.includes('Approved Signatory') && !official.body.includes('PRELIMINARY'));
   assert.strictEqual((await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '7' })).status, 404);
 
   console.log('LHU OK');

@@ -13,7 +13,7 @@ for (const [src, key] of jobs) {
   const t = convert(dir + file(src));
   const photos = t.images.filter(i => i.data.length >= PHOTO_MIN);
   t.images = t.images.filter(i => i.data.length < PHOTO_MIN);
-  t.slots = photos.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: 'Foto makro', fit: 'cover' }));   // foto memenuhi bingkai agar label putih di atasnya tetap di atas foto
+  t.slots = photos.map((p, i) => ({ id: 's' + (i + 1), x: p.x, y: p.y, w: p.w, h: p.h, label: 'Foto makro', fit: 'contain', bg: '#000' }));   // foto utuh (shrink to fit); sisa bingkai hitam agar label putih di atasnya tetap terbaca
   fs.writeFileSync(ROOT + 'lib/reportTemplates/' + key + '.json', JSON.stringify(t));
   console.log(key.padEnd(13), 'rows', t.rows.length, 'static img', t.images.length, 'slots', t.slots.map(s => [s.x, s.y, s.w, s.h].join(',')).join(' | '));
 }
