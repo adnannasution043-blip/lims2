@@ -2015,3 +2015,31 @@ table.master-table tr:hover .row-icons { opacity: 1; }
 .machine-row { display: flex; gap: 6px; align-items: center; }
 .machine-row select { flex: 1 1 auto; min-width: 0; }
 .machine-warn { margin-top: 6px; font-size: 12px; color: #8a5a00; background: #fff8e6; border: 1px solid #f1d38a; border-radius: 6px; padding: 6px 8px; }
+
+/* ===== Dropdown dengan pencarian (public/js/searchable-select.js) ===== */
+.ss { position: relative; display: block; width: 100%; min-width: 0; }
+.ss[hidden] { display: none; }
+.ss-native { position: absolute !important; inset: 0; width: 100% !important; height: 100% !important; opacity: 0 !important; pointer-events: none !important; }
+.ss-btn { display: flex; align-items: center; width: 100%; min-width: 0; text-align: left; cursor: pointer;
+  border: 1px solid var(--border-strong); border-radius: 7px; padding: 9px 30px 9px 11px; font: inherit; font-size: 13.5px;
+  color: var(--text); background: var(--surface); position: relative; }
+.ss-btn::after { content: ''; position: absolute; right: 11px; top: 50%; width: 7px; height: 7px; margin-top: -5px;
+  border-right: 1.6px solid var(--text-muted); border-bottom: 1.6px solid var(--text-muted); transform: rotate(45deg); }
+.ss-btn:focus-visible, .ss-btn[aria-expanded="true"] { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(170,0,0,0.18); }
+.ss-btn:disabled { background: var(--bg); color: var(--text-muted); cursor: default; }
+.ss-btn.ss-placeholder .ss-text { color: var(--text-muted); }
+.ss-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+table .ss-btn, .specimen-table .ss-btn { padding: 6px 26px 6px 8px; font-size: 12.5px; border-radius: 6px; }
+table .ss { min-width: 98px; }
+.d2-period .ss { width: auto; }
+.d2-period .ss-btn { border: 0; background: transparent; font-weight: 600; padding: 4px 24px 4px 2px; box-shadow: none; }
+.ss-pop { position: fixed; z-index: 3000; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(14,50,112,.18); padding: 6px; display: flex; flex-direction: column; max-height: 320px; }
+.ss-search { width: 100%; border: 1px solid var(--border-strong); border-radius: 6px; padding: 7px 9px; font: inherit; font-size: 13px; margin-bottom: 6px; }
+.ss-search:focus { outline: none; border-color: var(--accent); }
+.ss-list { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.ss-list li { padding: 7px 9px; border-radius: 5px; font-size: 13px; cursor: pointer; overflow-wrap: anywhere; }
+.ss-list li.active { background: var(--accent-light); }
+.ss-list li.selected { font-weight: 700; color: var(--navy); }
+.ss-list li.disabled { color: var(--text-muted); cursor: default; opacity: .6; }
+.ss-list li.ss-empty { color: var(--text-muted); cursor: default; }
