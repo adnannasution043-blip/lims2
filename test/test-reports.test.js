@@ -43,6 +43,9 @@ const MAP = { 'Bend Root': 'bending', 'Bend Face': 'bending', 'Tensile Test': 't
   assert.ok(!html.includes('class="rt-stamp"'), 'tanpa stempel bila tidak dipilih');
   html = renderTestReportPrintHtml({ ...base, approved_signatory: { status: '', name: 'Draft', signature: null, stamp: null } });
   assert.ok(html.includes('Pangestu'), 'belum disetujui: nama bawaan form tetap');
+  // Witnessed By: tiap saksi di baris sendiri
+  html = renderTestReportPrintHtml({ ...base, witnessed_by: 'Mr A of Pertamina, Mr B of JGC Japan' });
+  assert.ok(html.includes('Mr A of Pertamina<br>Mr B of JGC Japan'), 'saksi tersusun ke bawah');
 }
 
 // ---- reportTitle ----
