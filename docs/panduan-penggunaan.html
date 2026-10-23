@@ -54,10 +54,12 @@
   <div class="brand">DETECH Material Testing Laboratory</div>
   <h1>Panduan Penggunaan DETECH LIMS</h1>
   <p class="sub">Dari Permintaan Uji sampai Laporan Hasil Uji (LHU) terbit &mdash; langkah demi langkah</p>
-  <div class="meta">Versi 1.2 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
+  <div class="meta">Versi 1.3 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
 </div>
 
-<div class="note ok"><b>Yang baru di versi 1.2</b>: <b>Dashboard</b> manajemen baru (KPI, tren, Turn Around Time, klien teratas); <b>Perusahaan</b> dan <b>Atas Nama Perusahaan</b> dipilih terpisah; <b>Testing Machine Used</b> dipilih dari Master Equipment; <b>tanda tangan otomatis</b> dari akun approver dan <b>stempel perusahaan</b> pada LHU.</div>
+<div class="note ok"><b>Yang baru di versi 1.3</b>: menu <b>Machining</b> menampilkan Material Grade, Material Size, Ref. Code, Test Method, dan <b>Foto Receiving</b> per coupon; <b>kotak pencarian</b> di setiap dropdown; <b>Heat No</b> di Lembar Hasil Uji diambil otomatis dari Permintaan Uji; nama <b>Witnessed By</b> dicetak satu per baris; foto Macro dicetak <b>utuh</b> (tidak terpotong); Preliminary Report tetap memuat <b>logo DETECH</b>.</div>
+
+<div class="note"><b>Di versi 1.2</b>: <b>Dashboard</b> manajemen baru (KPI, tren, Turn Around Time, klien teratas); <b>Perusahaan</b> dan <b>Atas Nama Perusahaan</b> dipilih terpisah; <b>Testing Machine Used</b> dipilih dari Master Equipment; <b>tanda tangan otomatis</b> dari akun approver dan <b>stempel perusahaan</b> pada LHU.</div>
 
 <div class="note"><b>Di versi 1.1</b> (revisi klien Rev 1): tahap <i>Report Issued</i> dihapus &mdash; LHU terbit otomatis setelah Review &amp; Approval disetujui, <b>satu LHU per coupon</b>; No. Laporan otomatis per coupon <code>DE.1/MMYY/nnnn</code>; tahap <b>Reporting</b> kini berisi <b>Preliminary Report</b> dan tanggapan customer; tahap tidak bisa dilompati; data wajib lengkap sebelum Finalisasi; menu <b>Machining</b> untuk tim machining; Root &amp; Face Bend satu Lembar; Witnessed By lebih dari satu orang; lampiran hasil mesin uji; Perusahaan dipilih dari Master Customer.</div>
 
@@ -116,10 +118,10 @@
     <ul>
       <li><b>Root Bend dan Face Bend</b> pada coupon yang sama memakai <b>satu Lembar gabungan</b> (Root di kolom kiri, Face di kolom kanan pada form Bend Weld).</li>
       <li>Pilih bentuk form di dropdown bila ada beberapa (mis. Tensile: Reduced Section / Full Section / Bolt; SSCC: FPB / Proof Ring).</li>
-      <li>Isi tabel hasil; kolom yang bisa dihitung terisi otomatis (Area, kekuatan, rata-rata, dan sebagainya). No. Laporan dan Welder&rsquo;s Name tampil otomatis.</li>
+      <li>Isi tabel hasil; kolom yang bisa dihitung terisi otomatis (Area, kekuatan, rata-rata, dan sebagainya). No. Laporan, Welder&rsquo;s Name, dan <b>Heat No</b> tampil otomatis dari data coupon di Permintaan Uji, jadi tidak perlu diketik ulang.</li>
       <li><b>Testing Machine Used</b>: pilih alat dari Master Equipment; tekan <span class="btn">+ Tambah alat</span> bila memakai lebih dari satu alat. Di laporan tercetak <code>Nama Model, S/N : nomor seri</code>. Alat <i>Out of Service</i> tidak bisa dipilih; muncul peringatan kuning bila alat sedang perawatan atau kalibrasinya lewat jatuh tempo pada tanggal uji.</li>
-      <li><b>Witnessed By</b> bisa lebih dari satu orang: tekan <span class="btn">+ Tambah saksi</span>.</li>
-      <li>Foto (bila form menyediakan slot foto) dan <b>Lampiran Hasil Mesin Uji</b> (PDF, gambar, CSV/TXT, Excel, ZIP dari mesin uji; maks. 8 MB per file) tersimpan langsung saat dipilih. Lampiran hanya referensi, tidak dicetak.</li>
+      <li><b>Witnessed By</b> bisa lebih dari satu orang: tekan <span class="btn">+ Tambah saksi</span>. Di laporan, nama saksi dicetak <b>satu per baris</b> (tersusun ke bawah).</li>
+      <li>Foto (bila form menyediakan slot foto; foto dicetak utuh menyesuaikan bingkai, sisa bingkai berwarna hitam) dan <b>Lampiran Hasil Mesin Uji</b> (PDF, gambar, CSV/TXT, Excel, ZIP dari mesin uji; maks. 8 MB per file) tersimpan langsung saat dipilih. Lampiran hanya referensi, tidak dicetak.</li>
       <li><b>Wajib lengkap sebelum Final:</b> Date of Tested, Test Conducted By, ada data hasil uji, dan hasil tiap spesimen (Bend/Flaring/Nick Break/Fillet Weld Break: Result; Charpy: Impact; Tensile: beban atau kekuatan).</li>
       <li><span class="btn">Simpan sebagai Draft</span> lalu <span class="btn p">Simpan &amp; Finalisasi</span>.</li>
     </ul>
@@ -168,6 +170,10 @@
 
 <h2>Menu Machining (role Machining)</h2>
 <p>Akun dengan role <b>Machining</b> hanya melihat menu <span class="menu">Machining</span>: daftar Work Order yang sampelnya sudah diterima, dengan spesimen yang harus dibuat (coupon, jenis pengujian, Qty, Specimen Marking) dan satu tombol <span class="btn p">Mulai Machining</span> / <span class="btn p">Selesai Machining</span>. Work Order yang selesai machining tetap tampil 7 hari.</p>
+<ul>
+  <li>Kolom <b>Coupon &amp; Material</b> menampilkan <b>Material Grade</b>, <b>Material Size</b>, dan <b>Ref. Code</b> tiap coupon (dari Permintaan Uji). Kolom <b>Jenis Pengujian &amp; Test Method</b> menampilkan metode uji di bawah nama pengujian.</li>
+  <li>Tombol <span class="btn">Foto Receiving (n)</span> membuka foto dan dokumen yang diunggah di tahap Receiving untuk coupon itu, ditambah dokumen umum Work Order, untuk melihat bentuk asli material. Klik foto untuk ukuran penuh. Tim machining hanya bisa <b>melihat</b>, tidak bisa mengunggah atau menghapus. Tombol nonaktif bila belum ada foto.</li>
+</ul>
 
 <h2>Penamaan pengujian dan kode marking</h2>
 <p>Pengujian di daftar tetap tinggal dicentang. Pengujian lain diketik di <i>Other Test</i>; sistem mengenali penulisan di kolom tengah (huruf besar/kecil bebas) dan memakai form yang sesuai. Kode dipakai untuk marking spesimen (<code>{Sample Marking}-{kode}{nomor}</code>).</p>
@@ -253,6 +259,7 @@
 <h2>Tips</h2>
 <div class="note ok"><b>Uji coba dulu.</b> Jalankan satu pekerjaan percobaan dari awal sampai LHU terbit. Setelah selesai, <span class="menu">Pengaturan</span> &rarr; <b>Reset Data</b> (ketik <code>HAPUS</code>) mengosongkan semua data transaksi tanpa menyentuh Master Data dan Pengguna.</div>
 <ul>
+  <li><b>Mencari di dropdown:</b> setiap pilihan (dropdown) punya kotak pencarian. Klik dropdown, ketik sebagian nama, lalu pilih dari hasilnya.</li>
   <li><b>Ringkasan kinerja:</b> menu <span class="menu">Dashboard</span> untuk laporan manajemen per periode.</li>
   <li><b>Memantau posisi:</b> menu <span class="menu">Tasks</span> menampilkan tahap tiap Work Order; klik salah satu tahap di bagian atas untuk menyaring daftar. Antrian per tahap ada di bagian <span class="menu">Antrian Kerja</span>.</li>
   <li><b>Mencetak ke PDF:</b> gunakan tombol <i>Print / Simpan sebagai PDF</i> pada halaman cetak. Header tabel gelap dan baris selang-seling ikut tercetak.</li>
@@ -261,7 +268,7 @@
   <li><b>Keamanan:</b> jangan membagikan akun. Administrator dapat menonaktifkan akun yang tidak dipakai di menu Pengguna.</li>
 </ul>
 
-<footer>DETECH LIMS &middot; Panduan Penggunaan v1.2 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
+<footer>DETECH LIMS &middot; Panduan Penggunaan v1.3 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
 
 </body>
 </html>
