@@ -547,6 +547,14 @@ function call(method, path, params, body) {
   assert.ok(!('evil' in r.body.rows[0]) && r.body.rows[0].t5 === '13.2');
   x = await pagesPhotos('micro-mat', [{ marking_specimen: 'A' }]);
   assert.strictEqual(x.pages, 1);
+  // hanya satu foto (makro dihapus): foto mikro mengisi area kedua kotak, di tengah, tanpa garis penunjuk
+  x = await pagesPhotos('micro-weld', [{ marking_specimen: 'A' }]);
+  assert.ok(x.html.includes('x2="152"'), 'dua foto: garis penunjuk makro -> mikro dicetak');
+  await new Promise(resolve => routes['DELETE /api/test-reports/:id/photo']({ params: { id: String(msid) }, query: { slot: 'micro-weld/s1' } }, { json: resolve }));
+  x = await pagesPhotos('micro-weld', [{ marking_specimen: 'A' }]);
+  assert.strictEqual(x.photos, 1);
+  assert.ok(/width:623px;height:218px;object-fit:contain/.test(x.html), 'satu foto selebar dua kotak, shrink to fit');
+  assert.ok(!x.html.includes('x2="152"'), 'garis penunjuk tidak dicetak');
 
   // ---- Nick Break ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Nick Break Test' });
