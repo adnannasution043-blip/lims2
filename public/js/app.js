@@ -29,6 +29,7 @@
   let TEST_METHODS = [];
   let CUSTOMERS = [];
   let EQUIPMENT = [];
+  let HARDNESS_PATTERNS = [];
   let state = { view: 'dashboard', editingId: null, couponRows: [], tableUI: {} };
 
   // ---------- utils ----------
@@ -3016,7 +3017,7 @@
     state.testReport = data;
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
     state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
-    state.testReportHard = { lines: JSON.parse(JSON.stringify(((data.fields || {}).hardness || {}).lines || [[], []])), sketch: (data.fields || {}).sketch || '' };
+    state.testReportHard = hardStateOf(data.fields);
     state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {}));
     state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
     state.testReportPhotoSlots = new Set(data.photos || []);
@@ -3570,27 +3571,58 @@
 
   // Form Hardness: hasil HV per titik (Weld: Line 1 & 2 x 9 titik; Material: 5 titik + sketsa unggahan).
   const HARD_GROUPS = [['Base Metal', 3], ['HAZ', 3], ['Weld Metal', 3]];
+  function hardStateOf(fields) {
+    const f = fields || {};
+    return { lines: JSON.parse(JSON.stringify((f.hardness || {}).lines || [[], []])), sketch: f.sketch || '', pattern: f.pattern ? JSON.parse(JSON.stringify(f.pattern)) : null };
+  }
+  const hardKindOf = templateKey => (templateKey === 'hard-mat' ? 'material' : 'weld');
+  // pola yang berlaku untuk bentuk form terpilih (pola Weld tidak dipakai di form Material, dan sebaliknya)
+  function hardActivePattern(templateKey) {
+    const p = state.testReportHard.pattern;
+    return p && p.kind === hardKindOf(templateKey) ? p : null;
+  }
+
   function testReportHardHtml(templateKey) {
     const info = ((state.testReport || {}).template_hard || {})[templateKey];
     if (!info) return '';
+    const kind = hardKindOf(templateKey);
+    const pat = hardActivePattern(templateKey);
+    const custName = (state.testReport.test_request || {}).company || '';
+    const choices = HARDNESS_PATTERNS.filter(p => p.kind === kind)
+      .sort((a, b) => (b.customer === custName) - (a.customer === custName) || a.name.localeCompare(b.name, 'id'));
+    const known = pat && choices.some(p => p.id === pat.id);
+    const patternSel = `
+      <div class="form-grid" style="margin-bottom:12px;"><div class="field full">
+        <label>Pola Hardness <span class="en">dari Master Data &rarr; Pola Hardness; menentukan sketsa &amp; susunan titik</span></label>
+        <select id="hardPatternSel">
+          <option value="">— Susunan bawaan form (${info.lines} line × ${info.points} titik) —</option>
+          ${pat && !known ? `<option value="snapshot" selected>${esc(pat.name)} (tersimpan di Lembar ini)</option>` : ''}
+          ${choices.map(p => `<option value="${p.id}" ${pat && known && pat.id === p.id ? 'selected' : ''}>${esc(p.name)}${p.customer ? ' — ' + esc(p.customer) : ''} · ${esc(hardLayoutText(p))}</option>`).join('')}
+        </select>
+      </div></div>`;
+    const layoutLines = pat ? pat.lines : Array.from({ length: info.lines }, (_, i) => info.lines > 1 ? 'Line ' + (i + 1) : 'Result (HV)');
+    const layoutZones = pat ? pat.zones.map(z => [z.name || 'Titik uji', Number(z.points)]) : (info.points === 9 ? HARD_GROUPS : [['Titik uji', 5]]);
+    const boxW = layoutZones.reduce((n, z) => n + z[1], 0) > 9 ? 60 : 78;   // pola banyak titik: kotak lebih ramping
     const lines = [];
-    for (let li = 0; li < info.lines; li++) {
+    for (let li = 0; li < layoutLines.length; li++) {
       const vals = state.testReportHard.lines[li] || [];
       let n = 0;
-      const cells = (info.points === 9 ? HARD_GROUPS : [['Titik uji', 5]]).map(([g, c]) => `
+      const cells = layoutZones.map(([g, c]) => `
         <div><p class="muted" style="margin:0 0 4px;">${esc(g)}</p><div style="display:flex;gap:6px;">${Array.from({ length: c }, () => {
           const i = n++;
-          return `<div class="field" style="margin:0;width:78px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-hline="${li}" data-hpt="${i}" value="${esc(vals[i] || '')}"></div>`;
+          return `<div class="field" style="margin:0;width:${boxW}px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-hline="${li}" data-hpt="${i}" value="${esc(vals[i] || '')}"></div>`;
         }).join('')}</div></div>`).join('');
-      lines.push(`<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;">${info.lines > 1 ? 'Line ' + (li + 1) : 'Result (HV)'}</label><div style="display:flex;gap:18px;flex-wrap:wrap;">${cells}</div></div>`);
+      lines.push(`<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;">${esc(layoutLines[li])}</label><div style="display:flex;gap:18px;flex-wrap:wrap;">${cells}</div></div>`);
     }
-    const sketch = info.points === 5 ? `
+    const fallback = pat && pat.sketch ? 'sketsa dari pola dipakai' : (kind === 'weld' ? 'sketsa bawaan form Weld dipakai' : 'area sketsa tercetak kosong');
+    const sketch = `
       <div style="margin-top:8px;">
-        <label style="display:block;margin-bottom:4px;">Sketch Hardness <span class="en">gambar posisi titik uji (dicetak di halaman 1)</span></label>
+        <label style="display:block;margin-bottom:4px;">Sketch Hardness <span class="en">dicetak di halaman 1; unggahan di sini menggantikan sketsa pola/form untuk Lembar ini saja</span></label>
+        ${pat && pat.sketch && !state.testReportHard.sketch ? `<div style="margin:0 0 8px;"><img src="${pat.sketch}" alt="Sketsa pola" style="max-width:360px;max-height:200px;border:1px solid #ccc;"><br><span class="muted" style="font-size:12px;">Sketsa dari pola ${esc(pat.name)}</span></div>` : ''}
         <input type="file" id="hardSketchFile" accept="image/*">
-        ${state.testReportHard.sketch ? `<div style="margin-top:8px;"><img src="${state.testReportHard.sketch}" alt="Sketsa" style="max-width:360px;max-height:200px;border:1px solid #ccc;"><br><button type="button" class="btn btn-sm btn-danger" id="btnHardSketchRemove" style="margin-top:6px;">Hapus sketsa</button></div>` : '<p class="muted" style="margin:6px 0 0;">Belum ada sketsa; area sketsa tercetak kosong.</p>'}
-      </div>` : '<p class="muted" style="margin:0;">Sketsa posisi titik Weld sudah tercetak dari form.</p>';
-    return `<div class="form-grid"><div class="field full"><label>Material Specification</label><input type="text" name="field_spec" value="${esc((state.testReport.fields || {}).spec)}"></div></div>${lines.join('')}${sketch}`;
+        ${state.testReportHard.sketch ? `<div style="margin-top:8px;"><img src="${state.testReportHard.sketch}" alt="Sketsa" style="max-width:360px;max-height:200px;border:1px solid #ccc;"><br><button type="button" class="btn btn-sm btn-danger" id="btnHardSketchRemove" style="margin-top:6px;">Hapus sketsa</button></div>` : `<p class="muted" style="margin:6px 0 0;">Belum ada sketsa khusus; ${fallback}.</p>`}
+      </div>`;
+    return `${patternSel}<div class="form-grid"><div class="field full"><label>Material Specification</label><input type="text" name="field_spec" value="${esc((state.testReport.fields || {}).spec)}"></div></div>${lines.join('')}${sketch}`;
   }
 
   // Perkecil gambar sketsa di sisi klien (maks. 1400 px, JPEG) agar muat di batas ukuran simpan.
@@ -3623,6 +3655,19 @@
   }
 
   function bindTestReportHardSketch() {
+    const sel = document.getElementById('hardPatternSel');
+    if (sel) sel.addEventListener('change', async () => {
+      if (sel.value === 'snapshot') return;
+      if (!sel.value) state.testReportHard.pattern = null;
+      else {
+        try {
+          const p = await api(`/api/hardness-patterns/${sel.value}`);
+          state.testReportHard.pattern = { id: p.id, name: p.name, kind: p.kind, lines: p.lines, zones: p.zones, sketch: p.sketch || '' };
+        } catch (err) { toast(err.message, 'error'); return; }
+      }
+      state.testReportDirty = true;
+      rerenderTestReportHard();
+    });
     const file = document.getElementById('hardSketchFile');
     if (file) file.addEventListener('change', async () => {
       if (!file.files[0]) return;
@@ -4120,7 +4165,7 @@
     payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
       : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
       : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite }
-        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch }
+        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch, pattern: hardActivePattern(payload.template || state.testReport.template) }
           : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
@@ -4137,7 +4182,7 @@
       state.testReportHicLog = JSON.parse(JSON.stringify((state.testReport.fields || {}).hic_log || []));
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);
       state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
-      state.testReportHard = { lines: JSON.parse(JSON.stringify((((state.testReport.fields || {}).hardness) || {}).lines || [[], []])), sketch: (state.testReport.fields || {}).sketch || '' };
+      state.testReportHard = hardStateOf(state.testReport.fields);
       state.testReportDirty = false;
       toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
       render();
@@ -6646,7 +6691,8 @@
     { key: 'customers', label: 'Customer' },
     { key: 'specimen-types', label: 'Tipe Spesimen' },
     { key: 'test-type-codes', label: 'Kode Jenis Pengujian' },
-    { key: 'equipment', label: 'Equipment' }
+    { key: 'equipment', label: 'Equipment' },
+    { key: 'hardness-patterns', label: 'Pola Hardness' }
   ];
 
   async function loadWoPics() {
@@ -6669,7 +6715,8 @@
     'customers': { icon: 'building', desc: 'Data customer beserta ID-nya untuk Job No.' },
     'specimen-types': { icon: 'ruler', desc: 'Tipe spesimen dan nilai Code untuk auto-isi form Pengecekan Spesimen.' },
     'test-type-codes': { icon: 'hash', desc: 'Kode singkat tiap Jenis Pengujian untuk membentuk Marking Specimen.' },
-    'equipment': { icon: 'gauge', desc: 'Alat uji beserta status dan masa kalibrasinya.' }
+    'equipment': { icon: 'gauge', desc: 'Alat uji beserta status dan masa kalibrasinya.' },
+    'hardness-patterns': { icon: 'target', desc: 'Sketsa posisi titik dan susunan titik uji Hardness (line, zona, jumlah titik) per client.' }
   };
   const MASTER_ICONS = {
     flame: '<path d="M12 3c1 3.5 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .3 1.2 1 2 2 2-.5-3 .5-5 1-8z"/>',
@@ -6681,7 +6728,8 @@
     building: '<rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M9 15h2M13 15h2"/>',
     ruler: '<path d="m3 17 14-14 4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/>',
     hash: '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>',
-    gauge: '<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 13 4-5"/><circle cx="12" cy="13" r="1.3"/>'
+    gauge: '<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 13 4-5"/><circle cx="12" cy="13" r="1.3"/>',
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3"/>'
   };
   function masterIcon(key, size = 22) {
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MASTER_ICONS[(MASTER_META[key] || {}).icon] || ''}</svg>`;
@@ -6695,7 +6743,8 @@
       api('/api/customers').then(r => ['customers', (r.customers || []).length]),
       api('/api/specimen-types').then(r => ['specimen-types', (r.types || []).length]),
       api('/api/test-type-codes').then(r => ['test-type-codes', (r.codes || []).length]),
-      api('/api/equipment').then(r => ['equipment', (r.items || []).length])
+      api('/api/equipment').then(r => ['equipment', (r.items || []).length]),
+      api('/api/hardness-patterns').then(r => ['hardness-patterns', (r.items || []).length])
     ];
     const done = await Promise.allSettled(jobs);
     done.forEach(d => { if (d.status === 'fulfilled') state.masterCounts[d.value[0]] = d.value[1]; });
@@ -6755,6 +6804,8 @@
       await renderTestTypeCodeMaster();
     } else if (activeTab === 'equipment') {
       await renderEquipmentMaster();
+    } else if (activeTab === 'hardness-patterns') {
+      await renderHardnessPatternMaster();
     } else {
       await renderSimpleMaster(activeTab, MASTER_TABS.find(t => t.key === activeTab).label);
     }
@@ -7226,6 +7277,184 @@
     });
   }
 
+  async function loadHardnessPatterns() {
+    try {
+      HARDNESS_PATTERNS = (await api('/api/hardness-patterns')).items;
+    } catch (e) {
+      HARDNESS_PATTERNS = [];
+    }
+  }
+
+  // Ringkasan susunan titik, mis. "2 line × 9 titik — Base Metal 3 · HAZ 3 · Weld Metal 3"
+  function hardLayoutText(p) {
+    const total = (p.zones || []).reduce((n, z) => n + Number(z.points || 0), 0);
+    return `${(p.lines || []).length} line × ${total} titik — ${(p.zones || []).map(z => (z.name ? z.name + ' ' : '') + z.points).join(' · ')}`;
+  }
+
+  const HP_KINDS = [['weld', 'Weld (DE.1/TR/11 HARD)'], ['material', 'Material (DE.1/TR/12 HARD)']];
+  const HP_MAX_LINES = 3, HP_MAX_POINTS = 15;
+
+  async function renderHardnessPatternMaster() {
+    const wrap = document.getElementById('masterTabContent');
+    await loadHardnessPatterns();
+    const items = HARDNESS_PATTERNS;
+    let ed = state.hpEdit;
+    if (!ed) ed = state.hpEdit = { id: null, name: '', kind: 'weld', customer: '', notes: '', lines: ['Line 1', 'Line 2'], zones: [{ name: 'Base Metal', points: 3 }, { name: 'HAZ', points: 3 }, { name: 'Weld Metal', points: 3 }], sketch: '', sketchChanged: false };
+    const total = ed.zones.reduce((n, z) => n + (Number(z.points) || 0), 0);
+    const companies = [...new Set(CUSTOMERS.map(customerCompany).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+
+    // pratinjau kotak isian di Lembar Hasil Uji
+    let no = 0;
+    const preview = ed.lines.map(label => { no = 0; return `<div class="hp-prev-line"><span class="hp-prev-label">${esc(label)}</span>${ed.zones.map(z => `<span class="hp-prev-zone"><small>${esc(z.name) || '&nbsp;'}</small><span>${Array.from({ length: Number(z.points) || 0 }, () => `<i>${++no}</i>`).join('')}</span></span>`).join('')}</div>`; }).join('');
+
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">${ed.id ? `Edit Pola — ${esc(ed.name)}` : 'Tambah Pola Hardness'}</p>
+        <form id="hpForm">
+          <div class="form-grid">
+            <div class="field"><label>Nama Pola</label><input type="text" name="name" value="${esc(ed.name)}" placeholder="mis. Butt Weld 3 line — Pertamina" autocomplete="off"></div>
+            <div class="field"><label>Jenis Form</label><select name="kind">${HP_KINDS.map(([v, l]) => `<option value="${v}" ${ed.kind === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
+            <div class="field"><label>Customer <span class="en">opsional</span></label><input type="text" name="customer" value="${esc(ed.customer)}" list="hpCustomerList" autocomplete="off" placeholder="Kosongkan bila berlaku umum"></div>
+            <div class="field"><label>Catatan</label><input type="text" name="notes" value="${esc(ed.notes)}" autocomplete="off"></div>
+          </div>
+
+          <p class="subcard-title" style="margin-top:16px;">Line <span class="en">maks. ${HP_MAX_LINES}; label tercetak di kolom kiri tabel hasil (mis. Line 1, Cap, Root)</span></p>
+          <div class="hp-lines">${ed.lines.map((l, i) => `
+            <div class="hp-line"><input type="text" data-hp-line="${i}" value="${esc(l)}" aria-label="Label line ${i + 1}">${ed.lines.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-hp-line-del="${i}" aria-label="Hapus line">&times;</button>` : ''}</div>`).join('')}
+            ${ed.lines.length < HP_MAX_LINES ? '<button type="button" class="btn btn-sm" id="hpLineAdd">+ Tambah line</button>' : ''}
+          </div>
+
+          <p class="subcard-title" style="margin-top:16px;">Zona &amp; Jumlah Titik per Line <span class="en">urut dari kiri; total maks. ${HP_MAX_POINTS} titik</span></p>
+          <table class="data-table hp-zones">
+            <thead><tr><th>Nama Zona</th><th style="width:130px;">Jumlah Titik</th><th style="width:60px;"></th></tr></thead>
+            <tbody>${ed.zones.map((z, i) => `
+              <tr>
+                <td><input type="text" data-hp-zone="${i}" data-f="name" value="${esc(z.name)}" placeholder="mis. Base Metal / HAZ / Weld Metal" list="hpZoneList"></td>
+                <td><input type="number" min="1" max="${HP_MAX_POINTS}" data-hp-zone="${i}" data-f="points" value="${esc(z.points)}"></td>
+                <td>${ed.zones.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-hp-zone-del="${i}" aria-label="Hapus zona">&times;</button>` : ''}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+          <div class="hp-zone-foot"><button type="button" class="btn btn-sm" id="hpZoneAdd">+ Tambah zona</button>
+            <span class="${total > HP_MAX_POINTS ? 'hp-over' : 'muted'}">Total: <b>${total}</b> titik per line${total > HP_MAX_POINTS ? ` — melebihi ${HP_MAX_POINTS}` : ''}</span></div>
+
+          <p class="subcard-title" style="margin-top:16px;">Pratinjau Isian <span class="en">kotak HV yang tampil di Lembar Hasil Uji</span></p>
+          <div class="hp-prev">${preview}</div>
+
+          <p class="subcard-title" style="margin-top:16px;">Sketsa Posisi Titik <span class="en">dicetak di halaman Sketch Hardness; kosong = sketsa bawaan form (Weld)</span></p>
+          <input type="file" id="hpSketchFile" accept="image/png,image/jpeg,image/webp">
+          ${ed.sketch ? `<div class="hp-sketch"><img src="${ed.sketch}" alt="Sketsa pola"><button type="button" class="btn btn-sm btn-danger" id="hpSketchDel">Hapus sketsa</button></div>` : '<p class="muted" style="margin:6px 0 0;">Belum ada sketsa.</p>'}
+
+          <div class="form-actions">
+            <div>${ed.id ? '<button type="button" class="btn" id="hpCancel">Batal Edit</button>' : ''}</div>
+            <div class="right"><button type="submit" class="btn btn-primary">${ed.id ? 'Simpan Perubahan' : '+ Tambah Pola'}</button></div>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Pola Hardness</p>
+          <p class="card-desc">${items.length} pola tersimpan &mdash; dipilih di Lembar Hasil Uji Hardness; isi pola disalin ke Lembar, jadi laporan lama tidak berubah bila pola diedit</p>
+        </div>
+        <div id="hpTableArea"></div>
+      </div>
+      <datalist id="hpCustomerList">${companies.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <datalist id="hpZoneList"><option value="Base Metal"><option value="HAZ"><option value="Weld Metal"><option value="Fusion Line"></datalist>
+    `;
+
+    renderSearchablePaginatedTable({
+      key: 'hardness-patterns',
+      containerEl: document.getElementById('hpTableArea'),
+      allRows: items,
+      searchFields: ['name', 'customer', 'notes'],
+      searchPlaceholder: 'Cari nama pola atau customer...',
+      emptyHtml: '<p class="muted" style="padding:0 24px 16px;">Belum ada Pola Hardness. Tambahkan lewat form di atas.</p>',
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Nama Pola</th><th>Jenis</th><th>Customer</th><th>Susunan Titik</th><th>Sketsa</th><th></th></tr></thead>
+          <tbody>${pageRows.map(p => `
+            <tr>
+              <td><strong>${esc(p.name)}</strong>${p.notes ? `<br><span class="muted">${esc(p.notes)}</span>` : ''}</td>
+              <td>${p.kind === 'material' ? 'Material' : 'Weld'}</td>
+              <td>${esc(p.customer) || '<span class="muted">Umum</span>'}</td>
+              <td>${esc(hardLayoutText(p))}<br><span class="muted">${p.lines.map(esc).join(', ')}</span></td>
+              <td>${p.has_sketch ? 'Ada' : '<span class="muted">Bawaan form</span>'}</td>
+              <td style="white-space:nowrap;">
+                <button class="btn btn-sm" data-hp-edit="${p.id}">Edit</button>
+                <button class="btn btn-sm btn-danger" data-hp-del="${p.id}">Hapus</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-hp-edit]').forEach(btn => btn.addEventListener('click', async () => {
+          try {
+            const p = await api(`/api/hardness-patterns/${btn.dataset.hpEdit}`);
+            state.hpEdit = { id: p.id, name: p.name, kind: p.kind, customer: p.customer || '', notes: p.notes || '', lines: p.lines, zones: p.zones, sketch: p.sketch || '', sketchChanged: false };
+            renderHardnessPatternMaster();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } catch (err) { toast(err.message, 'error'); }
+        }));
+        container.querySelectorAll('[data-hp-del]').forEach(btn => btn.addEventListener('click', async () => {
+          if (!confirm('Hapus Pola Hardness ini? Lembar yang sudah memakai pola ini tidak berubah.')) return;
+          try {
+            await api(`/api/hardness-patterns/${btn.dataset.hpDel}`, { method: 'DELETE' });
+            toast('Pola dihapus', 'success');
+            if (state.hpEdit && state.hpEdit.id === Number(btn.dataset.hpDel)) state.hpEdit = null;
+            renderHardnessPatternMaster();
+          } catch (err) { toast(err.message, 'error'); }
+        }));
+      }
+    });
+
+    const form = document.getElementById('hpForm');
+    // isian teks disimpan ke state tanpa render ulang; perubahan struktur (tambah/hapus, jumlah titik) render ulang
+    const syncHead = () => { ['name', 'kind', 'customer', 'notes'].forEach(k => { ed[k] = form.elements[k].value; }); };
+    form.addEventListener('input', e => {
+      const t = e.target;
+      if (t.dataset.hpLine !== undefined) ed.lines[Number(t.dataset.hpLine)] = t.value;
+      else if (t.dataset.hpZone !== undefined && t.dataset.f === 'name') ed.zones[Number(t.dataset.hpZone)].name = t.value;
+      else syncHead();
+    });
+    form.addEventListener('change', e => {
+      const t = e.target;
+      if (t.dataset.hpZone !== undefined && t.dataset.f === 'points') {
+        ed.zones[Number(t.dataset.hpZone)].points = Math.max(1, Math.min(HP_MAX_POINTS, Math.floor(Number(t.value)) || 1));
+        renderHardnessPatternMaster();
+      } else if (t.dataset.hpLine !== undefined) renderHardnessPatternMaster();
+    });
+    const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', () => { syncHead(); fn(); renderHardnessPatternMaster(); }); };
+    on('hpLineAdd', () => ed.lines.push('Line ' + (ed.lines.length + 1)));
+    on('hpZoneAdd', () => ed.zones.push({ name: '', points: 1 }));
+    on('hpSketchDel', () => { ed.sketch = ''; ed.sketchChanged = true; });
+    on('hpCancel', () => { state.hpEdit = null; });
+    form.querySelectorAll('[data-hp-line-del]').forEach(b => b.addEventListener('click', () => { syncHead(); ed.lines.splice(Number(b.dataset.hpLineDel), 1); renderHardnessPatternMaster(); }));
+    form.querySelectorAll('[data-hp-zone-del]').forEach(b => b.addEventListener('click', () => { syncHead(); ed.zones.splice(Number(b.dataset.hpZoneDel), 1); renderHardnessPatternMaster(); }));
+    document.getElementById('hpSketchFile').addEventListener('change', async e => {
+      if (!e.target.files[0]) return;
+      try {
+        syncHead();
+        ed.sketch = await readSketchFile(e.target.files[0]);
+        ed.sketchChanged = true;
+        renderHardnessPatternMaster();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      syncHead();
+      if (!ed.name.trim()) { toast('Nama pola wajib diisi', 'error'); return; }
+      if (total > HP_MAX_POINTS) { toast(`Total titik per line maksimal ${HP_MAX_POINTS}`, 'error'); return; }
+      const payload = { name: ed.name, kind: ed.kind, customer: ed.customer, notes: ed.notes, lines: ed.lines, zones: ed.zones };
+      if (!ed.id || ed.sketchChanged) payload.sketch = ed.sketch;
+      try {
+        await api(ed.id ? `/api/hardness-patterns/${ed.id}` : '/api/hardness-patterns', {
+          method: ed.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        toast(ed.id ? 'Pola diperbarui' : 'Pola ditambahkan', 'success');
+        state.hpEdit = null;
+        renderHardnessPatternMaster();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
+
   async function loadEquipment() {
     try {
       EQUIPMENT = (await api('/api/equipment')).items;
@@ -7509,6 +7738,7 @@
     await loadTestMethods();
     await loadCustomers();
     await loadEquipment();
+    await loadHardnessPatterns();
     if (!can('dashboard')) {   // role tanpa akses Dashboard: buka menu pertama yang boleh
       const first = [...document.querySelectorAll('.nav-item[data-nav]')].find(n => !n.hidden && n.dataset.nav !== 'keluar');
       if (first) { first.click(); return; }

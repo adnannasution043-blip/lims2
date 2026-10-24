@@ -2,6 +2,7 @@ const { Pool } = require('pg');
 const { COMPANY_IDS } = require('./companyIds');
 const { TEST_METHOD_SEED } = require('./testMethodSeed');
 const { DEFAULT_ROLES, MACHINING_ROLE } = require('../lib/users');
+const { DEFAULT_PATTERNS } = require('../lib/hardnessPatterns');
 
 // Railway (and most managed Postgres) inject DATABASE_URL automatically once
 // the Postgres plugin is attached to this service. For local dev, put your
@@ -457,6 +458,20 @@ async function initSchema() {
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS job_title TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS signature_image BYTEA;
 
+    -- Master Data > Pola Hardness: sketsa posisi titik + susunan titik uji (line, zona & jumlah titik) per client
+    CREATE TABLE IF NOT EXISTS hardness_patterns (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'weld',     -- 'weld' | 'material'
+      customer TEXT,
+      lines JSONB NOT NULL DEFAULT '[]',     -- label tiap line, mis. ["Line 1","Line 2"]
+      zones JSONB NOT NULL DEFAULT '[]',     -- [{"name":"Base Metal","points":3}, ...]
+      notes TEXT,
+      sketch_image TEXT,                     -- data URL gambar sketsa
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Berkas aplikasi tunggal (mis. stempel perusahaan 'company_stamp'), diunggah Administrator di Pengaturan
     CREATE TABLE IF NOT EXISTS app_files (
       key TEXT PRIMARY KEY,
@@ -710,6 +725,17 @@ async function initSchema() {
       [MACHINING_ROLE.name, MACHINING_ROLE.description, JSON.stringify(MACHINING_ROLE.permissions)]
     );
     await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_role_machining', '1') ON CONFLICT (key) DO NOTHING`);
+  }
+  // Pola Hardness bawaan (susunan form resmi) ditambahkan sekali; boleh diubah atau dihapus di Master Data
+  const seededHard = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_hardness_patterns'`);
+  if (!seededHard.rows.length) {
+    for (const p of DEFAULT_PATTERNS) {
+      await pool.query(
+        `INSERT INTO hardness_patterns (name, kind, lines, zones, notes) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (name) DO NOTHING`,
+        [p.name, p.kind, JSON.stringify(p.lines), JSON.stringify(p.zones), p.notes]
+      );
+    }
+    await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_hardness_patterns', '1') ON CONFLICT (key) DO NOTHING`);
   }
 
   for (const [testName, code] of TEST_TYPE_CODE_SEED) {

@@ -2056,3 +2056,20 @@ table .ss { min-width: 98px; }
 .rf-tile span { overflow-wrap: anywhere; }
 .rf-doc .rf-doc-ico { height: 130px; display: grid; place-items: center; background: var(--accent-light); color: var(--accent); font-weight: 800; border-radius: 5px; }
 .rf-sub { font-weight: 700; color: var(--navy); margin: 14px 0 8px; }
+
+/* Master Data: Pola Hardness */
+.hp-lines { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.hp-line { display: flex; gap: 4px; align-items: center; }
+.hp-line input { width: 150px; }
+.hp-zones input { width: 100%; }
+.hp-zone-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 13px; }
+.hp-over { color: var(--danger, #b3341d); font-weight: 600; }
+.hp-prev { display: flex; flex-direction: column; gap: 8px; overflow-x: auto; padding: 10px; background: #f6f7f9; border-radius: 8px; }
+.hp-prev-line { display: flex; gap: 14px; align-items: flex-end; }
+.hp-prev-label { min-width: 70px; font-weight: 600; font-size: 12px; padding-bottom: 4px; }
+.hp-prev-zone { display: flex; flex-direction: column; gap: 3px; }
+.hp-prev-zone small { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.hp-prev-zone > span { display: flex; gap: 3px; }
+.hp-prev-zone i { font-style: normal; width: 28px; height: 24px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 4px; background: #fff; font-size: 11px; }
+.hp-sketch { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.hp-sketch img { max-width: 420px; max-height: 220px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }

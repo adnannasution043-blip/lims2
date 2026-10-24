@@ -414,6 +414,31 @@ function call(method, path, params, body) {
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: { sketch: 'javascript:alert(1)' } });
   assert.ok(!('sketch' in r.body.fields), 'sketch bukan data:image ditolak');
 
+  // Pola Hardness dari Master Data: 3 line x 15 titik -> tabel hasil dibuat menurut pola, sketsa pola menggantikan sketsa form
+  const zones5 = ['Base Metal', 'HAZ', 'Weld Metal', 'HAZ', 'Base Metal'].map(name => ({ name, points: 3 }));
+  const fifteen = Array.from({ length: 15 }, (_, i) => String(200 + i));
+  r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
+    spec: 'API 5L X52', hardness: { lines: [fifteen, fifteen, fifteen, fifteen] },
+    pattern: { id: 7, name: 'Pertamina 3 line', kind: 'weld', lines: ['Cap', 'Mid', 'Root', 'Extra'], zones: zones5, sketch: png, evil: 1 } } });
+  assert.strictEqual(r.body.fields.hardness.lines.length, 3);
+  assert.strictEqual(r.body.fields.hardness.lines[0].length, 15);
+  assert.deepStrictEqual(r.body.fields.pattern.lines, ['Cap', 'Mid', 'Root']);
+  assert.ok(!('evil' in r.body.fields.pattern));
+  const patHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
+  assert.ok(patHtml.includes('>Cap<') && patHtml.includes('>Root<') && patHtml.includes('>214<') && patHtml.includes('API 5L X52'));
+  assert.ok(patHtml.includes('>15<'), 'nomor titik sampai 15');
+  assert.ok(patHtml.includes(png), 'sketsa pola dicetak');
+  assert.ok(!patHtml.includes('top:617px'), 'sketsa bawaan form Weld diganti sketsa pola');
+  // pola yang susunannya sama dengan form resmi tetap dicetak di sel form (2 x 9, sketsa form)
+  r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
+    hardness: { lines: [['301'], ['302']] }, pattern: { name: 'Weld standar', kind: 'weld', lines: ['Line 1', 'Line 2'], zones: zones5.slice(0, 3) } } });
+  const stdHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
+  assert.ok(stdHtml.includes('>301<') && stdHtml.includes('top:617px') && !stdHtml.includes('>Location</td><td class="th-head"'));
+  // pola lebih dari 15 titik ditolak (tidak disimpan)
+  r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
+    pattern: { name: 'x', kind: 'weld', lines: ['L1'], zones: [{ name: 'A', points: 16 }] } } });
+  assert.ok(!('pattern' in r.body.fields), 'pola > 15 titik ditolak');
+
   // ---- Corrosion ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Intergranular / Pitting Corrosion' });
   assert.strictEqual(r.status, 201);

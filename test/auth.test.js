@@ -85,6 +85,15 @@ assert.ok(can(mach, 'GET', '/api/work-orders/5/files'));
 assert.ok(can(mach, 'GET', '/api/work-order-files/12'));
 assert.ok(!can(mach, 'POST', '/api/work-orders/5/files'));
 assert.ok(!can(mach, 'DELETE', '/api/work-order-files/12'));
+// Pola Hardness: daftar & detail terbuka untuk semua yang login (dipilih di Lembar Hasil Uji); ubah hanya Master Data
+const masterEditor = { permissions: { 'master-data': ['view', 'create', 'edit', 'delete'] } };
+assert.ok(can(tech, 'GET', '/api/hardness-patterns'));
+assert.ok(can(tech, 'GET', '/api/hardness-patterns/3'));
+assert.ok(!can(tech, 'POST', '/api/hardness-patterns'));
+assert.ok(!can(tech, 'PUT', '/api/hardness-patterns/3'));
+assert.ok(!can(tech, 'DELETE', '/api/hardness-patterns/3'));
+assert.ok(can(masterEditor, 'POST', '/api/hardness-patterns'));
+assert.ok(can(masterEditor, 'DELETE', '/api/hardness-patterns/3'));
 
 // ---- token ----
 const secret = 'rahasia-uji-yang-cukup-panjang';
