@@ -228,6 +228,21 @@ function convert(xlsxPath, sheetName) {
     if (!(css in styleIdx)) { styleIdx[css] = styleCss.length; styleCss.push(css); }
     return styleIdx[css];
   };
+  // Sel gabungan: Excel menggambar garis kanan dari sel paling kanan dan garis bawah dari sel paling bawah rentangnya,
+  // bukan dari sel kiri-atas. Garis itu disalin ke gaya sel gabungan supaya kotaknya tidak terbuka.
+  const sideOf = (css, side) => (new RegExp(`border-${side}:[^;]+`).exec(css) || [null])[0];
+  const mergedCss = (r, c, rs, cs) => {
+    const tl = cellMap.get(`${r}:${c}`);
+    let css = styleCss[cssFor(tl ? tl.s : 0)];
+    const edge = (rr, cc, side) => { const x = cellMap.get(`${rr}:${cc}`); return x ? sideOf(xfToCss(st.xfs[x.s] || st.xfs[0], st), side) : null; };
+    for (const [side, rr, cc] of [['right', r, c + cs - 1], ['bottom', r + rs - 1, c]]) {
+      if ((side === 'right' && cs < 2) || (side === 'bottom' && rs < 2)) continue;
+      const b = edge(rr, cc, side);
+      if (b && !sideOf(css, side)) css = css.replace(/;?$/, ';' + b);
+    }
+    if (!(css in styleIdx)) { styleIdx[css] = styleCss.length; styleCss.push(css); }
+    return styleIdx[css];
+  };
 
   const cols = [];
   for (let c = 0; c <= lastCol; c++) cols.push(hiddenCols.has(c) ? 0 : widthPx(colWidths[c] || defaultW));
@@ -244,7 +259,11 @@ function convert(xlsxPath, sheetName) {
       // sel tanpa isi & tanpa gaya khusus tetap perlu ada agar tabel tidak bergeser
       const out = { c, ref: colIdxToLetter(c) + (r + 1), s: cssFor(cell ? cell.s : 0) };
       if (cell && cell.v !== '') out.v = cell.v;
-      if (mg) { if (mg.rs > 1) out.rs = Math.min(mg.rs, lastRow - r + 1); if (mg.cs > 1) out.cs = Math.min(mg.cs, lastCol - c + 1); }
+      if (mg) {
+        if (mg.rs > 1) out.rs = Math.min(mg.rs, lastRow - r + 1);
+        if (mg.cs > 1) out.cs = Math.min(mg.cs, lastCol - c + 1);
+        out.s = mergedCss(r, c, out.rs || 1, out.cs || 1);
+      }
       cells.push(out);
     }
     const fillOf = c => ((/background:([^;]+)/.exec(styleCss[c.s] || '') || [])[1] || '');
