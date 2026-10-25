@@ -10,6 +10,7 @@ const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
 const { registerTestReportRoutes, canonicalTestName } = require('./lib/testReports');
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerHardnessPatternRoutes } = require('./lib/hardnessPatterns');
+const { registerWitnessRoutes } = require('./lib/witness');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
@@ -842,8 +843,12 @@ const { loadProgressRows, stageBlocker } = registerWorkOrderTaskRoutes(app, {
   rawBody: express.raw({ type: () => true, limit: '12mb' })
 });
 
+// Witness oleh client (Daftar Kehadiran & Berita Acara Witness), dipakai Lembar baru dan lampiran LHU.
+const witness = registerWitnessRoutes(app, { pool, getFullWorkOrder });
+
 // Lembar Hasil Uji tahap Testing (beda dari Pengecekan Spesimen milik tahap Preparation).
 const { printableReport } = registerTestReportRoutes(app, {
+  witnessDefault: witness.witnessDefault,
   pool, getFullWorkOrder, computeMarkingInfo, TEST_NAME_TO_CATEGORY, signatureToDataUrl, stageBlocker,
   rawBody: express.raw({ type: () => true, limit: '8mb' })
 });
@@ -861,7 +866,7 @@ registerUserRoutes(app, { pool });
 // Dashboard manajemen laboratorium (ringkasan dari data yang ada)
 registerDashboardRoutes(app, { pool, loadProgressRows });
 
-registerLhuReportRoutes(app, { pool, getFullWorkOrder, printableReport, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
+registerLhuReportRoutes(app, { pool, getFullWorkOrder, printableReport, witnessAttachment: witness.witnessAttachment, rawBody: express.raw({ type: () => true, limit: '12mb' }) });
 
 // Reset Data (halaman Pengaturan) — untuk mengosongkan data uji coba supaya bisa mulai input
 // dari awal saat pengujian end-to-end. Hanya menghapus data transaksional (Permintaan Uji dan

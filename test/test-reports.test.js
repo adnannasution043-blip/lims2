@@ -109,7 +109,7 @@ const pool = {
       const row = reports.find(r => r.id === Number(params[0]));
       return { rows: row ? [row] : [] };
     }
-    if (/^UPDATE test_reports SET/.test(sql)) {
+    if (/^UPDATE test_reports SET\s(?!witnessed_by = \$1 WHERE id)/.test(sql)) {
       const row = reports.find(r => r.id === Number(params[params.length - 1]));
       if (!row) return { rows: [] };
       Object.assign(row, {
@@ -150,6 +150,7 @@ const pool = {
     if (/^SELECT id, test_name FROM test_reports/.test(q)) { const row = reports.find(r => r.id === Number(params[0])); return { rows: row ? [row] : [] }; }
     if (/^INSERT INTO test_report_photos/.test(q)) { const i = photoStore.findIndex(p => p.id === Number(params[0]) && p.slot === params[1]); const e = { id: Number(params[0]), slot: params[1], mime_type: params[2], data: params[3] }; if (i >= 0) photoStore[i] = e; else photoStore.push(e); return { rows: [] }; }
     if (/^DELETE FROM test_report_photos/.test(q)) { const i = photoStore.findIndex(p => p.id === Number(params[0]) && p.slot === params[1]); if (i >= 0) photoStore.splice(i, 1); return { rows: [] }; }
+    if (/^UPDATE test_reports SET witnessed_by = \$1 WHERE id = \$2/.test(sql)) { const row = reports.find(r => r.id === Number(params[1])); if (row) row.witnessed_by = params[0]; return { rowCount: row ? 1 : 0 }; }
     if (/^DELETE FROM test_reports/.test(sql)) {
       const before = reports.length;
       reports = reports.filter(r => r.id !== Number(params[0]));
@@ -176,6 +177,8 @@ const computeMarkingInfo = async (reqId, testName, couponRowNo) => {
 
 registerTestReportRoutes(app, {
   pool, TEST_NAME_TO_CATEGORY: MAP, computeMarkingInfo,
+  // Witnessed By awal dari Daftar Hadir witness (hanya coupon 1 yang disaksikan)
+  witnessDefault: async (wo, rowNo) => (rowNo === 1 ? 'Indra of PT Teknik Jaya Sakti' : ''),
   getFullWorkOrder: async id => (String(id) === '1' ? JSON.parse(JSON.stringify(WO)) : null),
   signatureToDataUrl: b => (b ? 'data:image/png;base64,X' : null),
   rawBody: (req, res, next) => next()
@@ -395,6 +398,7 @@ function call(method, path, params, body) {
   // ---- Hardness ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Hardness Test' });
   assert.strictEqual(r.status, 201);
+  assert.strictEqual(r.body.witnessed_by, 'Indra of PT Teknik Jaya Sakti', 'Witnessed By awal dari sesi witness');
   assert.strictEqual(r.body.template, 'hard-weld');
   assert.deepStrictEqual(r.body.template_hard, { 'hard-weld': { lines: 2, points: 9 }, 'hard-mat': { lines: 1, points: 5 } });
   assert.strictEqual(r.body.fields.spec, 'A36');   // default dari Material Type/Grade coupon

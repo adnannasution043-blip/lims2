@@ -2933,6 +2933,7 @@
             ${stagePill(stage.status)}
           </div>
           ${stage.kind === 'derived' ? preparationBodyHtml(t) : woTaskFormHtml(t)}
+          ${stage.key === 'testing' ? '<div id="witnessWrap" class="card witness-card"><p class="muted">Memuat data witness...</p></div>' : ''}
         </section>
       </div>
     `;
@@ -2958,6 +2959,195 @@
     else bindWoTaskFormEvents(t);
     bindSheetShortcuts(t);
     if (stage.key === 'receiving') initReceivingEvidence(t);
+    if (stage.key === 'testing') loadWitness(t);
+  }
+
+  // ---------- Witness oleh client (tahap Testing) ----------
+  // Tiap sesi = Daftar Kehadiran Witness + Berita Acara Witness (nomor BA otomatis). Peserta tanda tangan langsung di
+  // layar; nama peserta mengisi Witnessed By Lembar coupon yang disaksikan, dan kedua dokumen ikut menjadi lampiran LHU.
+  const WITNESS_DEFAULT_PLACE = 'Laboratorium Pengujian Material PT Detech Profesional Indonesia';
+  const WITNESS_DEFAULT_SIGNER = { name: 'Fajar Pangestu, S.Tr.T.', title: 'Manager Teknis' };
+
+  function witnessCoupons(t) {
+    const seen = new Map();
+    (t.items || []).forEach(it => { if (!seen.has(it.coupon_row_no)) seen.set(it.coupon_row_no, it.sample_marking || it.coupon_label || 'Coupon #' + it.coupon_row_no); });
+    return [...seen].map(([row, label]) => ({ row, label }));
+  }
+
+  async function loadWitness(t) {
+    const wrap = document.getElementById('witnessWrap');
+    if (!wrap) return;
+    try {
+      state.witnessSessions = (await api(`/api/work-orders/${t.work_order.id}/witness`)).sessions || [];
+    } catch (err) {
+      wrap.innerHTML = `<p class="muted">Gagal memuat data witness: ${esc(err.message)}</p>`;
+      return;
+    }
+    state.witnessEdit = null;
+    renderWitness(t);
+  }
+
+  function renderWitness(t) {
+    const wrap = document.getElementById('witnessWrap');
+    if (!wrap) return;
+    if (state.witnessEdit) { renderWitnessEditor(t); return; }
+    const coupons = witnessCoupons(t);
+    const label = rows => (rows.length ? rows.map(r => (coupons.find(c => c.row === r) || {}).label || '#' + r).join(', ') : 'Semua coupon');
+    const sessions = state.witnessSessions || [];
+    wrap.innerHTML = `
+      <div class="witness-head">
+        <div><p class="section-title" style="margin:0;">Witness Client <span class="en">Daftar Kehadiran &amp; Berita Acara Witness &middot; ikut menjadi lampiran LHU</span></p></div>
+        ${t.locked ? '' : '<button type="button" class="btn btn-primary btn-sm" id="btnWitnessAdd">+ Sesi Witness</button>'}
+      </div>
+      ${sessions.length ? `<table class="data-table witness-table">
+        <thead><tr><th>No. Berita Acara</th><th>Tanggal &amp; Waktu</th><th>Coupon</th><th>Peserta</th><th></th></tr></thead>
+        <tbody>${sessions.map(s => `<tr>
+          <td><strong>${esc(s.ba_no)}</strong></td>
+          <td>${esc(formatDateOnly(s.session_date))}${s.session_time ? ' &middot; ' + esc(s.session_time) : ''}</td>
+          <td>${esc(label(s.coupon_rows))}</td>
+          <td>${s.attendees.length} orang<br><span class="muted">${esc(s.attendees.map(a => a.name).filter(Boolean).slice(0, 3).join(', '))}${s.attendees.length > 3 ? ', …' : ''}</span></td>
+          <td class="witness-actions">
+            <a class="btn btn-sm" href="/witness-sessions/${s.id}/print?doc=dh" target="_blank" rel="noopener">Daftar Hadir</a>
+            <a class="btn btn-sm" href="/witness-sessions/${s.id}/print?doc=ba" target="_blank" rel="noopener">Berita Acara</a>
+            ${t.locked ? '' : `<button type="button" class="btn btn-sm" data-witness-edit="${s.id}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-witness-del="${s.id}">Hapus</button>`}
+          </td></tr>`).join('')}</tbody></table>`
+        : '<p class="muted" style="margin:10px 0 0;">Belum ada sesi witness. Tambahkan bila pengujian disaksikan client.</p>'}`;
+    const add = document.getElementById('btnWitnessAdd');
+    if (add) add.addEventListener('click', () => {
+      state.witnessEdit = {
+        id: null, ba_no: '', session_date: todayISODate(), session_time: '', place: WITNESS_DEFAULT_PLACE,
+        agenda: 'Witness Pengujian Material ' + (t.work_order.company || ''), coupon_rows: [], notes: '',
+        detech_signer: { ...WITNESS_DEFAULT_SIGNER, signature: '' }, attendees: [{ name: '', company: t.work_order.company || '', phone: '', email: '', signature: '' }]
+      };
+      renderWitness(t);
+    });
+    wrap.querySelectorAll('[data-witness-edit]').forEach(b => b.addEventListener('click', () => {
+      const s = sessions.find(x => x.id === Number(b.dataset.witnessEdit));
+      state.witnessEdit = JSON.parse(JSON.stringify(s));
+      renderWitness(t);
+    }));
+    wrap.querySelectorAll('[data-witness-del]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Hapus sesi witness ini beserta Daftar Hadir & Berita Acaranya?')) return;
+      try {
+        await api(`/api/witness-sessions/${b.dataset.witnessDel}`, { method: 'DELETE' });
+        toast('Sesi witness dihapus', 'success');
+        loadWitness(t);
+      } catch (err) { toast(err.message, 'error'); }
+    }));
+  }
+
+  function witnessPadHtml(key, dataUrl) {
+    return `<div class="witness-pad"><canvas data-wpad="${key}" width="360" height="110"></canvas>
+      <button type="button" class="btn btn-sm" data-wpad-clear="${key}">Ulang</button>${dataUrl ? '<span class="muted">tersimpan</span>' : ''}</div>`;
+  }
+
+  // Kanvas tanda tangan witness: isi tersimpan digambar ulang; coretan baru langsung disimpan ke state (PNG)
+  function bindWitnessPads(get, set) {
+    document.querySelectorAll('#witnessWrap canvas[data-wpad]').forEach(cv => {
+      const key = cv.dataset.wpad;
+      const ctx = cv.getContext('2d');
+      const blank = () => { ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height); };
+      blank();
+      ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      const existing = get(key);
+      if (existing) { const img = new Image(); img.onload = () => ctx.drawImage(img, 0, 0, cv.width, cv.height); img.src = existing; }
+      const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; };
+      let drawing = false, drawn = false;
+      cv.addEventListener('pointerdown', e => { drawing = true; cv.setPointerCapture(e.pointerId); const p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+      cv.addEventListener('pointermove', e => { if (!drawing) return; const p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); drawn = true; });
+      const end = () => { if (drawing && drawn) set(key, cv.toDataURL('image/png')); drawing = false; };
+      ['pointerup', 'pointercancel', 'pointerleave'].forEach(ev => cv.addEventListener(ev, end));
+      const clr = document.querySelector(`#witnessWrap [data-wpad-clear="${key}"]`);
+      if (clr) clr.addEventListener('click', () => { blank(); drawn = false; set(key, ''); });
+    });
+  }
+
+  function renderWitnessEditor(t) {
+    const wrap = document.getElementById('witnessWrap');
+    const ed = state.witnessEdit;
+    const coupons = witnessCoupons(t);
+    const companies = [...new Set([t.work_order.company, ...CUSTOMERS.map(customerCompany)].filter(Boolean))];
+    wrap.innerHTML = `
+      <div class="witness-head"><p class="section-title" style="margin:0;">${ed.id ? 'Edit Sesi Witness — ' + esc(ed.ba_no) : 'Sesi Witness Baru'}</p></div>
+      <form id="witnessForm">
+        <div class="form-grid">
+          <div class="field"><label>No. Berita Acara <span class="en">otomatis</span></label><input type="text" name="ba_no" value="${esc(ed.ba_no)}" ${ed.id ? '' : 'disabled placeholder="dibuat otomatis saat disimpan"'}></div>
+          <div class="field"><label>Tanggal Witness</label><input type="date" name="session_date" value="${esc(ed.session_date)}"></div>
+          <div class="field"><label>Waktu</label><input type="text" name="session_time" value="${esc(ed.session_time)}" placeholder="mis. 10.00 WIB"></div>
+          <div class="field"><label>Tempat</label><input type="text" name="place" value="${esc(ed.place)}"></div>
+          <div class="field full"><label>Agenda</label><input type="text" name="agenda" value="${esc(ed.agenda)}"></div>
+        </div>
+        <p class="subcard-title" style="margin-top:14px;">Coupon yang disaksikan <span class="en">tidak dicentang satu pun = semua coupon</span></p>
+        <div class="witness-coupons">${coupons.map(c => `<label class="chk"><input type="checkbox" data-wcoupon="${c.row}" ${ed.coupon_rows.includes(c.row) ? 'checked' : ''}> ${esc(c.label)}</label>`).join('') || '<span class="muted">Belum ada pengujian pada Work Order ini.</span>'}</div>
+
+        <p class="subcard-title" style="margin-top:14px;">Daftar Hadir <span class="en">nama &amp; perusahaan juga mengisi Witnessed By di Lembar Hasil Uji yang masih kosong</span></p>
+        <div class="witness-people">${ed.attendees.map((a, i) => `
+          <div class="witness-person">
+            <div class="witness-person-no">${i + 1}</div>
+            <div class="form-grid">
+              <div class="field"><label>Nama</label><input type="text" data-watt="${i}" data-f="name" value="${esc(a.name)}"></div>
+              <div class="field"><label>Perusahaan</label><input type="text" data-watt="${i}" data-f="company" value="${esc(a.company)}" list="witnessCompanyList"></div>
+              <div class="field"><label>No. HP</label><input type="tel" data-watt="${i}" data-f="phone" value="${esc(a.phone)}"></div>
+              <div class="field"><label>Email</label><input type="email" data-watt="${i}" data-f="email" value="${esc(a.email)}"></div>
+            </div>
+            <div class="witness-sign"><label>Tanda Tangan</label>${witnessPadHtml('a' + i, a.signature)}</div>
+            <button type="button" class="btn btn-sm btn-danger witness-person-del" data-watt-del="${i}" aria-label="Hapus peserta">&times;</button>
+          </div>`).join('')}</div>
+        <button type="button" class="btn btn-sm" id="btnWitnessPerson">+ Tambah peserta</button>
+
+        <p class="subcard-title" style="margin-top:16px;">Penanda tangan PT Detech Profesional Indonesia <span class="en">di Berita Acara</span></p>
+        <div class="witness-person witness-signer">
+          <div class="form-grid">
+            <div class="field"><label>Nama</label><input type="text" data-wsigner="name" value="${esc(ed.detech_signer.name)}"></div>
+            <div class="field"><label>Jabatan</label><input type="text" data-wsigner="title" value="${esc(ed.detech_signer.title)}"></div>
+          </div>
+          <div class="witness-sign"><label>Tanda Tangan <span class="en">opsional</span></label>${witnessPadHtml('signer', ed.detech_signer.signature)}</div>
+        </div>
+        <div class="form-actions">
+          <div><button type="button" class="btn" id="btnWitnessCancel">Batal</button></div>
+          <div class="right"><button type="submit" class="btn btn-primary">Simpan Sesi Witness</button></div>
+        </div>
+      </form>
+      <datalist id="witnessCompanyList">${companies.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+
+    const form = document.getElementById('witnessForm');
+    const syncHead = () => ['ba_no', 'session_date', 'session_time', 'place', 'agenda'].forEach(k => { if (!form.elements[k].disabled) ed[k] = form.elements[k].value; });
+    form.addEventListener('input', e => {
+      const el = e.target;
+      if (el.dataset.watt !== undefined) ed.attendees[Number(el.dataset.watt)][el.dataset.f] = el.value;
+      else if (el.dataset.wsigner) ed.detech_signer[el.dataset.wsigner] = el.value;
+      else if (el.dataset.wcoupon) ed.coupon_rows = [...form.querySelectorAll('[data-wcoupon]:checked')].map(x => Number(x.dataset.wcoupon));
+      else syncHead();
+    });
+    bindWitnessPads(
+      key => (key === 'signer' ? ed.detech_signer.signature : (ed.attendees[Number(key.slice(1))] || {}).signature),
+      (key, val) => { if (key === 'signer') ed.detech_signer.signature = val; else ed.attendees[Number(key.slice(1))].signature = val; });
+    document.getElementById('btnWitnessPerson').addEventListener('click', () => {
+      syncHead();
+      ed.attendees.push({ name: '', company: (ed.attendees[ed.attendees.length - 1] || {}).company || '', phone: '', email: '', signature: '' });
+      renderWitnessEditor(t);
+    });
+    form.querySelectorAll('[data-watt-del]').forEach(b => b.addEventListener('click', () => {
+      syncHead();
+      ed.attendees.splice(Number(b.dataset.wattDel), 1);
+      if (!ed.attendees.length) ed.attendees.push({ name: '', company: '', phone: '', email: '', signature: '' });
+      renderWitnessEditor(t);
+    }));
+    document.getElementById('btnWitnessCancel').addEventListener('click', () => { state.witnessEdit = null; renderWitness(t); });
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      syncHead();
+      const people = ed.attendees.filter(a => a.name.trim() || a.company.trim());
+      if (!people.length) { toast('Isi minimal satu peserta', 'error'); return; }
+      if (people.some(a => !a.name.trim())) { toast('Nama peserta wajib diisi', 'error'); return; }
+      try {
+        const saved = await api(ed.id ? `/api/witness-sessions/${ed.id}` : `/api/work-orders/${t.work_order.id}/witness`, {
+          method: ed.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ed, attendees: people })
+        });
+        toast(`Sesi witness ${saved.ba_no} tersimpan${saved.filled_reports ? ` · Witnessed By terisi di ${saved.filled_reports} Lembar` : ''}`, 'success');
+        loadWitness(t);
+      } catch (err) { toast(err.message, 'error'); }
+    });
   }
 
   // Pintasan ke modul Pengecekan Spesimen dari Preparation & Testing. "Buat Sheet" membawa

@@ -2073,3 +2073,24 @@ table .ss { min-width: 98px; }
 .hp-prev-zone i { font-style: normal; width: 28px; height: 24px; display: grid; place-items: center; border: 1px solid var(--border); border-radius: 4px; background: #fff; font-size: 11px; }
 .hp-sketch { margin-top: 8px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .hp-sketch img { max-width: 420px; max-height: 220px; border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+
+/* Task Testing: Witness client (Daftar Hadir & Berita Acara) */
+.witness-card { margin-top: 18px; }
+.witness-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+.witness-table td { vertical-align: top; }
+
+.witness-actions .btn { margin: 0 4px 4px 0; }
+.witness-coupons { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.witness-coupons .chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.witness-people { display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px; }
+.witness-person { position: relative; display: grid; grid-template-columns: 28px 1fr 380px; gap: 12px; align-items: start; border: 1px solid var(--border); border-radius: 10px; padding: 12px 40px 12px 12px; background: #fafbfc; }
+.witness-signer { grid-template-columns: 1fr 380px; padding-right: 12px; }
+.witness-person-no { width: 26px; height: 26px; border-radius: 50%; background: var(--navy); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+.witness-person-del { position: absolute; top: 10px; right: 10px; }
+.witness-sign label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.witness-pad { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.witness-pad canvas { width: 360px; max-width: 100%; height: 110px; border: 1px dashed #9aa3b2; border-radius: 6px; background: #fff; touch-action: none; cursor: crosshair; }
+@media (max-width: 1100px) { .witness-person { grid-template-columns: 28px 1fr; } .witness-person .witness-sign { grid-column: 2; } .witness-signer { grid-template-columns: 1fr; } }
+#witnessForm .form-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
+.witness-person > * { min-width: 0; }
+.witness-actions { white-space: normal; }

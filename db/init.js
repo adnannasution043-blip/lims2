@@ -458,6 +458,26 @@ async function initSchema() {
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS job_title TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS signature_image BYTEA;
 
+    -- Witness oleh client (tahap Testing): satu sesi = Daftar Kehadiran + Berita Acara Witness (nomor BA urut per tahun)
+    CREATE TABLE IF NOT EXISTS witness_sessions (
+      id SERIAL PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      ba_no TEXT UNIQUE,
+      ba_seq INTEGER,
+      ba_year INTEGER,
+      session_date TEXT,
+      session_time TEXT,
+      place TEXT,
+      agenda TEXT,
+      coupon_rows JSONB NOT NULL DEFAULT '[]',     -- coupon yang disaksikan; kosong = semua coupon
+      attendees JSONB NOT NULL DEFAULT '[]',       -- [{name, company, phone, email, signature(data URL PNG)}]
+      detech_signer JSONB NOT NULL DEFAULT '{}',   -- {name, title, signature}
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS witness_sessions_wo ON witness_sessions (work_order_id);
+
     -- Master Data > Pola Hardness: sketsa posisi titik + susunan titik uji (line, zona & jumlah titik) per client
     CREATE TABLE IF NOT EXISTS hardness_patterns (
       id SERIAL PRIMARY KEY,
