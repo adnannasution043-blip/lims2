@@ -54,10 +54,12 @@
   <div class="brand">DETECH Material Testing Laboratory</div>
   <h1>Panduan Penggunaan DETECH LIMS</h1>
   <p class="sub">Dari Permintaan Uji sampai Laporan Hasil Uji (LHU) terbit &mdash; langkah demi langkah</p>
-  <div class="meta">Versi 1.3 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
+  <div class="meta">Versi 1.4 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
 </div>
 
-<div class="note ok"><b>Yang baru di versi 1.3</b>: menu <b>Machining</b> menampilkan Material Grade, Material Size, Ref. Code, Test Method, dan <b>Foto Receiving</b> per coupon; <b>kotak pencarian</b> di setiap dropdown; <b>Heat No</b> di Lembar Hasil Uji diambil otomatis dari Permintaan Uji; nama <b>Witnessed By</b> dicetak satu per baris; foto Macro dicetak <b>utuh</b> (tidak terpotong); Preliminary Report tetap memuat <b>logo DETECH</b>.</div>
+<div class="note ok"><b>Yang baru di versi 1.4</b>: <b>Witness Client</b> di tahap Testing &mdash; Daftar Kehadiran &amp; Berita Acara Witness dengan tanda tangan di layar, ikut menjadi lampiran LHU; <b>Pola Hardness</b> di Master Data (sketsa &amp; susunan titik per client); <b>Backup Database</b> (.sql) di Pengaturan, sedangkan Reset Data dinonaktifkan; laporan lebih rapi: bagian Term &amp; Conditions selalu di dasar halaman, garis tabel lengkap, satu foto Microstructure dicetak di tengah, dan daftar Witnessed By sejajar dengan labelnya.</div>
+
+<div class="note"><b>Di versi 1.3</b>: menu <b>Machining</b> menampilkan Material Grade, Material Size, Ref. Code, Test Method, dan <b>Foto Receiving</b> per coupon; <b>kotak pencarian</b> di setiap dropdown; <b>Heat No</b> di Lembar Hasil Uji diambil otomatis dari Permintaan Uji; nama <b>Witnessed By</b> dicetak satu per baris; foto Macro dicetak <b>utuh</b> (tidak terpotong); Preliminary Report tetap memuat <b>logo DETECH</b>.</div>
 
 <div class="note"><b>Di versi 1.2</b>: <b>Dashboard</b> manajemen baru (KPI, tren, Turn Around Time, klien teratas); <b>Perusahaan</b> dan <b>Atas Nama Perusahaan</b> dipilih terpisah; <b>Testing Machine Used</b> dipilih dari Master Equipment; <b>tanda tangan otomatis</b> dari akun approver dan <b>stempel perusahaan</b> pada LHU.</div>
 
@@ -80,6 +82,7 @@
   <li><b>Login.</b> Buka alamat aplikasi, masukkan username dan kata sandi. Klik nama Anda di bagian bawah sidebar untuk <span class="menu">mengganti kata sandi</span> atau keluar. Sesi berlaku 12 jam dan diperpanjang selama dipakai.</li>
   <li><b>Master Data &rarr; Customer.</b> Isi <b>Nama Perusahaan</b>, <b>ID Perusahaan</b>, <b>Atas Nama Perusahaan</b>, alamat, dan telepon. Di Permintaan Uji, <b>Perusahaan</b> dan <b>Atas Nama Perusahaan</b> hanya bisa dipilih dari daftar ini (tidak bisa diketik). Customer lama yang belum punya Nama Perusahaan dilengkapi lewat tombol <span class="btn">Ubah</span>; selama kosong, namanya tampil memakai Atas Nama.</li>
   <li><b>Master Data &rarr; Equipment.</b> Daftarkan semua alat uji lengkap dengan <b>model</b>, <b>nomor seri</b>, status, dan tanggal kalibrasi berikutnya. <i>Testing Machine Used</i> di Lembar Hasil Uji hanya bisa dipilih dari daftar ini.</li>
+  <li><b>Master Data &rarr; Pola Hardness.</b> Untuk susunan titik Hardness yang berbeda per client. Isi <b>Nama Pola</b>, <b>Jenis Form</b> (Weld / Material), <b>Customer</b> (boleh kosong bila berlaku umum), label tiap <b>Line</b> (maks. 3, mis. Line 1, Cap, Root), <b>Zona &amp; Jumlah Titik</b> per line (mis. Base Metal 3 &middot; HAZ 3 &middot; Weld Metal 3 &middot; HAZ 3 &middot; Base Metal 3; total maks. 15 titik), lalu unggah <b>Sketsa Posisi Titik</b>. Pratinjau kotak isian tampil langsung. Dua pola bawaan mengikuti form resmi (Weld 2 line &times; 9 titik, Material 5 titik).</li>
   <li><b>Master Data lain.</b> Daftar <b>PIC</b> (nama petugas tiap tahap), <b>Tipe Spesimen</b> (mengisi kolom Code di Pengecekan Spesimen), dan <b>Kode Jenis Pengujian</b> (dipakai marking spesimen).</li>
   <li><b>Tanda tangan &amp; stempel</b> (sekali saja). Tiap approver: klik nama di sidebar &rarr; <span class="menu">Akun Saya</span>, isi <b>Jabatan</b> lalu <span class="btn">Unggah gambar tanda tangan</span> (foto/scan tanda tangan di kertas putih; centang <i>Buang latar putih</i>). Administrator: <span class="menu">Pengaturan</span> &rarr; <b>Stempel Perusahaan</b> &rarr; <span class="btn">Unggah stempel</span>. Tanda tangan di akun hanya bisa dipakai pemiliknya.</li>
   <li><b>Pengguna &amp; Role</b> (khusus Administrator). Tab <i>Role &amp; Hak Akses</i> mengatur apa yang boleh dilakukan tiap role (Lihat/Tambah/Ubah/Hapus per menu); tab <i>Pengguna</i> untuk membuat akun dan memilihkan role.</li>
@@ -120,12 +123,23 @@
       <li>Pilih bentuk form di dropdown bila ada beberapa (mis. Tensile: Reduced Section / Full Section / Bolt; SSCC: FPB / Proof Ring).</li>
       <li>Isi tabel hasil; kolom yang bisa dihitung terisi otomatis (Area, kekuatan, rata-rata, dan sebagainya). No. Laporan, Welder&rsquo;s Name, dan <b>Heat No</b> tampil otomatis dari data coupon di Permintaan Uji, jadi tidak perlu diketik ulang.</li>
       <li><b>Testing Machine Used</b>: pilih alat dari Master Equipment; tekan <span class="btn">+ Tambah alat</span> bila memakai lebih dari satu alat. Di laporan tercetak <code>Nama Model, S/N : nomor seri</code>. Alat <i>Out of Service</i> tidak bisa dipilih; muncul peringatan kuning bila alat sedang perawatan atau kalibrasinya lewat jatuh tempo pada tanggal uji.</li>
-      <li><b>Witnessed By</b> bisa lebih dari satu orang: tekan <span class="btn">+ Tambah saksi</span>. Di laporan, nama saksi dicetak <b>satu per baris</b> (tersusun ke bawah).</li>
+      <li><b>Witnessed By</b> bisa lebih dari satu orang: tekan <span class="btn">+ Tambah saksi</span>. Di laporan, nama saksi dicetak <b>satu per baris</b> (tersusun ke bawah, sejajar dengan label). Bila ada sesi <b>Witness Client</b> (lihat di bawah), kolom ini terisi otomatis.</li>
+      <li><b>Hardness:</b> pilih <b>Pola Hardness</b> di bagian atas isian (pola milik customer Work Order tampil paling atas). Kotak nilai HV mengikuti line, zona, dan titik pola; sketsa pola tercetak di halaman Sketch Hardness. Sketsa khusus untuk satu Lembar bisa diunggah di bawahnya. Isi pola disalin ke Lembar, jadi laporan lama tidak berubah bila pola di Master diubah.</li>
+      <li><b>Microstructure:</b> bila hanya satu foto yang diunggah, foto itu dicetak utuh di tengah kotak foto.</li>
       <li>Foto (bila form menyediakan slot foto; foto dicetak utuh menyesuaikan bingkai, sisa bingkai berwarna hitam) dan <b>Lampiran Hasil Mesin Uji</b> (PDF, gambar, CSV/TXT, Excel, ZIP dari mesin uji; maks. 8 MB per file) tersimpan langsung saat dipilih. Lampiran hanya referensi, tidak dicetak.</li>
       <li><b>Wajib lengkap sebelum Final:</b> Date of Tested, Test Conducted By, ada data hasil uji, dan hasil tiap spesimen (Bend/Flaring/Nick Break/Fillet Weld Break: Result; Charpy: Impact; Tensile: beban atau kekuatan).</li>
       <li><span class="btn">Simpan sebagai Draft</span> lalu <span class="btn p">Simpan &amp; Finalisasi</span>.</li>
     </ul>
-    Di halaman tahap Testing, <b>tanggal uji dan status diambil otomatis dari Lembar</b> (Lembar Final = Selesai, Draft = Sedang Diuji); tidak perlu diisi lagi. Setelah semua Lembar Final, selesaikan tahap.</li>
+    Di halaman tahap Testing, <b>tanggal uji dan status diambil otomatis dari Lembar</b> (Lembar Final = Selesai, Draft = Sedang Diuji); tidak perlu diisi lagi. Setelah semua Lembar Final, selesaikan tahap.
+    <p style="margin:8px 0 4px;"><b>Witness Client</b> (bila pengujian disaksikan client) &mdash; bagian di bawah form tahap Testing:</p>
+    <ul>
+      <li>Klik <span class="btn p">+ Sesi Witness</span>. Isi tanggal, waktu, tempat, dan agenda (terisi otomatis &ldquo;Witness Pengujian Material &lt;perusahaan&gt;&rdquo;), lalu centang <b>coupon yang disaksikan</b> (tidak dicentang = semua coupon).</li>
+      <li><b>Daftar Hadir:</b> isi nama, perusahaan, No. HP, dan email tiap peserta; peserta <b>tanda tangan langsung di layar</b> (jari di tablet atau mouse). <span class="btn">+ Tambah peserta</span> untuk baris berikutnya; <span class="btn">Ulang</span> untuk menghapus coretan.</li>
+      <li><b>Penanda tangan DETECH</b> di Berita Acara terisi Fajar Pangestu, S.Tr.T. / Manager Teknis dan bisa diubah; tanda tangannya opsional.</li>
+      <li>Klik <span class="btn p">Simpan Sesi Witness</span>. <b>No. Berita Acara</b> dibuat otomatis: <code>nnnn/DPI/ADM-BA/&lt;bulan Romawi&gt;/&lt;tahun&gt;</code>, urut per tahun (bisa diubah lewat Edit bila perlu). Satu Work Order boleh punya beberapa sesi.</li>
+      <li>Tombol <span class="btn">Daftar Hadir</span> (form DPI-LP-FR-63) dan <span class="btn">Berita Acara</span> (form DPI-LP-FR-39) membuka dokumen siap cetak. Data perusahaan, Job No., Report No., deskripsi material, jenis pengujian, dan jumlah spesimen terisi otomatis.</li>
+      <li>Nama peserta mengisi <b>Witnessed By</b> (&ldquo;Nama of Perusahaan&rdquo;) pada Lembar coupon yang disaksikan yang masih kosong dan belum Final, serta Lembar yang dibuat sesudahnya. Kedua dokumen witness <b>ikut dicetak sebagai lampiran LHU</b> coupon itu.</li>
+    </ul></li>
   <li><b>Reporting</b> <span class="tag">Preliminary Report</span><br>
     <ul>
       <li>Klik <span class="btn p">Unduh Preliminary Report</span> untuk tiap coupon, lalu serahkan ke customer untuk ditinjau. Isinya sama dengan laporan asli, tetapi <b>tanpa logo KAN</b> (logo DETECH tetap ada), <b>tanpa tanda tangan approval</b>, dan dengan watermark <i>PRELIMINARY REPORT</i>.</li>
@@ -148,7 +162,7 @@
 
 <h2>D. Hasil &amp; Laporan</h2>
 <ol class="steps" style="counter-reset: s 12;">
-  <li>Menu <span class="menu">Hasil &amp; Laporan</span> menampilkan <b>satu baris per coupon</b> yang LHU-nya sudah terbit; <b>No. LHU = No. Laporan coupon</b>. Buka detailnya lalu <span class="btn p">Download PDF</span>: dokumen berisi semua Lembar Hasil Uji Final coupon itu, dengan nomor halaman berurutan.</li>
+  <li>Menu <span class="menu">Hasil &amp; Laporan</span> menampilkan <b>satu baris per coupon</b> yang LHU-nya sudah terbit; <b>No. LHU = No. Laporan coupon</b>. Buka detailnya lalu <span class="btn p">Download PDF</span>: dokumen berisi semua Lembar Hasil Uji Final coupon itu, dengan nomor halaman berurutan, ditambah Daftar Hadir &amp; Berita Acara Witness bila coupon itu disaksikan. Bagian Term &amp; Conditions dan alamat perusahaan selalu tercetak di dasar halaman.</li>
   <li>Unggah <b>attachment</b> pendukung bila perlu, dan catat <b>Distribusi</b> (pengiriman LHU ke customer beserta bukti kirim). Keduanya dicatat per coupon.</li>
 </ol>
 
@@ -257,7 +271,8 @@
 <p style="font-size:9.4pt;color:var(--muted)">Role bisa diubah di <b>Pengguna &rarr; Role &amp; Hak Akses</b>. Hak akses per menu: Lihat, Tambah, Ubah, Hapus. Role lain yang perlu melihat menu Machining cukup dicentang hak <i>Machining (tim machining)</i>-nya.</p>
 
 <h2>Tips</h2>
-<div class="note ok"><b>Uji coba dulu.</b> Jalankan satu pekerjaan percobaan dari awal sampai LHU terbit. Setelah selesai, <span class="menu">Pengaturan</span> &rarr; <b>Reset Data</b> (ketik <code>HAPUS</code>) mengosongkan semua data transaksi tanpa menyentuh Master Data dan Pengguna.</div>
+<div class="note ok"><b>Backup rutin.</b> Administrator: <span class="menu">Pengaturan</span> &rarr; <b>Backup Database</b> &rarr; <span class="btn p">Unduh Backup (.sql)</span>. File berisi seluruh data, termasuk foto dan file unggahan; simpan di tempat aman (mis. Google Drive kantor), disarankan tiap minggu. Memulihkan: jalankan aplikasi sekali pada database tujuan, lalu <code>psql "&lt;DATABASE_URL&gt;" -f &lt;file backup&gt;</code> (isi database tujuan diganti isi backup).</div>
+<div class="note warn"><b>Reset Data dinonaktifkan</b> karena aplikasi sudah dipakai sungguhan: kartunya tidak tampil di Pengaturan dan server menolak perintah reset. Bila suatu saat benar-benar perlu, pengelola server mengisi variabel <code>ALLOW_DATA_RESET=1</code> di Railway.</div>
 <ul>
   <li><b>Mencari di dropdown:</b> setiap pilihan (dropdown) punya kotak pencarian. Klik dropdown, ketik sebagian nama, lalu pilih dari hasilnya.</li>
   <li><b>Ringkasan kinerja:</b> menu <span class="menu">Dashboard</span> untuk laporan manajemen per periode.</li>
@@ -268,7 +283,7 @@
   <li><b>Keamanan:</b> jangan membagikan akun. Administrator dapat menonaktifkan akun yang tidak dipakai di menu Pengguna.</li>
 </ul>
 
-<footer>DETECH LIMS &middot; Panduan Penggunaan v1.3 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
+<footer>DETECH LIMS &middot; Panduan Penggunaan v1.4 &middot; Dokumen internal PT Detech Profesional Indonesia</footer>
 
 </body>
 </html>
