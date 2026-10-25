@@ -2679,11 +2679,18 @@
   }
 
   // Foto dari kamera bisa 5-12 MB; dikecilkan dulu supaya database tidak cepat penuh.
+  // Foto unggahan dikecilkan di browser sebelum dikirim: sisi terpanjang maks. 2400 px, JPEG kualitas 88%. Cukup untuk
+  // cetak tajam (~300 dpi) sampai selebar halaman A4, tapi file turun 70-90% dari foto HP (4000-8000 px, 3-8 MB).
+  // Foto yang sudah kecil tidak diubah dan tidak pernah diperbesar; PDF/dokumen/lampiran mesin uji tidak disentuh.
+  const PHOTO_MAX_SIDE = 2400;
+  const PHOTO_QUALITY = 0.88;
+  const PHOTO_KEEP_BYTES = 1.2 * 1024 * 1024;
+
   async function prepareEvidenceFile(file) {
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < 1.2 * 1024 * 1024) return file;
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type) || file.size < PHOTO_KEEP_BYTES) return file;
     try {
       const bitmap = await createImageBitmap(file);
-      const scale = Math.min(1, 1920 / Math.max(bitmap.width, bitmap.height));
+      const scale = Math.min(1, PHOTO_MAX_SIDE / Math.max(bitmap.width, bitmap.height));
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(bitmap.width * scale);
       canvas.height = Math.round(bitmap.height * scale);
@@ -2691,7 +2698,7 @@
       ctx.fillStyle = '#fff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85));
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', PHOTO_QUALITY));
       if (blob && blob.size < file.size) {
         return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
       }
@@ -3539,7 +3546,7 @@
     const slot = e.target.dataset && e.target.dataset.mphoto;
     if (!slot || !e.target.files[0]) return;
     try {
-      const blob = await shrinkImageToBlob(e.target.files[0], 1600);
+      const blob = await shrinkImageToBlob(e.target.files[0], PHOTO_MAX_SIDE);
       const res = await fetch('/api/test-reports/' + state.testReport.id + '/photos?slot=' + encodeURIComponent(slot), { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Gagal mengunggah foto');
       state.testReportPhotoSlots.add(slot);
@@ -3701,12 +3708,14 @@
         img.onerror = () => reject(new Error('File bukan gambar yang valid'));
         img.onload = () => {
           const k = Math.min(1, maxSide / Math.max(img.width, img.height));
+          // JPEG yang sudah kecil dikirim apa adanya (tidak dikompres ulang)
+          if (k === 1 && file.type === 'image/jpeg' && file.size < PHOTO_KEEP_BYTES) { resolve(file); return; }
           const cv = document.createElement('canvas');
           cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
           const ctx = cv.getContext('2d');
           ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
           ctx.drawImage(img, 0, 0, cv.width, cv.height);
-          cv.toBlob(b => (b ? resolve(b) : reject(new Error('Gagal memproses gambar'))), 'image/jpeg', 0.85);
+          cv.toBlob(b => (b ? resolve(b) : reject(new Error('Gagal memproses gambar'))), 'image/jpeg', PHOTO_QUALITY);
         };
         img.src = fr.result;
       };
@@ -3737,7 +3746,7 @@
       const slot = e.target.dataset.cphoto;
       if (!slot || !e.target.files[0]) return;
       try {
-        const blob = await shrinkImageToBlob(e.target.files[0], 1600);
+        const blob = await shrinkImageToBlob(e.target.files[0], PHOTO_MAX_SIDE);
         const res = await fetch(`/api/test-reports/${state.testReport.id}/photos?slot=${encodeURIComponent(slot)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Gagal mengunggah foto');
         state.testReportPhotoSlots.add(slot);
@@ -3815,7 +3824,7 @@
     return `${patternSel}<div class="form-grid"><div class="field full"><label>Material Specification</label><input type="text" name="field_spec" value="${esc((state.testReport.fields || {}).spec)}"></div></div>${lines.join('')}${sketch}`;
   }
 
-  // Perkecil gambar sketsa di sisi klien (maks. 1400 px, JPEG) agar muat di batas ukuran simpan.
+  // Perkecil gambar sketsa di sisi klien (maks. 2000 px, JPEG 90%) agar muat di batas ukuran simpan.
   function readSketchFile(file) {
     return new Promise((resolve, reject) => {
       const fr = new FileReader();
@@ -3824,13 +3833,13 @@
         const img = new Image();
         img.onerror = () => reject(new Error('File bukan gambar yang valid'));
         img.onload = () => {
-          const k = Math.min(1, 1400 / Math.max(img.width, img.height));
+          const k = Math.min(1, 2000 / Math.max(img.width, img.height));
           const cv = document.createElement('canvas');
           cv.width = Math.round(img.width * k); cv.height = Math.round(img.height * k);
           const ctx = cv.getContext('2d');
           ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, cv.width, cv.height);
           ctx.drawImage(img, 0, 0, cv.width, cv.height);
-          resolve(cv.toDataURL('image/jpeg', 0.85));
+          resolve(cv.toDataURL('image/jpeg', 0.9));
         };
         img.src = fr.result;
       };
@@ -5262,9 +5271,10 @@
 
     uploadBtn.addEventListener('click', () => input.click());
     input.addEventListener('change', async () => {
-      const file = input.files[0];
+      const original = input.files[0];
       input.value = '';
-      if (!file) return;
+      if (!original) return;
+      const file = await prepareEvidenceFile(original);
       if (file.size > 10 * 1024 * 1024) { toast('Ukuran file maksimal 10 MB', 'error'); return; }
       try {
         await api(`/api/lhu-reports/${woId}/attachments`, {
@@ -5292,9 +5302,10 @@
     listEl.parentElement.appendChild(proofInput);
     let proofTargetId = null;
     proofInput.addEventListener('change', async () => {
-      const file = proofInput.files[0];
+      const original = proofInput.files[0];
       proofInput.value = '';
-      if (!file || !proofTargetId) return;
+      if (!original || !proofTargetId) return;
+      const file = await prepareEvidenceFile(original);
       if (file.size > 10 * 1024 * 1024) { toast('Ukuran file maksimal 10 MB', 'error'); return; }
       try {
         await api(`/api/lhu-distributions/${proofTargetId}/proof`, {
