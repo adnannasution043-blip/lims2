@@ -109,7 +109,16 @@ const pool = {
       const row = reports.find(r => r.id === Number(params[0]));
       return { rows: row ? [row] : [] };
     }
-    if (/^UPDATE test_reports SET\s(?!witnessed_by = \$1 WHERE id)/.test(sql)) {
+    if (/^SELECT witnessed_by FROM test_reports WHERE test_request_id/.test(sql)) {
+      const list = reports.filter(r => r.test_request_id === params[0] && r.id !== Number(params[1]) && r.witnessed_by).slice().reverse();
+      return { rows: (/LIMIT 1/.test(sql) ? list.slice(0, 1) : list).map(r => ({ witnessed_by: r.witnessed_by })) };
+    }
+    if (/^UPDATE test_reports SET witnessed_by = \$1, updated_at = NOW\(\)\s+WHERE test_request_id/.test(sql)) {
+      let n = 0;
+      reports.forEach(r => { if (r.test_request_id === params[1] && r.id !== params[2] && !r.witnessed_by && r.status !== 'final') { r.witnessed_by = params[0]; n++; } });
+      return { rowCount: n };
+    }
+    if (/^UPDATE test_reports SET\s(?!witnessed_by = \$1)/.test(sql)) {
       const row = reports.find(r => r.id === Number(params[params.length - 1]));
       if (!row) return { rows: [] };
       Object.assign(row, {
@@ -877,6 +886,29 @@ function call(method, path, params, body) {
   assert.strictEqual(r.status, 200);
   r = await call('GET', '/api/test-reports/:id', { id: String(id) });
   assert.strictEqual(r.status, 404);
+
+  // ---- Witnessed By menaut antar-Lembar satu pekerjaan (permintaan klien) ----
+  reports.forEach(x => { x.witnessed_by = ''; });
+  const finalOne = reports.find(x => x.test_request_id === WO.test_request_id);
+  finalOne.status = 'final';
+  r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 2, test_name: 'Bend Root' });
+  assert.strictEqual(r.status, 201);
+  assert.strictEqual(r.body.witnessed_by, '', 'belum ada isian di pekerjaan ini');
+  const linkId = r.body.id;
+  const draftsBefore = reports.filter(x => x.test_request_id === WO.test_request_id && x.id !== linkId && x.status !== 'final').length;
+  r = await call('PUT', '/api/test-reports/:id', { id: String(linkId) }, { status: 'draft', witnessed_by: 'a of pertamina, b of bp, c of jgc', rows: [] });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.body.witness_linked, draftsBefore, 'Lembar lain yang kosong & belum Final ikut terisi');
+  assert.strictEqual(finalOne.witnessed_by, '', 'Lembar Final tidak diubah');
+  const other = reports.find(x => x.test_request_id === WO.test_request_id && x.id !== linkId && x.status !== 'final');
+  assert.strictEqual(other.witnessed_by, 'a of pertamina, b of bp, c of jgc');
+  // Lembar lain diubah sendiri (satu saksi beda) -> tidak ditimpa lagi; saran berisi semua nama yang pernah dipakai
+  r = await call('PUT', '/api/test-reports/:id', { id: String(other.id) }, { status: 'draft', witnessed_by: 'a of pertamina, d of shell', rows: other.rows });
+  r = await call('PUT', '/api/test-reports/:id', { id: String(linkId) }, { status: 'draft', witnessed_by: 'a of pertamina, b of bp, c of jgc', rows: [] });
+  assert.strictEqual(other.witnessed_by, 'a of pertamina, d of shell');
+  const sugg = r.body.witness_suggestions;
+  assert.ok(['a of pertamina', 'b of bp', 'c of jgc', 'd of shell'].every(n => sugg.includes(n)), 'saran dari Lembar lain');
+  assert.strictEqual(sugg.filter(n => n === 'a of pertamina').length, 1, 'tanpa duplikat');
 
   console.log('TEST_REPORTS OK');
 })().catch(e => { console.error(e); process.exit(1); });

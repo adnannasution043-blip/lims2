@@ -4054,7 +4054,7 @@
     return list.length ? list : [''];
   }
   function witnessRowHtml(name) {
-    return `<div class="witness-row"><input type="text" data-witness value="${esc(name)}" placeholder="Nama / instansi"><button type="button" class="btn btn-sm btn-danger" data-witness-del aria-label="Hapus saksi">&times;</button></div>`;
+    return `<div class="witness-row"><input type="text" data-witness value="${esc(name)}" placeholder="Nama / instansi" list="witnessSuggest"><button type="button" class="btn btn-sm btn-danger" data-witness-del aria-label="Hapus saksi">&times;</button></div>`;
   }
   function bindWitnessEvents() {
     const list = document.getElementById('witnessList'), hidden = document.getElementById('witnessedByValue');
@@ -4255,6 +4255,7 @@
               <input type="hidden" name="welder_name" value="${esc(r.welder_name)}"></div>
             <div class="field"><label>Witnessed By <span class="en">bisa lebih dari 1 orang</span></label>
               <div id="witnessList">${witnessNames(r.witnessed_by).map(witnessRowHtml).join('')}</div>
+              <datalist id="witnessSuggest">${(r.witness_suggestions || []).map(n => `<option value="${esc(n)}">`).join('')}</datalist>
               <button type="button" class="btn btn-sm" id="btnAddWitness" style="align-self:flex-start;margin-top:4px;">+ Tambah saksi</button>
               <input type="hidden" name="witnessed_by" id="witnessedByValue" value="${esc(r.witnessed_by)}"></div>
             <div class="field"><label>Test Conducted by</label><input type="text" name="test_conducted_by" value="${esc(r.test_conducted_by) || esc(r.testing_pic)}"></div>
@@ -4383,7 +4384,8 @@
       state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
       state.testReportHard = hardStateOf(state.testReport.fields);
       state.testReportDirty = false;
-      toast(payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan', 'success');
+      toast((payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan')
+        + (state.testReport.witness_linked ? ` · Witnessed By juga diisi di ${state.testReport.witness_linked} Lembar lain` : ''), 'success');
       render();
     } catch (err) {
       if (!showIncomplete(err, e.target)) toast(err.message, 'error');
