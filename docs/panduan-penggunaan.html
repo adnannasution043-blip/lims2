@@ -57,7 +57,7 @@
   <div class="meta">Versi 1.4 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
 </div>
 
-<div class="note ok"><b>Yang baru di versi 1.4</b>: <b>Witness Client</b> di tahap Testing &mdash; Daftar Kehadiran &amp; Berita Acara Witness dengan tanda tangan di layar, ikut menjadi lampiran LHU; <b>Pola Hardness</b> di Master Data (sketsa &amp; susunan titik per client); <b>Backup Database</b> (.sql) di Pengaturan, sedangkan Reset Data dinonaktifkan; laporan lebih rapi: bagian Term &amp; Conditions selalu di dasar halaman, garis tabel lengkap, satu foto Microstructure dicetak di tengah, dan daftar Witnessed By sejajar dengan labelnya.</div>
+<div class="note ok"><b>Yang baru di versi 1.4</b>: <b>Witness Client</b> di tahap Testing &mdash; Daftar Kehadiran &amp; Berita Acara Witness dengan tanda tangan di layar, ikut menjadi lampiran LHU; <b>Pola Hardness</b> di Master Data (sketsa &amp; susunan titik per client); <b>Backup Database</b> (.sql) di Pengaturan, sedangkan Reset Data dinonaktifkan; <b>foto unggahan dikecilkan otomatis</b> (tetap tajam saat dicetak); laporan lebih rapi: bagian Term &amp; Conditions selalu di dasar halaman, garis tabel lengkap, satu foto Microstructure dicetak di tengah, dan daftar Witnessed By sejajar dengan labelnya.</div>
 
 <div class="note"><b>Di versi 1.3</b>: menu <b>Machining</b> menampilkan Material Grade, Material Size, Ref. Code, Test Method, dan <b>Foto Receiving</b> per coupon; <b>kotak pencarian</b> di setiap dropdown; <b>Heat No</b> di Lembar Hasil Uji diambil otomatis dari Permintaan Uji; nama <b>Witnessed By</b> dicetak satu per baris; foto Macro dicetak <b>utuh</b> (tidak terpotong); Preliminary Report tetap memuat <b>logo DETECH</b>.</div>
 
@@ -108,7 +108,7 @@
 <p>Buka menu <span class="menu">Tasks</span>, cari Work Order, lalu klik <span class="btn p">Kerjakan</span> atau langsung lingkaran status tahapnya. Tiap tahap berisi PIC, tanggal, catatan, dan tombol <span class="btn">Simpan sebagai Draft</span> / <span class="btn p">Simpan &amp; Selesaikan Tahap</span>. Bila tahap belum bisa diselesaikan, daftar kekurangannya muncul di bawah form.</p>
 <ol class="steps" style="counter-reset: s 7;">
   <li><b>Receiving</b> <span class="tag">penerimaan sampel</span><br>
-    Pilih PIC dan tanggal penerimaan. Untuk <b>setiap coupon</b> isi status diterima dan kondisi (Baik / Cacat-Rusak / Perlu Klarifikasi). Foto kondisi sampel bisa diunggah sebagai bukti.</li>
+    Pilih PIC dan tanggal penerimaan. Untuk <b>setiap coupon</b> isi status diterima dan kondisi (Baik / Cacat-Rusak / Perlu Klarifikasi). Foto kondisi sampel bisa diunggah sebagai bukti (foto dari HP dikecilkan otomatis, lihat <i>Foto unggahan</i> di bagian Tips).</li>
   <li><b>Preparation</b> <span class="tag">machining &amp; Pengecekan Spesimen</span><br>
     Tidak ada form; tahap selesai sendiri bila machining selesai dan semua sheet Pengecekan Spesimen berstatus Final.
     <ul>
@@ -279,6 +279,7 @@
   <li><b>Memantau posisi:</b> menu <span class="menu">Tasks</span> menampilkan tahap tiap Work Order; klik salah satu tahap di bagian atas untuk menyaring daftar. Antrian per tahap ada di bagian <span class="menu">Antrian Kerja</span>.</li>
   <li><b>Mencetak ke PDF:</b> gunakan tombol <i>Print / Simpan sebagai PDF</i> pada halaman cetak. Header tabel gelap dan baris selang-seling ikut tercetak.</li>
   <li><b>Mengecek hasil cetak:</b> bandingkan tampilan cetak/PDF dengan form Excel klien, terutama angka hasil perhitungan (Area, kekuatan, CSR/CLR/CTR, dan sebagainya).</li>
+  <li><b>Foto unggahan:</b> foto (Receiving, foto di Lembar Hasil Uji, lampiran LHU, bukti kirim) otomatis dikecilkan sebelum diunggah: sisi terpanjang maks. 2400 piksel, JPEG kualitas tinggi. Ini setara ~300 dpi bila dicetak selebar A4, jadi tetap tajam di laporan, sementara ukuran file turun sekitar 70&ndash;90% (mis. 10 MB menjadi &plusmn;0,8 MB). Foto yang sudah kecil tidak diubah. PDF, Lampiran Hasil Mesin Uji, dan sertifikat Equipment tidak dikecilkan.</li>
   <li><b>Riwayat perubahan:</b> Administrator dapat melihat siapa mengubah apa di <span class="menu">Pengaturan</span> &rarr; <i>Jejak Aktivitas</i>.</li>
   <li><b>Keamanan:</b> jangan membagikan akun. Administrator dapat menonaktifkan akun yang tidak dipakai di menu Pengguna.</li>
 </ul>
