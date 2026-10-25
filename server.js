@@ -11,6 +11,7 @@ const { registerTestReportRoutes, canonicalTestName } = require('./lib/testRepor
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerHardnessPatternRoutes } = require('./lib/hardnessPatterns');
 const { registerWitnessRoutes } = require('./lib/witness');
+const { registerBackupRoutes } = require('./lib/backup');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
 const { registerUserRoutes } = require('./lib/users');
 const { createAuth, ensureAdmin } = require('./lib/auth');
@@ -874,7 +875,9 @@ registerLhuReportRoutes(app, { pool, getFullWorkOrder, printableReport, witnessA
 // Order beserta sample marking/Tasks/file evidence, Pengecekan Spesimen, dan Lembar Hasil Uji).
 // Master Data (Customer, Equipment, Tipe Spesimen, Kode Jenis Pengujian, dll) sengaja TIDAK
 // disentuh karena bukan data uji coba dan biasanya perlu diisi ulang manual.
+// Sejak aplikasi dipakai sungguhan, Reset Data dimatikan: hanya bisa dipakai bila variabel server ALLOW_DATA_RESET=1.
 app.post('/api/admin/reset-data', async (req, res) => {
+  if (process.env.ALLOW_DATA_RESET !== '1') return res.status(403).json({ error: 'Reset Data dinonaktifkan karena aplikasi sudah dipakai.' });
   try {
     await pool.query('TRUNCATE TABLE test_requests RESTART IDENTITY CASCADE');
     res.json({ ok: true });
@@ -883,6 +886,9 @@ app.post('/api/admin/reset-data', async (req, res) => {
     res.status(500).json({ error: 'Gagal mereset data' });
   }
 });
+
+// Backup database (.sql) dari halaman Pengaturan, khusus Administrator.
+registerBackupRoutes(app, { pool });
 
 // "stage" = tahap yang sedang berjalan menurut urutan proses (Receiving -> ... -> Review & Approval).
 // "status" Work Order tidak difinalisasi manual: 'complete' otomatis setelah semua tahap selesai

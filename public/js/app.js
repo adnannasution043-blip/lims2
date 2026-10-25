@@ -5509,11 +5509,25 @@
           <button type="button" class="btn btn-danger" id="stampDelete" ${AUTH.company_stamp && can('pengaturan', 'edit') ? '' : 'hidden'}>Hapus stempel</button>
         </div>
       </div>`;
+    // Backup: seluruh isi database sebagai file .sql (khusus Administrator; server juga memeriksa)
+    const canBackup = !AUTH.enforced || (AUTH.user && AUTH.user.is_admin);
+    const backupCard = canBackup ? `
+      <div class="card">
+        <p class="card-title">Backup Database</p>
+        <p class="card-desc">Mengunduh seluruh data LIMS &mdash; Permintaan Uji, Work Order, Lembar Hasil Uji, LHU, Master Data, Pengguna, serta semua file
+          dan foto yang diunggah &mdash; sebagai satu file <b>.sql</b>. Simpan file di tempat aman (mis. Google Drive kantor) karena memuat seluruh data.
+          Disarankan dilakukan rutin, misalnya tiap minggu.</p>
+        <a class="btn btn-primary" href="/api/admin/backup" id="btnBackup" download>Unduh Backup (.sql)</a>
+        <p class="um-help" style="margin-top:10px;">Memulihkan: jalankan aplikasi sekali pada database tujuan, lalu <code>psql "&lt;DATABASE_URL&gt;" -f &lt;file backup&gt;</code>. Isi database tujuan akan diganti dengan isi backup.</p>
+      </div>` : '';
+    // Reset Data disembunyikan sejak aplikasi dipakai sungguhan (server juga menolak tanpa ALLOW_DATA_RESET=1)
+    const SHOW_RESET = false;
     contentEl.innerHTML = `
       ${authCard}
+      ${backupCard}
       ${stampCard}
       ${auditCard}
-      <div class="card">
+      <div class="card" ${SHOW_RESET ? '' : 'hidden'}>
         <p class="card-title" style="color: var(--danger);">Reset Data</p>
         <p class="card-desc">
           Menghapus semua data transaksional — Permintaan Uji, Work Order, Tasks, Pengecekan
@@ -5546,8 +5560,11 @@
       } catch (err) { toast(err.message, 'error'); }
     });
 
+    const backupBtn = document.getElementById('btnBackup');
+    if (backupBtn) backupBtn.addEventListener('click', () => toast('Menyiapkan backup… unduhan akan mulai sebentar lagi', 'success'));
     const input = document.getElementById('resetConfirmInput');
     const btn = document.getElementById('btnResetData');
+    if (!SHOW_RESET) return;
     input.addEventListener('input', () => {
       btn.disabled = input.value.trim() !== 'HAPUS';
     });
