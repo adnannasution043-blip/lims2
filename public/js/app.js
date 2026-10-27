@@ -204,7 +204,7 @@
 
   const NAV_MODULE = {
     dashboard: 'dashboard', 'permintaan-uji': 'permintaan-uji', 'work-order': 'work-order', tasks: 'tasks',
-    'pengecekan-spesimen': 'pengecekan-spesimen', machining: 'machining', 'hasil-laporan': 'hasil-laporan', 'manajemen-data': 'master-data',
+    'pengecekan-spesimen': 'pengecekan-spesimen', machining: 'machining', 'hasil-laporan': 'hasil-laporan', witness: 'witness', 'manajemen-data': 'master-data',
     pengguna: 'pengguna', pengaturan: 'pengaturan'
   };
   const navModule = key => (key.startsWith('q-') ? 'antrian-kerja' : NAV_MODULE[key]);
@@ -410,6 +410,9 @@
         render();
       } else if (key === 'hasil-laporan') {
         state.view = 'lhu-list';
+        render();
+      } else if (key === 'witness') {
+        state.view = 'witness-list';
         render();
       } else if (key === 'timeline') {
         state.view = 'timeline';
@@ -2940,7 +2943,6 @@
             ${stagePill(stage.status)}
           </div>
           ${stage.kind === 'derived' ? preparationBodyHtml(t) : woTaskFormHtml(t)}
-          ${stage.key === 'testing' ? '<div id="witnessWrap" class="card witness-card"><p class="muted">Memuat data witness...</p></div>' : ''}
         </section>
       </div>
     `;
@@ -2966,81 +2968,150 @@
     else bindWoTaskFormEvents(t);
     bindSheetShortcuts(t);
     if (stage.key === 'receiving') initReceivingEvidence(t);
-    if (stage.key === 'testing') loadWitness(t);
   }
 
-  // ---------- Witness oleh client (tahap Testing) ----------
-  // Tiap sesi = Daftar Kehadiran Witness + Berita Acara Witness (nomor BA otomatis). Peserta tanda tangan langsung di
-  // layar; nama peserta mengisi Witnessed By Lembar coupon yang disaksikan, dan kedua dokumen ikut menjadi lampiran LHU.
+  // ---------- Menu Witness (Berita Acara & Daftar Hadir Witness client) ----------
+  // Modul sendiri di luar tahapan teknis (usul klien), tetap tertaut ke Job No.: pilih pekerjaan, data coupon & pengujian
+  // terisi dari Permintaan Uji, lalu isi daftar hadir dan tanda tangan di layar. Nomor BA otomatis; nama peserta mengisi
+  // Witnessed By di Lembar Hasil Uji; BA & Daftar Hadir ikut menjadi lampiran LHU coupon yang disaksikan.
   const WITNESS_DEFAULT_PLACE = 'Laboratorium Pengujian Material PT Detech Profesional Indonesia';
   const WITNESS_DEFAULT_SIGNER = { name: 'Fajar Pangestu, S.Tr.T.', title: 'Manager Teknis' };
 
-  function witnessCoupons(t) {
-    const seen = new Map();
-    (t.items || []).forEach(it => { if (!seen.has(it.coupon_row_no)) seen.set(it.coupon_row_no, it.sample_marking || it.coupon_label || 'Coupon #' + it.coupon_row_no); });
-    return [...seen].map(([row, label]) => ({ row, label }));
+  async function renderWitnessList() {
+    pageTitle.textContent = 'Witness';
+    pageSubtitle.textContent = 'Berita Acara & Daftar Hadir Witness client, tertaut ke Job No.';
+    topbarActions.innerHTML = can('witness', 'create') ? '<button class="btn btn-primary" id="btnWitnessNew">+ Berita Acara Witness</button>' : '';
+    const nb = document.getElementById('btnWitnessNew');
+    if (nb) nb.addEventListener('click', () => openWitnessForm(null));
+    contentEl.innerHTML = '<div class="card"><p class="muted">Memuat data...</p></div>';
+    let sessions = [];
+    try { sessions = (await api('/api/witness-sessions')).sessions || []; }
+    catch (err) { contentEl.innerHTML = `<div class="card"><p class="muted">Gagal memuat: ${esc(err.message)}</p></div>`; return; }
+    sessions.forEach(x => { x._people = x.attendees.map(a => a.name + ' ' + a.company).join(' '); });
+    contentEl.innerHTML = `
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Berita Acara Witness</p>
+          <p class="card-desc">${sessions.length} sesi witness &mdash; BA &amp; Daftar Hadir ikut menjadi lampiran LHU coupon yang disaksikan</p>
+        </div>
+        <div id="witnessTableArea"></div>
+      </div>`;
+    renderSearchablePaginatedTable({
+      key: 'witness',
+      containerEl: document.getElementById('witnessTableArea'),
+      allRows: sessions,
+      searchFields: ['ba_no', 'job_number', 'company', 'project_name', '_people'],
+      searchPlaceholder: 'Cari No. BA, Job No., perusahaan, proyek, atau nama saksi...',
+      emptyHtml: '<p class="muted" style="padding:0 24px 16px;">Belum ada Berita Acara Witness.</p>',
+      renderTableHtml: rows => `
+        <table class="data-table witness-table">
+          <thead><tr><th>No. Berita Acara</th><th>Tanggal</th><th>Job No. / Perusahaan</th><th>Peserta</th><th></th></tr></thead>
+          <tbody>${rows.map(x => `<tr>
+            <td><strong>${esc(x.ba_no)}</strong></td>
+            <td>${esc(formatDateOnly(x.session_date))}${x.session_time ? '<br><span class="muted">' + esc(x.session_time) + '</span>' : ''}</td>
+            <td><strong>${esc(x.job_number)}</strong><br><span class="muted">${esc(x.company)}${x.project_name ? ' &middot; ' + esc(x.project_name) : ''}</span></td>
+            <td>${x.attendees.length} orang<br><span class="muted">${esc(x.attendees.map(a => a.name).filter(Boolean).slice(0, 3).join(', '))}${x.attendees.length > 3 ? ', …' : ''}</span></td>
+            <td class="witness-actions">
+              <a class="btn btn-sm btn-primary" href="/witness-sessions/${x.id}/print" target="_blank" rel="noopener">Cetak BA + Daftar Hadir</a>
+              <a class="btn btn-sm" href="/witness-sessions/${x.id}/print?doc=ba" target="_blank" rel="noopener">BA</a>
+              <a class="btn btn-sm" href="/witness-sessions/${x.id}/print?doc=dh" target="_blank" rel="noopener">Daftar Hadir</a>
+              ${can('witness', 'edit') ? `<button type="button" class="btn btn-sm" data-witness-edit="${x.id}">Edit</button>` : ''}
+              ${can('witness', 'delete') ? `<button type="button" class="btn btn-sm btn-danger" data-witness-del="${x.id}">Hapus</button>` : ''}
+            </td></tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: container => {
+        container.querySelectorAll('[data-witness-edit]').forEach(b => b.addEventListener('click', () => openWitnessForm(Number(b.dataset.witnessEdit))));
+        container.querySelectorAll('[data-witness-del]').forEach(b => b.addEventListener('click', async () => {
+          if (!confirm('Hapus Berita Acara Witness ini beserta Daftar Hadirnya?')) return;
+          try {
+            await api(`/api/witness-sessions/${b.dataset.witnessDel}`, { method: 'DELETE' });
+            toast('Berita Acara Witness dihapus', 'success');
+            renderWitnessList();
+          } catch (err) { toast(err.message, 'error'); }
+        }));
+      }
+    });
   }
 
-  async function loadWitness(t) {
-    const wrap = document.getElementById('witnessWrap');
-    if (!wrap) return;
+  // id = sesi yang diedit, atau null untuk BA baru (pilih Job No. dulu)
+  async function openWitnessForm(id) {
+    state.view = 'witness-form';
+    syncNavActive();
+    contentEl.innerHTML = '<div class="card"><p class="muted">Memuat data...</p></div>';
     try {
-      state.witnessSessions = (await api(`/api/work-orders/${t.work_order.id}/witness`)).sessions || [];
-    } catch (err) {
-      wrap.innerHTML = `<p class="muted">Gagal memuat data witness: ${esc(err.message)}</p>`;
+      if (id) {
+        const sess = await api(`/api/witness-sessions/${id}`);
+        state.witnessJob = await api(`/api/witness-jobs/${sess.work_order_id}`);
+        state.witnessEdit = sess;
+      } else {
+        state.witnessJobs = (await api('/api/witness-jobs')).jobs || [];
+        state.witnessJob = null;
+        state.witnessEdit = null;
+      }
+    } catch (err) { toast(err.message, 'error'); state.view = 'witness-list'; render(); return; }
+    renderWitnessForm();
+  }
+
+  function newWitnessSession(job) {
+    return {
+      id: null, ba_no: '', work_order_id: job.id, session_date: todayISODate(), session_time: '', place: WITNESS_DEFAULT_PLACE,
+      agenda: 'Witness Pengujian Material ' + (job.company || ''), coupon_rows: [], notes: '',
+      detech_signer: { ...WITNESS_DEFAULT_SIGNER, signature: '' }, attendees: [{ name: '', company: job.company || '', phone: '', email: '', signature: '' }]
+    };
+  }
+
+  function witnessJobHtml(job, rows) {
+    const shown = job.coupons.filter(c => !rows.length || rows.includes(c.row));
+    return `<div class="witness-job">
+      <div class="witness-job-facts">
+        <div><span>Job No.</span><b>${esc(job.job_number) || '-'}</b></div>
+        <div><span>Perusahaan</span><b>${esc(job.company) || '-'}</b></div>
+        <div><span>Atas Nama Perusahaan</span><b>${esc(job.on_behalf_owner) || '-'}</b></div>
+        <div><span>PO No.</span><b>${esc(job.po_number) || '-'}</b></div>
+        <div><span>Project Name</span><b>${esc(job.project_name) || '-'}</b></div>
+      </div>
+      <table class="data-table witness-job-table">
+        <thead><tr><th>Report No.</th><th>Coupon &amp; Material</th><th>Jenis Pengujian</th><th>Jumlah Spesimen</th></tr></thead>
+        <tbody>${shown.map(c => (c.tests.length ? c.tests : [{ test_name: '-', qty: '' }]).map((t, i) => `<tr>
+          ${i === 0 ? `<td rowspan="${c.tests.length || 1}">${esc(c.report_no) || '-'}</td><td rowspan="${c.tests.length || 1}"><strong>${esc(c.label)}</strong><br><span class="muted">${esc(c.material) || '-'}</span></td>` : ''}
+          <td>${esc(t.test_name)}</td><td>${esc(t.qty) || '-'}</td></tr>`).join('')).join('') || '<tr><td colspan="4" class="muted">Belum ada pengujian.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function renderWitnessForm() {
+    const ed = state.witnessEdit, job = state.witnessJob;
+    pageTitle.textContent = ed && ed.id ? 'Edit Berita Acara Witness' : 'Berita Acara Witness Baru';
+    pageSubtitle.textContent = job ? `${job.job_number} · ${job.company}` : 'Pilih Job No. untuk memulai';
+    topbarActions.innerHTML = '<button class="btn" id="btnWitnessBack">Kembali ke daftar</button>';
+    document.getElementById('btnWitnessBack').addEventListener('click', () => {
+      if (state.witnessEdit && !confirm('Tinggalkan halaman ini? Isian yang belum disimpan akan hilang.')) return;
+      state.view = 'witness-list'; render();
+    });
+    if (!job) {
+      contentEl.innerHTML = `<div class="card">
+        <p class="section-title">Pilih Pekerjaan</p>
+        <div class="field" style="max-width:640px;"><label>Job No. / Perusahaan / Proyek</label>
+          <select id="witnessJobSel"><option value="">— Pilih Job No. —</option>${(state.witnessJobs || []).map(j => `<option value="${j.id}">${esc(j.job_number)} — ${esc(j.company)}${j.project_name ? ' · ' + esc(j.project_name) : ''}</option>`).join('')}</select></div>
+        <p class="muted" style="margin-top:8px;">Data perusahaan, coupon, Report No., dan pengujian diambil dari Permintaan Uji pekerjaan itu.</p>
+      </div>`;
+      document.getElementById('witnessJobSel').addEventListener('change', async e => {
+        if (!e.target.value) return;
+        try {
+          state.witnessJob = await api(`/api/witness-jobs/${e.target.value}`);
+          state.witnessEdit = newWitnessSession(state.witnessJob);
+          renderWitnessForm();
+        } catch (err) { toast(err.message, 'error'); }
+      });
       return;
     }
-    state.witnessEdit = null;
-    renderWitness(t);
-  }
-
-  function renderWitness(t) {
-    const wrap = document.getElementById('witnessWrap');
-    if (!wrap) return;
-    if (state.witnessEdit) { renderWitnessEditor(t); return; }
-    const coupons = witnessCoupons(t);
-    const label = rows => (rows.length ? rows.map(r => (coupons.find(c => c.row === r) || {}).label || '#' + r).join(', ') : 'Semua coupon');
-    const sessions = state.witnessSessions || [];
-    wrap.innerHTML = `
-      <div class="witness-head">
-        <div><p class="section-title" style="margin:0;">Witness Client <span class="en">Daftar Kehadiran &amp; Berita Acara Witness &middot; ikut menjadi lampiran LHU</span></p></div>
-        ${t.locked ? '' : '<button type="button" class="btn btn-primary btn-sm" id="btnWitnessAdd">+ Sesi Witness</button>'}
+    contentEl.innerHTML = `
+      <div class="card">
+        <p class="section-title">Data Pekerjaan <span class="en">dari Permintaan Uji &amp; Work Order; tercetak di Berita Acara</span></p>
+        <div id="witnessJobInfo">${witnessJobHtml(job, ed.coupon_rows)}</div>
       </div>
-      ${sessions.length ? `<table class="data-table witness-table">
-        <thead><tr><th>No. Berita Acara</th><th>Tanggal &amp; Waktu</th><th>Coupon</th><th>Peserta</th><th></th></tr></thead>
-        <tbody>${sessions.map(s => `<tr>
-          <td><strong>${esc(s.ba_no)}</strong></td>
-          <td>${esc(formatDateOnly(s.session_date))}${s.session_time ? ' &middot; ' + esc(s.session_time) : ''}</td>
-          <td>${esc(label(s.coupon_rows))}</td>
-          <td>${s.attendees.length} orang<br><span class="muted">${esc(s.attendees.map(a => a.name).filter(Boolean).slice(0, 3).join(', '))}${s.attendees.length > 3 ? ', …' : ''}</span></td>
-          <td class="witness-actions">
-            <a class="btn btn-sm" href="/witness-sessions/${s.id}/print?doc=dh" target="_blank" rel="noopener">Daftar Hadir</a>
-            <a class="btn btn-sm" href="/witness-sessions/${s.id}/print?doc=ba" target="_blank" rel="noopener">Berita Acara</a>
-            ${t.locked ? '' : `<button type="button" class="btn btn-sm" data-witness-edit="${s.id}">Edit</button><button type="button" class="btn btn-sm btn-danger" data-witness-del="${s.id}">Hapus</button>`}
-          </td></tr>`).join('')}</tbody></table>`
-        : '<p class="muted" style="margin:10px 0 0;">Belum ada sesi witness. Tambahkan bila pengujian disaksikan client.</p>'}`;
-    const add = document.getElementById('btnWitnessAdd');
-    if (add) add.addEventListener('click', () => {
-      state.witnessEdit = {
-        id: null, ba_no: '', session_date: todayISODate(), session_time: '', place: WITNESS_DEFAULT_PLACE,
-        agenda: 'Witness Pengujian Material ' + (t.work_order.company || ''), coupon_rows: [], notes: '',
-        detech_signer: { ...WITNESS_DEFAULT_SIGNER, signature: '' }, attendees: [{ name: '', company: t.work_order.company || '', phone: '', email: '', signature: '' }]
-      };
-      renderWitness(t);
-    });
-    wrap.querySelectorAll('[data-witness-edit]').forEach(b => b.addEventListener('click', () => {
-      const s = sessions.find(x => x.id === Number(b.dataset.witnessEdit));
-      state.witnessEdit = JSON.parse(JSON.stringify(s));
-      renderWitness(t);
-    }));
-    wrap.querySelectorAll('[data-witness-del]').forEach(b => b.addEventListener('click', async () => {
-      if (!confirm('Hapus sesi witness ini beserta Daftar Hadir & Berita Acaranya?')) return;
-      try {
-        await api(`/api/witness-sessions/${b.dataset.witnessDel}`, { method: 'DELETE' });
-        toast('Sesi witness dihapus', 'success');
-        loadWitness(t);
-      } catch (err) { toast(err.message, 'error'); }
-    }));
+      <div class="card" id="witnessWrap"></div>`;
+    renderWitnessEditor();
   }
 
   function witnessPadHtml(key, dataUrl) {
@@ -3069,14 +3140,16 @@
     });
   }
 
-  function renderWitnessEditor(t) {
+  function renderWitnessEditor() {
     const wrap = document.getElementById('witnessWrap');
-    const ed = state.witnessEdit;
-    const coupons = witnessCoupons(t);
-    const companies = [...new Set([t.work_order.company, ...CUSTOMERS.map(customerCompany)].filter(Boolean))];
+    const ed = state.witnessEdit, job = state.witnessJob;
+    const coupons = job.coupons;
+    const locked = job.locked;
+    const companies = [...new Set([job.company, ...CUSTOMERS.map(customerCompany)].filter(Boolean))];
     wrap.innerHTML = `
-      <div class="witness-head"><p class="section-title" style="margin:0;">${ed.id ? 'Edit Sesi Witness — ' + esc(ed.ba_no) : 'Sesi Witness Baru'}</p></div>
+      ${locked ? '<p class="witness-locked">LHU pekerjaan ini sudah terbit, jadi data witness terkunci (hanya bisa dilihat dan dicetak).</p>' : ''}
       <form id="witnessForm">
+        <fieldset class="task-fieldset" ${locked ? 'disabled' : ''}>
         <div class="form-grid">
           <div class="field"><label>No. Berita Acara <span class="en">otomatis</span></label><input type="text" name="ba_no" value="${esc(ed.ba_no)}" ${ed.id ? '' : 'disabled placeholder="dibuat otomatis saat disimpan"'}></div>
           <div class="field"><label>Tanggal Witness</label><input type="date" name="session_date" value="${esc(ed.session_date)}"></div>
@@ -3085,7 +3158,7 @@
           <div class="field full"><label>Agenda</label><input type="text" name="agenda" value="${esc(ed.agenda)}"></div>
         </div>
         <p class="subcard-title" style="margin-top:14px;">Coupon yang disaksikan <span class="en">tidak dicentang satu pun = semua coupon</span></p>
-        <div class="witness-coupons">${coupons.map(c => `<label class="chk"><input type="checkbox" data-wcoupon="${c.row}" ${ed.coupon_rows.includes(c.row) ? 'checked' : ''}> ${esc(c.label)}</label>`).join('') || '<span class="muted">Belum ada pengujian pada Work Order ini.</span>'}</div>
+        <div class="witness-coupons">${coupons.map(c => `<label class="chk"><input type="checkbox" data-wcoupon="${c.row}" ${ed.coupon_rows.includes(c.row) ? 'checked' : ''}> ${esc(c.label)}${c.report_no ? ' <span class="muted">(' + esc(c.report_no) + ')</span>' : ''}</label>`).join('') || '<span class="muted">Belum ada coupon pada pekerjaan ini.</span>'}</div>
 
         <p class="subcard-title" style="margin-top:14px;">Daftar Hadir <span class="en">nama &amp; perusahaan juga mengisi Witnessed By di Lembar Hasil Uji yang masih kosong</span></p>
         <div class="witness-people">${ed.attendees.map((a, i) => `
@@ -3110,9 +3183,10 @@
           </div>
           <div class="witness-sign"><label>Tanda Tangan <span class="en">opsional</span></label>${witnessPadHtml('signer', ed.detech_signer.signature)}</div>
         </div>
+        </fieldset>
         <div class="form-actions">
-          <div><button type="button" class="btn" id="btnWitnessCancel">Batal</button></div>
-          <div class="right"><button type="submit" class="btn btn-primary">Simpan Sesi Witness</button></div>
+          <div>${ed.id ? `<a class="btn" href="/witness-sessions/${ed.id}/print" target="_blank" rel="noopener">Cetak BA + Daftar Hadir</a>` : ''}</div>
+          <div class="right">${locked ? '' : '<button type="submit" class="btn btn-primary">Simpan Berita Acara Witness</button>'}</div>
         </div>
       </form>
       <datalist id="witnessCompanyList">${companies.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
@@ -3123,24 +3197,26 @@
       const el = e.target;
       if (el.dataset.watt !== undefined) ed.attendees[Number(el.dataset.watt)][el.dataset.f] = el.value;
       else if (el.dataset.wsigner) ed.detech_signer[el.dataset.wsigner] = el.value;
-      else if (el.dataset.wcoupon) ed.coupon_rows = [...form.querySelectorAll('[data-wcoupon]:checked')].map(x => Number(x.dataset.wcoupon));
-      else syncHead();
+      else if (el.dataset.wcoupon) {
+        ed.coupon_rows = [...form.querySelectorAll('[data-wcoupon]:checked')].map(x => Number(x.dataset.wcoupon));
+        document.getElementById('witnessJobInfo').innerHTML = witnessJobHtml(job, ed.coupon_rows);
+      } else syncHead();
     });
+    if (locked) return;
     bindWitnessPads(
       key => (key === 'signer' ? ed.detech_signer.signature : (ed.attendees[Number(key.slice(1))] || {}).signature),
       (key, val) => { if (key === 'signer') ed.detech_signer.signature = val; else ed.attendees[Number(key.slice(1))].signature = val; });
     document.getElementById('btnWitnessPerson').addEventListener('click', () => {
       syncHead();
       ed.attendees.push({ name: '', company: (ed.attendees[ed.attendees.length - 1] || {}).company || '', phone: '', email: '', signature: '' });
-      renderWitnessEditor(t);
+      renderWitnessEditor();
     });
     form.querySelectorAll('[data-watt-del]').forEach(b => b.addEventListener('click', () => {
       syncHead();
       ed.attendees.splice(Number(b.dataset.wattDel), 1);
       if (!ed.attendees.length) ed.attendees.push({ name: '', company: '', phone: '', email: '', signature: '' });
-      renderWitnessEditor(t);
+      renderWitnessEditor();
     }));
-    document.getElementById('btnWitnessCancel').addEventListener('click', () => { state.witnessEdit = null; renderWitness(t); });
     form.addEventListener('submit', async e => {
       e.preventDefault();
       syncHead();
@@ -3148,11 +3224,13 @@
       if (!people.length) { toast('Isi minimal satu peserta', 'error'); return; }
       if (people.some(a => !a.name.trim())) { toast('Nama peserta wajib diisi', 'error'); return; }
       try {
-        const saved = await api(ed.id ? `/api/witness-sessions/${ed.id}` : `/api/work-orders/${t.work_order.id}/witness`, {
+        const saved = await api(ed.id ? `/api/witness-sessions/${ed.id}` : `/api/work-orders/${job.id}/witness`, {
           method: ed.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...ed, attendees: people })
         });
-        toast(`Sesi witness ${saved.ba_no} tersimpan${saved.filled_reports ? ` · Witnessed By terisi di ${saved.filled_reports} Lembar` : ''}`, 'success');
-        loadWitness(t);
+        toast(`Berita Acara ${saved.ba_no} tersimpan${saved.filled_reports ? ` · Witnessed By terisi di ${saved.filled_reports} Lembar` : ''}`, 'success');
+        state.witnessEdit = null;
+        state.view = 'witness-list';
+        render();
       } catch (err) { toast(err.message, 'error'); }
     });
   }
@@ -5899,6 +5977,7 @@
     timeline: 'timeline',
     'specimen-list': 'pengecekan-spesimen', 'specimen-form': 'pengecekan-spesimen',
     'lhu-list': 'hasil-laporan', 'lhu-detail': 'hasil-laporan',
+    'witness-list': 'witness', 'witness-form': 'witness',
     machining: 'machining',
     settings: 'pengaturan',
     users: 'pengguna'
@@ -5927,6 +6006,8 @@
     else if (state.view === 'specimen-form') renderSpecimenForm();
     else if (state.view === 'lhu-list') renderLhuList();
     else if (state.view === 'machining') renderMachining();
+    else if (state.view === 'witness-list') renderWitnessList();
+    else if (state.view === 'witness-form') renderWitnessForm();
     else if (state.view === 'lhu-detail') renderLhuDetail();
     else if (state.view === 'settings') renderSettings();
     else if (state.view === 'users') renderUsers();

@@ -746,6 +746,18 @@ async function initSchema() {
     );
     await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_role_machining', '1') ON CONFLICT (key) DO NOTHING`);
   }
+  // Modul Witness (baru): role yang sudah bisa mengisi Tasks diberi akses penuh sekali; setelah itu diatur di Role & Hak Akses
+  const seededWitness = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_witness_permission'`);
+  if (!seededWitness.rows.length) {
+    const { rows: roleRows } = await pool.query('SELECT id, permissions FROM roles WHERE is_system = FALSE');
+    for (const r of roleRows) {
+      const perms = r.permissions || {};
+      if (Array.isArray(perms.tasks) && perms.tasks.includes('edit') && !(perms.witness || []).includes('create')) {
+        await pool.query('UPDATE roles SET permissions = $1 WHERE id = $2', [JSON.stringify({ ...perms, witness: ['view', 'create', 'edit', 'delete'] }), r.id]);
+      }
+    }
+    await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_witness_permission', '1') ON CONFLICT (key) DO NOTHING`);
+  }
   // Pola Hardness bawaan (susunan form resmi) ditambahkan sekali; boleh diubah atau dihapus di Master Data
   const seededHard = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_hardness_patterns'`);
   if (!seededHard.rows.length) {

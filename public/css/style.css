@@ -2094,3 +2094,10 @@ table .ss { min-width: 98px; }
 #witnessForm .form-grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 .witness-person > * { min-width: 0; }
 .witness-actions { white-space: normal; }
+
+/* Menu Witness */
+.witness-job-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px 18px; margin-bottom: 12px; }
+.witness-job-facts span { display: block; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; }
+.witness-job-facts b { font-size: 14px; }
+.witness-job-table td { vertical-align: top; }
+.witness-locked { background: #fff6e5; border: 1px solid #f0c36d; color: #7a4b00; padding: 8px 12px; border-radius: 8px; margin: 0 0 12px; }

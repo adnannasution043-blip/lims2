@@ -23,11 +23,19 @@ assert.strictEqual(materialText({ coupon_type: [], coupon_type_other: 'Pipe', th
 assert.deepStrictEqual(longDate('2026-10-15'), { day: 'Kamis', date: 15, month: 'Oktober', year: 2026, short: '15/10/2026' });
 
 // ---- hak akses ----
+// modul Witness sendiri (bukan Tasks); dokumennya juga terbuka untuk Hasil & Laporan (lampiran LHU)
 const tech = { permissions: { tasks: ['view', 'edit'] } };
+const witnessUser = { permissions: { witness: ['view', 'create', 'edit'] } };
+const witnessViewer = { permissions: { witness: ['view'] } };
 const lhuViewer = { permissions: { 'hasil-laporan': ['view'] } };
 const can = (u, m, p) => A.allowed(u, A.ruleFor(m, p), m);
-assert.ok(can(tech, 'POST', '/api/work-orders/5/witness'));
-assert.ok(can(tech, 'PUT', '/api/witness-sessions/3'));
+assert.ok(can(witnessUser, 'POST', '/api/work-orders/5/witness'));
+assert.ok(can(witnessUser, 'PUT', '/api/witness-sessions/3'));
+assert.ok(!can(witnessUser, 'DELETE', '/api/witness-sessions/3'), 'hapus butuh hak Hapus');
+assert.ok(can(witnessViewer, 'GET', '/api/witness-sessions') && can(witnessViewer, 'GET', '/api/witness-jobs/5'));
+assert.ok(!can(witnessViewer, 'POST', '/api/work-orders/5/witness'));
+assert.ok(!can(tech, 'POST', '/api/work-orders/5/witness'), 'Tasks saja tidak cukup');
+assert.ok(require('../lib/users').PERMISSION_MODULES.some(m => m.key === 'witness'));
 assert.ok(can(lhuViewer, 'GET', '/witness-sessions/3/print'));
 assert.ok(!can(lhuViewer, 'PUT', '/api/witness-sessions/3'));
 
@@ -44,6 +52,7 @@ const WO = {
 let sessions = [];
 let seq = 0;
 const updates = [];
+const lockedReq = [];
 const pool = {
   async query(sql, p) {
     if (/SELECT COALESCE\(MAX\(ba_seq\)/.test(sql)) return { rows: [{ m: sessions.filter(s => s.ba_year === p[0]).reduce((m, s) => Math.max(m, s.ba_seq), 0) }] };
@@ -60,6 +69,9 @@ const pool = {
     if (/^UPDATE test_reports SET witnessed_by/.test(sql)) { updates.push(p); return { rowCount: 2 }; }
     if (/FROM witness_sessions WHERE work_order_id/.test(sql)) return { rows: sessions.filter(s => s.work_order_id === Number(p[0])) };
     if (/^SELECT \* FROM witness_sessions WHERE id/.test(sql)) return { rows: sessions.filter(s => s.id === Number(p[0])) };
+    if (/FROM witness_sessions s\s+JOIN work_orders/.test(sql)) return { rows: sessions.map(x => ({ ...x, job_number: 'DE.1.26.1191', company: 'PT GRUNDFOS POMPA', project_name: 'Pompa' })) };
+    if (/FROM work_orders w\s+JOIN test_requests tr/.test(sql)) return { rows: [{ id: 5, job_number: 'DE.1.26.1191', company: 'PT GRUNDFOS POMPA', project_name: 'Pompa' }] };
+    if (/FROM work_orders w JOIN work_order_tasks t/.test(sql)) return { rows: lockedReq.includes(p[0]) ? [{ 1: 1 }] : [] };
     if (/^DELETE FROM witness_sessions/.test(sql)) { const n = sessions.length; sessions = sessions.filter(s => s.id !== Number(p[0])); return { rowCount: n - sessions.length }; }
     throw new Error('unexpected sql ' + sql);
   }
@@ -112,6 +124,23 @@ const call = (key, params, body, query) => new Promise(resolve => {
   const att2 = await api.witnessAttachment(WO, 2);
   assert.strictEqual(att2.pages.length, 2);
   assert.strictEqual(await api.witnessDefault(WO, 1), 'Indra of PT Teknik Jaya Sakti, Nugraha U. of PT Rafa Karya Indonesia');
+
+  // menu Witness: daftar semua sesi (tanpa gambar tanda tangan), pilihan Job No., data pekerjaan
+  r = await call('GET /api/witness-sessions');
+  assert.strictEqual(r.body.sessions.length, 2);
+  assert.strictEqual(r.body.sessions[0].job_number, 'DE.1.26.1191');
+  assert.ok(!JSON.stringify(r.body).includes(sigPng), 'daftar tidak memuat gambar tanda tangan');
+  assert.strictEqual(r.body.sessions.find(x => x.id === sid).attendees[0].signed, true);
+  r = await call('GET /api/witness-sessions/:sid', { sid: String(sid) });
+  assert.strictEqual(r.body.attendees[0].signature, sigPng, 'detail untuk diedit memuat tanda tangan');
+  r = await call('GET /api/witness-jobs');
+  assert.strictEqual(r.body.jobs[0].job_number, 'DE.1.26.1191');
+  r = await call('GET /api/witness-jobs/:id', { id: '5' });
+  assert.strictEqual(r.body.locked, false);
+  assert.deepStrictEqual(r.body.coupons[0], { row: 1, label: 'GP.1', report_no: 'DE.1/1026/4470', material: 'Plate, SS400, 12 mm Thickness', tests: [{ test_name: 'Tensile Test', qty: '1' }, { test_name: 'PMI', qty: '1' }] });
+  lockedReq.push(9);
+  assert.strictEqual((await call('GET /api/witness-jobs/:id', { id: '5' })).body.locked, true, 'LHU terbit -> terkunci');
+  assert.strictEqual((await call('GET /api/witness-jobs/:id', { id: '77' })).status, 404);
 
   r = await call('GET /api/work-orders/:id/witness', { id: '5' });
   assert.strictEqual(r.body.sessions.length, 2);
