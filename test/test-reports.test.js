@@ -571,12 +571,14 @@ function call(method, path, params, body) {
   assert.strictEqual(x.pages, 1);
   // hanya satu foto (makro dihapus): foto mikro mengisi area kedua kotak, di tengah, tanpa garis penunjuk
   x = await pagesPhotos('micro-weld', [{ marking_specimen: 'A' }]);
-  assert.ok(x.html.includes('x2="152"'), 'dua foto: garis penunjuk makro -> mikro dicetak');
+  const pointer = h => /<svg class="rt-shape"[^>]*><line x1="0" y1="0" x2="\d+" y2="7"/.test(h);   // garis miring (tinggi 7 px)
+  assert.ok(pointer(x.html), 'dua foto: garis penunjuk makro -> mikro dicetak');
   await new Promise(resolve => routes['DELETE /api/test-reports/:id/photo']({ params: { id: String(msid) }, query: { slot: 'micro-weld/s1' } }, { json: resolve }));
   x = await pagesPhotos('micro-weld', [{ marking_specimen: 'A' }]);
   assert.strictEqual(x.photos, 1);
-  assert.ok(/width:623px;height:218px;object-fit:contain/.test(x.html), 'satu foto selebar dua kotak, shrink to fit');
-  assert.ok(!x.html.includes('x2="152"'), 'garis penunjuk tidak dicetak');
+  // kotak gabungan = lebar kedua kotak (623 px di form) yang ikut menyempit bersama kolom agar muat A4 (lebar isi 740 px)
+  assert.ok(new RegExp('width:' + Math.round(623 * 740 / 837) + 'px;height:218px;object-fit:contain').test(x.html), 'satu foto selebar dua kotak, shrink to fit');
+  assert.ok(!pointer(x.html), 'garis penunjuk tidak dicetak');
 
   // ---- Nick Break ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Nick Break Test' });
