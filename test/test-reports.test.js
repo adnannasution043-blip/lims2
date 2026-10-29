@@ -43,6 +43,15 @@ const MAP = { 'Bend Root': 'bending', 'Bend Face': 'bending', 'Tensile Test': 't
   assert.ok(!html.includes('class="rt-stamp"'), 'tanpa stempel bila tidak dipilih');
   html = renderTestReportPrintHtml({ ...base, approved_signatory: { status: '', name: 'Draft', signature: null, stamp: null } });
   assert.ok(html.includes('Pangestu'), 'belum disetujui: nama bawaan form tetap');
+  // Tensile: alat dari Master Equipment -> baris contoh "S/N : ..." form tidak dicetak; keterangan BBGM/BOGM di Remarks
+  const machine = 'Computer Servo Hydraulic Universal Testing Machine 1000kN HT-2101, S/N : 2311';
+  const legend = 'BBGM : Broke Between Gauge Marks; BOGM : Broke Outside Gauge Marks';
+  html = renderTestReportPrintHtml({ ...base, template: 'tn-mat', testing_machine: machine, remarks: '-', rows: [{ marking_specimen: 'A-TS1', location: 'BBGM' }] });
+  assert.ok(html.includes(legend) && !html.includes('S/N : 2312') && !html.includes('S/N : 286684'));
+  html = renderTestReportPrintHtml({ ...base, testing_machine: machine, remarks: 'Retest', rows: [{ marking_specimen: 'A-TS1', location: 'BOGM' }] });
+  assert.ok(html.includes('Retest<br>' + legend), 'form lain: keterangan ditambahkan bila BBGM/BOGM dipakai');
+  html = renderTestReportPrintHtml({ ...base, rows: [{ marking_specimen: 'A-TS1', location: 'Base Metal' }] });
+  assert.ok(!html.includes('Broke Between') && html.includes('S/N : 2312'), 'tanpa BBGM/BOGM & tanpa alat terpilih: form apa adanya');
   // Witnessed By: tiap saksi di baris sendiri
   html = renderTestReportPrintHtml({ ...base, witnessed_by: 'Mr A of Pertamina, Mr B of JGC Japan' });
   assert.ok(html.includes('Mr A of Pertamina<br>Mr B of JGC Japan'), 'saksi tersusun ke bawah');
