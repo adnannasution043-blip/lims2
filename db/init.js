@@ -458,6 +458,15 @@ async function initSchema() {
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS job_title TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS signature_image BYTEA;
 
+    -- Token QR verifikasi keaslian LHU (satu per Work Order + coupon); dipakai halaman publik /verify/<token>
+    CREATE TABLE IF NOT EXISTS lhu_verify_tokens (
+      token TEXT PRIMARY KEY,
+      work_order_id INTEGER NOT NULL REFERENCES work_orders(id) ON DELETE CASCADE,
+      coupon_row_no INTEGER NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE (work_order_id, coupon_row_no)
+    );
+
     -- Witness oleh client (tahap Testing): satu sesi = Daftar Kehadiran + Berita Acara Witness (nomor BA urut per tahun)
     CREATE TABLE IF NOT EXISTS witness_sessions (
       id SERIAL PRIMARY KEY,

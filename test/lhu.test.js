@@ -17,7 +17,8 @@ const state = {
   ],
   dist: [{ id: 1, work_order_id: 1, coupon_row_no: null, status: 'sent' }],
   reports: [{ id: 5, coupon_row_no: 1, status: 'final' }, { id: 6, coupon_row_no: 1, status: 'draft' }, { id: 7, coupon_row_no: 2, status: 'final' }],
-  inserted: []
+  inserted: [],
+  tokens: []
 };
 const pool = {
   async query(sql, p = []) {
@@ -38,6 +39,10 @@ const pool = {
     if (/^INSERT INTO lhu_distributions/.test(q)) { state.inserted.push(p); return { rows: [{ id: 9, work_order_id: p[0] }] }; }
     if (/^SELECT id FROM test_reports WHERE test_request_id = \$1 AND coupon_row_no = \$2 AND status = 'final'/.test(q)) return { rows: state.reports.filter(r => r.coupon_row_no === p[1] && r.status === 'final').map(r => ({ id: r.id })) };
     if (/^SELECT id FROM test_reports WHERE test_request_id = \$1 AND coupon_row_no = \$2 ORDER BY/.test(q)) return { rows: state.reports.filter(r => r.coupon_row_no === p[1]).map(r => ({ id: r.id })) };
+    if (/^SELECT token FROM lhu_verify_tokens WHERE work_order_id/.test(q)) return { rows: state.tokens.filter(t => t.work_order_id === p[0] && t.coupon_row_no === p[1]) };
+    if (/^INSERT INTO lhu_verify_tokens/.test(q)) { const t = { token: p[0], work_order_id: p[1], coupon_row_no: p[2] }; state.tokens.push(t); return { rows: [t] }; }
+    if (/^SELECT work_order_id, coupon_row_no FROM lhu_verify_tokens WHERE token/.test(q)) return { rows: state.tokens.filter(t => t.token === p[0]) };
+    if (/^SELECT approver_name, approver_title, approval_date, updated_at FROM work_order_tasks/.test(q)) return { rows: [{ approver_name: 'Fajar Pangestu, S.Tr.T', approver_title: 'Technical Manager', approval_date: '2026-10-21' }] };
     throw new Error('query tidak dikenal: ' + q.slice(0, 120));
   }
 };
@@ -56,7 +61,7 @@ const app = { get: (p, ...h) => { routes['GET ' + p] = h[h.length - 1]; }, post:
 registerLhuReportRoutes(app, { pool, getFullWorkOrder, printableReport, rawBody: (q, s, n) => n() });
 const call = (key, params, body) => new Promise(resolve => {
   const res = { code: 200, status(c) { this.code = c; return this; }, json(o) { resolve({ status: this.code, body: o }); }, send(o) { resolve({ status: this.code, body: o }); }, setHeader() {} };
-  routes[key]({ params, body: body || {} }, res);
+  routes[key]({ params, body: body || {}, protocol: 'http', get: h => ({ host: 'lims.test', 'x-forwarded-proto': 'https' })[h.toLowerCase()] }, res);
 });
 
 (async () => {
@@ -105,6 +110,34 @@ const call = (key, params, body) => new Promise(resolve => {
   const official = await call('GET /lhu-reports/:id/print', { id: '1-1' });
   assert.ok(imgs(official.body).some(x => x >= 300) && official.body.includes('Approved Signatory') && !official.body.includes('PRELIMINARY'));
   assert.strictEqual((await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '7' })).status, 404);
+
+  // QR verifikasi keaslian: ada di LHU resmi (bukan di Preliminary), berisi alamat /verify/<token acak>
+  r = await call('GET /lhu-reports/:id/print', { id: '1-1' });
+  assert.ok(r.body.includes('class="rt-qr"') && r.body.includes('Scan untuk verifikasi keaslian'), 'QR di LHU');
+  assert.strictEqual(state.tokens.length, 1);
+  const token = state.tokens[0].token;
+  assert.ok(/^[A-Za-z0-9_-]{20,}$/.test(token), 'token acak, bukan nomor urut');
+  r = await call('GET /lhu-reports/:id/print', { id: '1-1' });
+  assert.strictEqual(state.tokens.length, 1, 'token yang sama dipakai ulang');
+  const pre = await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '1' });
+  assert.ok(!pre.body.includes('class="rt-qr"'), 'Preliminary tanpa QR');
+  // halaman verifikasi publik
+  r = await call('GET /verify/:token', { token });
+  assert.strictEqual(r.status, 200);
+  assert.ok(r.body.includes('Valid') && r.body.includes('DE.1/1026/0001') && r.body.includes('ABC.10.1') && r.body.includes('Tensile Test') && r.body.includes('Fajar Pangestu'));
+  assert.ok(r.body.includes('/verify/' + token + '/lhu'), 'tautan LHU asli');
+  r = await call('GET /verify/:token/lhu', { token });
+  assert.ok(r.status === 200 && r.body.includes('salinan terverifikasi'));
+  r = await call('GET /verify/:token', { token: 'tidak-ada-token-seperti-ini' });
+  assert.strictEqual(r.status, 404);
+  assert.ok(r.body.includes('tidak terdaftar'));
+  assert.strictEqual((await call('GET /verify/:token', { token: '<script>' })).status, 404);
+  // LHU dicabut untuk revisi -> status peringatan, LHU asli tidak dibuka
+  state.issued.delete(1);
+  r = await call('GET /verify/:token', { token });
+  assert.ok(r.body.includes('dicabut untuk revisi') && !r.body.includes('/lhu"'));
+  assert.strictEqual((await call('GET /verify/:token/lhu', { token })).status, 404);
+  state.issued.add(1);
 
   console.log('LHU OK');
 })().catch(e => { console.error(e); process.exit(1); });
