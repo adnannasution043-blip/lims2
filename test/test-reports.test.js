@@ -682,7 +682,10 @@ function call(method, path, params, body) {
   h = await tnHtml('tn-weld', [{ marking_specimen: 'S1', dia: '12.5', gauge: '50', l1: '62', yield: '480', tensile: '575' }], { type_specimen: 'Round', test_speed: '10 mm/min' });
   assert.ok(h.includes('>24.0<') && h.includes('>122.72<') && h.includes('Round') && h.includes('10 mm/min'));
   h = await tnHtml('tn-bolt', [{ marking_specimen: 'PL1', kind: 'Proof Load', dia: '16', load: '95000' }, { marking_specimen: 'TS1', kind: 'Tensile', dia: '16', load: '120000' }]);
-  assert.ok(h.includes('Proof Load PL1') && h.includes('Thread is Good') && h.includes('>597<') && h.includes('12 MPa/s'));
+  assert.ok(h.includes('Proof Load<br>PL1') && h.includes('Thread is Good') && h.includes('>597<') && h.includes('12 MPa/s'));
+  // form Bolt tanpa baris: bawaan berpasangan Proof Load + Tensile per spesimen (PL1, TS1, PL2, TS2)
+  r = await call('PUT', '/api/test-reports/:id', { id: String(tid) }, { template: 'tn-bolt', status: 'draft', rows: [] });
+  assert.deepStrictEqual(r.body.rows.map(x => x.kind + ' ' + x.marking_specimen), ['Proof Load ABN.9.1-PL1', 'Tensile ABN.9.1-TS1', 'Proof Load ABN.9.1-PL2', 'Tensile ABN.9.1-TS2']);
   h = await tnHtml('tn-mat', [{ marking_specimen: 'S1', thickness: '6', width: '12.5', gauge: '50', l1: '63', yield: '360', tensile: '510' }]);
   assert.ok(h.includes('>75.00<') && h.includes('>26.0<'));
   r = await call('GET', '/api/test-reports/:id', { id: String(tid) });

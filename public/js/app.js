@@ -3377,7 +3377,13 @@
       const key = (sel && sel.value) || state.testReport.template;
       const info = state.testReport.template_tn[key] || { cols: [], bolt: false };
       const listFor = k => (k === 'location' ? 'tnLocList' : (k === 'failure' ? 'tnFailList' : ''));
-      return `<div style="overflow-x:auto;"><table class="task-table">
+      // Bolt / Nut: Proof Load + Tensile per spesimen (baris PL di atas baris TS spesimen yang sama)
+      const hasPl = state.testReportRows.some(r => r.kind === 'Proof Load');
+      const boltBar = info.bolt ? `<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap;">
+        <span class="muted">Tensile + Proof Load:</span>
+        <button type="button" class="btn btn-sm" data-bolt-pl="add">+ Baris Proof Load tiap spesimen</button>
+        ${hasPl ? '<button type="button" class="btn btn-sm btn-danger" data-bolt-pl="del">Hapus semua baris Proof Load</button>' : ''}</div>` : '';
+      return `${boltBar}<div style="overflow-x:auto;"><table class="task-table">
         <thead><tr>${info.bolt ? '<th>Jenis</th>' : ''}<th>Specimen No.</th>${info.cols.map(c => `<th>${esc(c.label)}</th>`).join('')}<th></th></tr></thead>
         <tbody>${state.testReportRows.map((r, idx) => `
           <tr data-trow="${idx}">
@@ -3651,6 +3657,23 @@
     // hanya tampil untuk baris di atas Qty
     const qty = Number(state.testReport && state.testReport.qty) || 0;
     if (qty && state.testReportRows.length <= qty) wrap.querySelectorAll('[data-trow-remove]').forEach(b => { b.style.display = 'none'; });
+    wrap.querySelectorAll('[data-bolt-pl]').forEach(btn => btn.addEventListener('click', () => {
+      const rows = state.testReportRows;
+      if (btn.dataset.boltPl === 'del') {
+        state.testReportRows = rows.filter(r => r.kind !== 'Proof Load');
+      } else {
+        const have = new Set(rows.filter(r => r.kind === 'Proof Load').map(r => r.marking_specimen));
+        const out = [];
+        rows.forEach(r => {
+          const pl = String(r.marking_specimen || '').replace(/[A-Za-z]+(\d+)$/, 'PL$1');
+          if (r.kind !== 'Proof Load' && !have.has(pl)) out.push({ ...blankTestReportRow(), dia: r.dia || '', kind: 'Proof Load', marking_specimen: pl });
+          out.push(r);
+        });
+        state.testReportRows = out;
+      }
+      state.testReportDirty = true;
+      rerenderTestReportRows();
+    }));
     wrap.addEventListener('input', handleTestReportRowInput);
     wrap.addEventListener('change', handleTestReportRowInput);
     wrap.addEventListener('change', handleMacroPhotoChange);
