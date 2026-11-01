@@ -23,6 +23,18 @@ const MAP = { 'Bend Root': 'bending', 'Bend Face': 'bending', 'Tensile Test': 't
   ['Compression Test', 'Compression test (ASTM E9)', 'compression', 'Uji Tekan'].forEach(n => assert.strictEqual(defaultTemplate(n, {}), 'tn-comp', n));
   assert.strictEqual(defaultTemplate('Tensile Test', {}), 'tn-mat');
   assert.strictEqual(defaultTemplate('Decorative Test', {}), null);
+  // Charpy > 9 spesimen: dilanjutkan di halaman berikutnya, grup V-Notch tidak dipecah
+  {
+    const { renderTemplateReportHtml } = require(ROOT + 'lib/testReportTemplatePrint.js');
+    const notches = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
+    const rows = notches.flatMap(n => [1, 2, 3].map(i => ({ notch_position: n, impact: String(10 * i) })));
+    const ch = renderTemplateReportHtml({ template: 'charpy-weld', test_request: {}, coupon: {}, fields: {}, rows });
+    assert.strictEqual((ch.match(/class="paper"/g) || []).length, 2, '15 spesimen = 9 + 6');
+    assert.ok(ch.includes('1 of 2') && ch.includes('2 of 2'));
+    assert.strictEqual(ch.split('Fusion Line + 2 mm').length - 1, 1);
+    const nine = renderTemplateReportHtml({ template: 'charpy-weld', test_request: {}, coupon: {}, fields: {}, rows: rows.slice(0, 9) });
+    assert.strictEqual((nine.match(/class="paper"/g) || []).length, 1);
+  }
   assert.ok(hasTemplate('tn-comp'));
   assert.deepStrictEqual(tnInfo('tn-comp').cols.map(c => c.key), ['dia', 'area', 'load', 'location', 'failure']);
   assert.strictEqual(tnInfo('tn-comp').cols[2].label, 'Maximum Load (N)');
