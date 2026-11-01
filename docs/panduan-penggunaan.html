@@ -54,7 +54,7 @@
   <div class="brand">DETECH Material Testing Laboratory</div>
   <h1>Panduan Penggunaan DETECH LIMS</h1>
   <p class="sub">Dari Permintaan Uji sampai Laporan Hasil Uji (LHU) terbit &mdash; langkah demi langkah</p>
-  <div class="meta">Versi 1.4 &middot; Oktober 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
+  <div class="meta">Versi 1.5 &middot; November 2026 &middot; Untuk pengguna harian (admin, petugas lab, tim machining, reviewer)</div>
 </div>
 
 <div class="note ok"><b>Yang baru di versi 1.5</b> (perbaikan form report dari klien): jumlah spesimen di Lembar <b>mengikuti Qty</b>; Corrosion bisa memuat <b>banyak spesimen</b>; jenis pengujian <b>Bending Material</b> baru dan <b>Intergranular</b> / <b>Pitting Corrosion</b> dipisah (Permintaan Uji lama dengan nama gabungan tetap berlaku); Tensile Bolt/Nut berisi baris <b>Proof Load + Tensile</b>; cetakan <b>Work Order landscape</b>; Fillet Weld Break <b>satu halaman per spesimen</b>; Charpy lebih dari 9 spesimen <b>lanjut ke halaman baru</b>; satuan ditulis <b>m&sup2; / &deg;C</b>; berat Corrosion 4 desimal, rata-rata Charpy 2 desimal; Ferrite mencetak <b>&plusmn; 95% CI</b>; Chemical hanya mencetak <b>unsur yang diisi</b>; ukuran logo seragam; garis dan keterangan foto lebih rapi.</div>
@@ -103,6 +103,7 @@
 <ol class="steps" style="counter-reset: s 5;">
   <li>Di daftar Permintaan Uji, pada baris yang sudah Final klik ikon <b>Buat Work Order</b>, lengkapi data, lalu simpan.</li>
   <li><b>No. Laporan dibuat otomatis per coupon</b> dengan format <code>DE.1/MMYY/nnnn</code> (mis. <code>DE.1/1026/0001</code> = Oktober 2026, urutan 1). Urutan berjalan sepanjang tahun dan mulai lagi dari 0001 saat tahun berganti. Nomor ini tercetak di Lembar Hasil Uji dan sekaligus menjadi <b>No. LHU</b> coupon itu.</li>
+  <li><b>Cetak Work Order</b> memakai kertas <b>A4 landscape</b> (mendatar): kolom Material Size dan Type of Test lebih lebar, tabel <i>Description of process</i> dan kotak <i>Prepared / Checked / Approved</i> berdampingan sehingga muat satu halaman. Di jendela print, orientasi otomatis <i>Landscape</i>; jangan diganti ke Portrait.</li>
 </ol>
 <div class="note warn">Setelah Work Order dibuat, coupon tidak boleh dihapus atau diubah urutannya (hasil uji, marking, dan No. Laporan menempel pada nomor coupon). Coupon baru hanya boleh ditambahkan di bagian bawah.</div>
 
@@ -131,6 +132,10 @@
       <li><b>Jumlah spesimen mengikuti Qty</b> di Permintaan Uji. Bila Qty dinaikkan setelah Lembar dibuat, baris spesimen yang kurang ditambahkan otomatis saat Lembar dibuka. Untuk mengurangi spesimen, ubah Qty-nya.</li>
       <li><b>Satu halaman per spesimen</b> untuk Microstructure, Macro, SSCC, Fillet Weld Break, dan Peel. <b>Charpy</b> mencetak maks. 9 spesimen per halaman; sisanya berlanjut di halaman berikutnya (grup V-Notch tidak dipecah).</li>
       <li><b>Corrosion (Pitting / Intergranular / G28) dengan Qty lebih dari 1:</b> pilih tombol <span class="btn">Spesimen 1</span>, <span class="btn">Spesimen 2</span>, &hellip; di atas isian. Sample Identification, dimensi, berat, observation, dan foto diisi per spesimen; jam uji, volume, density, dan Summary of Test dipakai bersama. Tiap spesimen dicetak di halaman utama dan halaman fotonya sendiri.</li>
+      <li><b>Chemical:</b> isi hanya unsur yang dianalisis; di laporan <b>hanya unsur yang diisi yang dicetak</b>, dirapatkan berurutan sesuai form. Bila tidak ada yang diisi, tabel unsur lengkap tetap tercetak.</li>
+      <li><b>Ferrite:</b> Estimated Volume tercetak bersama 95% CI dari halaman lampiran lokasi itu, mis. <code>46.88 ± 1.19</code>.</li>
+      <li><b>Corrosion:</b> berat sebelum/sesudah uji dan rata-ratanya selalu tercetak <b>4 angka di belakang koma</b> (123.0000). Laju Pitting tercetak dalam <b>g/(m&sup2;&times;day)</b> dan <b>mg/(dm&sup2;&times;day)</b>; nilai kedua = nilai pertama &times; 10. Keterangan foto (Section 1 &ndash; Before, dan seterusnya) tercetak di bawah foto.</li>
+      <li><b>Charpy:</b> rata-rata Impact Value tercetak <b>2 angka di belakang koma</b> (33.33).</li>
       <li><b>Microstructure:</b> cukup unggah <b>foto mikrostruktur</b> (isian foto sampel makro sudah dihapus); foto dicetak utuh di tengah kotak foto.</li>
       <li>Foto (bila form menyediakan slot foto; foto dicetak utuh menyesuaikan bingkai, sisa bingkai berwarna hitam) dan <b>Lampiran Hasil Mesin Uji</b> (PDF, gambar, CSV/TXT, Excel, ZIP dari mesin uji; maks. 8 MB per file) tersimpan langsung saat dipilih. Lampiran hanya referensi, tidak dicetak.</li>
       <li><b>Wajib lengkap sebelum Final:</b> Date of Tested, Test Conducted By, ada data hasil uji, dan hasil tiap spesimen (Bend/Flaring/Nick Break/Fillet Weld Break: Result; Charpy: Impact; Tensile: beban atau kekuatan).</li>
@@ -289,7 +294,7 @@
   <li><b>Mencari di dropdown:</b> setiap pilihan (dropdown) punya kotak pencarian. Klik dropdown, ketik sebagian nama, lalu pilih dari hasilnya.</li>
   <li><b>Ringkasan kinerja:</b> menu <span class="menu">Dashboard</span> untuk laporan manajemen per periode.</li>
   <li><b>Memantau posisi:</b> menu <span class="menu">Tasks</span> menampilkan tahap tiap Work Order; klik salah satu tahap di bagian atas untuk menyaring daftar. Antrian per tahap ada di bagian <span class="menu">Antrian Kerja</span>.</li>
-  <li><b>Mencetak ke PDF / printer:</b> gunakan tombol <i>Print / Simpan sebagai PDF</i> pada halaman cetak. Di jendela print pilih kertas <b>A4</b>, <b>Scale: Default</b> (jangan &ldquo;Fit to page&rdquo;), dan <b>Margins: Default</b>; laporan sudah diatur agar hurufnya tercetak hampir seukuran form Excel (margin 6&nbsp;mm atas, 5&nbsp;mm bawah, 7&nbsp;mm kiri-kanan). Isian yang lebih panjang dari selnya otomatis dikecilkan di sel itu saja. Header tabel gelap dan baris selang-seling ikut tercetak.</li>
+  <li><b>Mencetak ke PDF / printer:</b> gunakan tombol <i>Print / Simpan sebagai PDF</i> pada halaman cetak. Di jendela print pilih kertas <b>A4</b>, <b>Scale: Default</b> (jangan &ldquo;Fit to page&rdquo;), dan <b>Margins: Default</b>; laporan sudah diatur agar hurufnya tercetak hampir seukuran form Excel (margin 6&nbsp;mm atas, 5&nbsp;mm bawah, 7&nbsp;mm kiri-kanan). Isian yang lebih panjang dari selnya otomatis dikecilkan di sel itu saja. Header tabel gelap dan baris selang-seling ikut tercetak. Satuan ditulis dengan pangkat dan simbol derajat yang benar (m&sup2;, cm&sup2;, mm&sup2;, &deg;C), dan logo DETECH serta KAN berukuran sama di semua form. <b>Work Order</b> tercetak landscape; laporan lain tetap portrait.</li>
   <li><b>Mengecek hasil cetak:</b> bandingkan tampilan cetak/PDF dengan form Excel klien, terutama angka hasil perhitungan (Area, kekuatan, CSR/CLR/CTR, dan sebagainya).</li>
   <li><b>Foto unggahan:</b> foto (Receiving, foto di Lembar Hasil Uji, lampiran LHU, bukti kirim) otomatis dikecilkan sebelum diunggah: sisi terpanjang maks. 2400 piksel, JPEG kualitas tinggi. Ini setara ~300 dpi bila dicetak selebar A4, jadi tetap tajam di laporan, sementara ukuran file turun sekitar 70&ndash;90% (mis. 10 MB menjadi &plusmn;0,8 MB). Foto yang sudah kecil tidak diubah. PDF, Lampiran Hasil Mesin Uji, dan sertifikat Equipment tidak dikecilkan.</li>
   <li><b>Riwayat perubahan:</b> Administrator dapat melihat siapa mengubah apa di <span class="menu">Pengaturan</span> &rarr; <i>Jejak Aktivitas</i>.</li>
