@@ -451,12 +451,12 @@ function call(method, path, params, body) {
   assert.ok(patHtml.includes('>Cap<') && patHtml.includes('>Root<') && patHtml.includes('>214<') && patHtml.includes('API 5L X52'));
   assert.ok(patHtml.includes('>15<'), 'nomor titik sampai 15');
   assert.ok(patHtml.includes(png), 'sketsa pola dicetak');
-  assert.ok(!patHtml.includes('top:617px'), 'sketsa bawaan form Weld diganti sketsa pola');
+  assert.ok(!patHtml.includes('top:626px'), 'sketsa bawaan form Weld diganti sketsa pola');
   // pola yang susunannya sama dengan form resmi tetap dicetak di sel form (2 x 9, sketsa form)
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
     hardness: { lines: [['301'], ['302']] }, pattern: { name: 'Weld standar', kind: 'weld', lines: ['Line 1', 'Line 2'], zones: zones5.slice(0, 3) } } });
   const stdHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
-  assert.ok(stdHtml.includes('>301<') && stdHtml.includes('top:617px') && !stdHtml.includes('>Location</td><td class="th-head"'));
+  assert.ok(stdHtml.includes('>301<') && stdHtml.includes('top:626px') && !stdHtml.includes('>Location</td><td class="th-head"'));
   // pola lebih dari 15 titik ditolak (tidak disimpan)
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
     pattern: { name: 'x', kind: 'weld', lines: ['L1'], zones: [{ name: 'A', points: 16 }] } } });
