@@ -3293,7 +3293,7 @@
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
     state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
     state.testReportHard = hardStateOf(data.fields);
-    state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {}));
+    state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {})); state.testReportCorrIdx = 0;
     state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
     state.testReportPhotoSlots = new Set(data.photos || []);
     state.testReportPhotoVer = {};
@@ -3733,12 +3733,28 @@
   // Form Corrosion (Pitting / Intergranular): berat sebelum & sesudah uji (5 penimbangan), luas, jam uji, teks ringkasan
   // dan foto sampel. Hasil hitung (rata-rata, weight loss, rate) dibuat otomatis saat cetak.
   function corrFive(arr) { const a = Array.isArray(arr) ? arr.slice(0, 5) : []; while (a.length < 5) a.push(''); return a; }
+  // Banyak spesimen (Qty > 1): spesimen ke-2 dst. ada di corr.more; jam uji, volume, density & summary dipakai bersama
+  const CORR_SHARED = ['hours', 'volume', 'density', 'summary'];
+  function corrSpecimen() {
+    const c = state.testReportCorr, i = state.testReportCorrIdx || 0;
+    if (!i) return c;
+    c.more = c.more || [];
+    return (c.more[i - 1] = c.more[i - 1] || {});
+  }
+  const corrSlotOf = slot => ((state.testReportCorrIdx || 0) ? slot.replace('/', '/n' + (state.testReportCorrIdx + 1) + '-') : slot);
 
   function testReportCorrHtml(templateKey) {
     const info = ((state.testReport || {}).template_corr || {})[templateKey];
     if (!info) return '';
-    const c = state.testReportCorr;
-    const inp = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" data-corr="${key}" value="${esc(c[key] || '')}" placeholder="${esc(ph || '')}"></div>`;
+    const all = state.testReportCorr;
+    const count = 1 + ((all.more || []).length);
+    if ((state.testReportCorrIdx || 0) >= count) state.testReportCorrIdx = 0;
+    const c = corrSpecimen();
+    const inp = (key, label, ph) => `<div class="field"><label>${label}</label><input type="text" data-corr="${key}" value="${esc((CORR_SHARED.includes(key) ? all : c)[key] || '')}" placeholder="${esc(ph || '')}"></div>`;
+    const tabs = count > 1 ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">${Array.from({ length: count }, (_, i) => {
+      const sp = i ? all.more[i - 1] || {} : all;
+      return `<button type="button" class="btn btn-sm${i === (state.testReportCorrIdx || 0) ? ' btn-primary' : ''}" data-corr-spec="${i}">Spesimen ${i + 1}${sp.sample_id ? ' — ' + esc(sp.sample_id) : ''}</button>`;
+    }).join('')}</div><p class="muted" style="margin:0 0 8px;">Jam uji, volume, density dan Summary of Test dipakai bersama semua spesimen; tiap spesimen dicetak di halamannya sendiri.</p>` : '';
     const rowW = (name, arr, attr) => `<div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:6px;flex-wrap:wrap;"><span style="width:150px;font-size:12px;">${name}</span>${corrFive(arr).map((v, i) => `<div class="field" style="margin:0;width:92px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" ${attr} data-ci="${i}" value="${esc(v)}"></div>`).join('')}</div>`;
     let weights = '';
     if (info.weights) {
@@ -3758,17 +3774,18 @@
         <div class="field"><label>Lebar W (mm)</label><input type="text" inputmode="decimal" data-corr="w" value="${esc(c.w || '')}"></div>
         <div class="field"><label>Tebal T (mm)</label><input type="text" inputmode="decimal" data-corr="t" value="${esc(c.t || '')}"></div>
         <div class="field"><label>Surface Area (${esc(unit)}) <span class="en">kosong = dihitung 2(LW+LT+WT)</span></label><input type="text" inputmode="decimal" data-corr="area" value="${esc(c.area || '')}"></div>
-        ${info.density ? `<div class="field"><label>Density (g/cm&sup3;) <span class="en">untuk mpy; kosong = 8.14</span></label><input type="text" inputmode="decimal" data-corr="density" value="${esc(c.density || '')}" placeholder="8.14"></div>` : ''}
+        ${info.density ? `<div class="field"><label>Density (g/cm&sup3;) <span class="en">untuk mpy; kosong = 8.14</span></label><input type="text" inputmode="decimal" data-corr="density" value="${esc(all.density || '')}" placeholder="8.14"></div>` : ''}
       </div>` : '';
     const texts = `
       <div class="form-grid">
-        <div class="field full"><label>Summary of Test <span class="en">kosong = teks bawaan form (xxx diganti jam uji)</span></label><textarea data-corr="summary" rows="3" placeholder="${esc(info.summary)}">${esc(c.summary || '')}</textarea></div>
+        <div class="field full"><label>Summary of Test <span class="en">kosong = teks bawaan form (xxx diganti jam uji)</span></label><textarea data-corr="summary" rows="3" placeholder="${esc(info.summary)}">${esc(all.summary || '')}</textarea></div>
         ${info.observation ? `<div class="field full"><label>${info.kind === 'e' ? 'Examination Result' : 'Observation'} <span class="en">kosong = teks bawaan form</span></label><textarea data-corr="observation" rows="2" placeholder="${esc(info.observation)}">${esc(c.observation || '')}</textarea></div>` : ''}
         ${info.periodObservation ? [1, 2].map(i => `<div class="field full"><label>Observation halaman Periode ${i + 1}</label><textarea data-cobs="${i - 1}" rows="2">${esc(((c.obs || [])[i - 1]) || '')}</textarea></div>`).join('') : ''}
       </div>${info.kind === 'c' ? '<p class="muted" style="margin:4px 0 0;">Teks bawaan form menyebut "E308L-16 weld metal specimen" — sesuaikan dengan spesimen yang diuji.</p>' : ''}`;
     const photoHtml = (info.photos || []).map(pg => `
       <div style="margin-top:12px;"><p class="muted" style="margin:0 0 6px;">${esc(pg.label)} — foto disimpan langsung saat dipilih (tidak perlu menekan Simpan)</p>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">${pg.slots.map(sl => {
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;">${pg.slots.map(sl0 => {
+          const sl = { ...sl0, slot: corrSlotOf(sl0.slot) };
           const has = state.testReportPhotoSlots.has(sl.slot);
           return `<div style="border:1px solid #ccc;border-radius:6px;padding:8px;">
             <div style="font-size:12px;font-weight:600;margin-bottom:4px;">${esc(sl.label)}</div>
@@ -3777,7 +3794,7 @@
             ${has ? `<button type="button" class="btn btn-sm btn-danger" data-cphoto-del="${esc(sl.slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}
           </div>`;
         }).join('')}</div></div>`).join('');
-    return `<div class="form-grid">${inp('sample_id', 'Sample Identification')}${inp('hours', info.periods === 3 ? 'Jam per periode (Period of Test)' : 'Period of Test (jam)', info.kind === 'e' ? '15' : '')}${inp('volume', 'Volume Test Solution (ml)')}</div>${dims}${weights}${texts}${photoHtml}`;
+    return `${tabs}<div class="form-grid">${inp('sample_id', 'Sample Identification')}${inp('hours', info.periods === 3 ? 'Jam per periode (Period of Test)' : 'Period of Test (jam)', info.kind === 'e' ? '15' : '')}${inp('volume', 'Volume Test Solution (ml)')}</div>${dims}${weights}${texts}${photoHtml}`;
   }
 
   // Foto diperkecil di sisi klien (maks. 1600 px, JPEG) lalu diunggah mentah ke server.
@@ -3814,8 +3831,8 @@
     const wrap = document.getElementById('testReportCorrWrap');
     if (!wrap) return;
     wrap.addEventListener('input', e => {
-      const t = e.target, c = state.testReportCorr;
-      if (t.dataset.corr) { c[t.dataset.corr] = t.value; state.testReportDirty = true; return; }
+      const t = e.target, c = corrSpecimen();
+      if (t.dataset.corr) { (CORR_SHARED.includes(t.dataset.corr) ? state.testReportCorr : c)[t.dataset.corr] = t.value; state.testReportDirty = true; return; }
       if (t.dataset.cw) {
         const target = t.dataset.cp !== undefined ? ((c.periods = c.periods || [{}, {}, {}])[Number(t.dataset.cp)] = c.periods[Number(t.dataset.cp)] || {}) : c;
         target[t.dataset.cw] = corrFive(target[t.dataset.cw]);
@@ -3838,6 +3855,7 @@
       } catch (err) { toast(err.message, 'error'); e.target.value = ''; }
     });
     wrap.addEventListener('click', async e => {
+      if (e.target.dataset.corrSpec !== undefined) { state.testReportCorrIdx = Number(e.target.dataset.corrSpec); rerenderTestReportCorr(); return; }
       const slot = e.target.dataset.cphotoDel;
       if (!slot) return;
       if (!confirm('Hapus foto ini?')) return;
@@ -4460,7 +4478,7 @@
       });
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
-      state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {}));
+      state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {})); state.testReportCorrIdx = 0;
       state.testReportHicLog = JSON.parse(JSON.stringify((state.testReport.fields || {}).hic_log || []));
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);
       state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));

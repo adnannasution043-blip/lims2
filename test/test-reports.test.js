@@ -527,6 +527,26 @@ function call(method, path, params, body) {
   assert.strictEqual(await pagesOf('corr-b-weld', {}), 2);
   assert.strictEqual(await pagesOf('corr-pit-mat', {}), 3);   // tanpa isian: tetap tercetak (tanpa angka)
 
+  // Qty 2: dua set halaman (utama + foto) per spesimen; spesimen 2 di corr.more, jam uji ikut spesimen 1
+  const corrItem = WO.coupon_tests[0].test_items.find(x => x.test_name === 'Intergranular / Pitting Corrosion');
+  corrItem.qty = '2';
+  r = await call('GET', '/api/test-reports/:id', { id: String(cid2) });
+  assert.strictEqual(r.body.fields.corr.more.length, 1);
+  assert.strictEqual(r.body.fields.corr.more[0].sample_id, 'ABN.9.1-TS2');
+  r = await call('PUT', '/api/test-reports/:id', { id: String(cid2) }, { template: 'corr-pit-weld', status: 'draft', fields: { corr: {
+    hours: '72', l: '50', w: '25', t: '3', before: w(33.7589, -0.0001), after: w(33.7578, 0.0001), sample_id: 'PT-1',
+    more: [{ sample_id: 'PT-2', hours: '999', l: '50', w: '25', t: '3', before: w(20.1, 0), after: w(20.0, 0), observation: 'Pit 2', evil: 1 }] } } });
+  assert.strictEqual(r.body.fields.corr.more[0].sample_id, 'PT-2');
+  assert.ok(!('evil' in r.body.fields.corr.more[0]) && !('hours' in r.body.fields.corr.more[0]));
+  assert.strictEqual((await upload('corr-pit-weld-ph1/n2-s1', 'image/png', png1)).status, 201);   // slot foto spesimen 2
+  assert.strictEqual((await upload('corr-pit-weld-ph1/n11-s1', 'image/png', png1)).status, 400);
+  corrHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(cid2) } }, { setHeader() {}, send: resolve }));
+  assert.strictEqual((corrHtml.match(/class="paper"/g) || []).length, 6);
+  assert.ok(corrHtml.includes('>PT-1<') && corrHtml.includes('>PT-2<') && corrHtml.includes('Pit 2'));
+  assert.ok(corrHtml.includes('>20.1000<'), 'berat spesimen 2');
+  assert.ok(corrHtml.includes('6 of 6'));
+  corrItem.qty = '1';
+
   // ---- Macro-Etching ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Macro-etching & Examination' });
   assert.strictEqual(r.status, 201);
