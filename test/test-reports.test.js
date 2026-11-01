@@ -393,6 +393,7 @@ function call(method, path, params, body) {
   const fwbHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(wid) } }, { setHeader() {}, send: resolve }));
   assert.ok(fwbHtml.includes('>ok 1<') && fwbHtml.includes('>Rejected<') && fwbHtml.includes('Plate to Pipe') === false);
   assert.strictEqual((fwbHtml.match(/ABN[.]9[.]1-TS[12]/g) || []).length, 2);
+  assert.strictEqual((fwbHtml.match(/class="paper"/g) || []).length, 2, 'satu halaman per spesimen FWB');
   assert.ok(fwbHtml.includes('No inclusion or porosity'));   // remarks kosong -> teks bawaan form
   r = await call('PUT', '/api/test-reports/:id', { id: String(wid) }, { template: 'fwb-aws-d11', rows: [], status: 'draft' });
   assert.strictEqual(r.body.rows.length, 2);   // fallback ke default (satu per Marking Specimen)
