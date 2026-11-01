@@ -329,7 +329,7 @@ function call(method, path, params, body) {
   assert.strictEqual(r.body.fields.test_temp, '-40');
   assert.ok(!('evil' in r.body.fields) && !('evil' in r.body.rows[0]));
   const chHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(cid) } }, { setHeader() {}, send: resolve }));
-  assert.ok(chHtml.includes('-40') && chHtml.includes('Longitudinal') && chHtml.includes('>105<'));   // Average 100 & 110
+  assert.ok(chHtml.includes('-40') && chHtml.includes('Longitudinal') && chHtml.includes('>105.00<'));   // Average 100 & 110, 2 desimal
   assert.ok(chHtml.includes('DE.1/TR/06/CHARPY/MAT'));
   // rows kosong -> fallback ke default charpy (bukan observation/result)
   r = await call('PUT', '/api/test-reports/:id', { id: String(cid) }, { template: 'charpy-weld', rows: [], status: 'draft' });
@@ -477,7 +477,7 @@ function call(method, path, params, body) {
   assert.ok(!('evil' in r.body.fields.corr));
   assert.strictEqual(r.body.fields.corr.before.length, 5);
   let corrHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(cid2) } }, { setHeader() {}, send: resolve }));
-  assert.ok(corrHtml.includes('>33.7587<') && corrHtml.includes('>33.758<'), 'rata-rata sebelum/sesudah');
+  assert.ok(corrHtml.includes('>33.7587<') && corrHtml.includes('>33.7580<'), 'rata-rata sebelum/sesudah, 4 desimal');
   assert.ok(corrHtml.includes('>0.00295<'), 'luas dari L W T (m2)');
   assert.ok(corrHtml.includes('>0.0007<'), 'weight loss');
   assert.strictEqual((corrHtml.match(/class="paper"/g) || []).length, 3);   // utama + 2 halaman foto
@@ -742,7 +742,7 @@ function call(method, path, params, body) {
   let ssh = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(ssid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual(ssh.split('class="paper"').length - 1, 3, 'halaman utama + 2 halaman foto');
   assert.strictEqual(ssh.split('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ').length - 1, 5, 'lima gambar');
-  ['5 wt% NaCl + 95% H2O', '35 ± 2 °C', '0.8-1 kg/cm2', '1-2 mL/h', 'No rust was observed after 72h of exposure time', '>2<', 'ABN.9.1-SP2'].forEach(t => assert.ok(ssh.includes(t), 'salt bawaan memuat ' + t));
+  ['5 wt% NaCl + 95% H2O', '35 ± 2 °C', '0.8-1 kg/cm²', '1-2 mL/h', 'No rust was observed after 72h of exposure time', '>2<', 'ABN.9.1-SP2'].forEach(t => assert.ok(ssh.includes(t), 'salt bawaan memuat ' + t));
   // diisi: lama paparan ikut mengubah observasi bawaan; larik lain dipakai apa adanya
   r = await call('PUT', '/api/test-reports/:id', { id: String(ssid) }, { status: 'draft', fields: { salt_exposure: '96h', salt_solution: '3.5 wt% NaCl', evil: 'x' }, rows: [{ marking_specimen: 'ABN.9.1-SP1' }, { marking_specimen: 'ABN.9.1-SP2' }] });
   assert.strictEqual(r.body.fields.salt_exposure, '96h'); assert.strictEqual(r.body.fields.evil, undefined);
