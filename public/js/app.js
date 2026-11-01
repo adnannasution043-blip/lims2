@@ -3503,10 +3503,10 @@
       // Microstructure: satu baris per spesimen (satu halaman cetak); foto 1 atau 2 per baris menurut form
       const sel = document.getElementById('testReportTemplate');
       const key = (sel && sel.value) || state.testReport.template;
-      const info = state.testReport.template_micro[key] || { thick: false, photosPerRow: 2, photoLabels: [] };
+      const info = state.testReport.template_micro[key] || { thick: false, photosPerRow: 2, photoLabels: [], showPhotos: [1] };
       const last = state.testReportRows.length - 1;
       const avg = r => { const ns = [1, 2, 3, 4, 5].map(k => parseFloat(String(r['t' + k] || '').replace(',', '.'))).filter(n => Number.isFinite(n)); return ns.length ? String(Math.round(ns.reduce((a, b) => a + b, 0) / ns.length * 100) / 100) : '-'; };
-      const photoCell = (idx) => Array.from({ length: info.photosPerRow }, (_, p) => {
+      const photoCell = (idx) => (info.showPhotos || Array.from({ length: info.photosPerRow }, (_, p) => p)).map(p => {
         const slotNo = idx * info.photosPerRow + p + 1;
         const slot = key + '/s' + slotNo;
         const has = state.testReportPhotoSlots.has(slot);

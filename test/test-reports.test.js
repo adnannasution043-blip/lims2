@@ -545,7 +545,7 @@ function call(method, path, params, body) {
   assert.strictEqual(r.status, 201);
   assert.strictEqual(r.body.template, 'micro-weld');
   assert.deepStrictEqual(r.body.template_options.map(o => o.key), ['micro-weld', 'micro-mat', 'micro-thick-weld', 'micro-thick-mat']);
-  assert.deepStrictEqual(r.body.template_micro['micro-weld'], { thick: false, photosPerRow: 2, photoLabels: ['Foto sampel (makro)', 'Foto mikrostruktur'] });
+  assert.deepStrictEqual(r.body.template_micro['micro-weld'], { thick: false, photosPerRow: 2, photoLabels: ['Foto sampel (makro)', 'Foto mikrostruktur'], showPhotos: [1] });   // hanya foto mikrostruktur di Lembar
   assert.strictEqual(r.body.template_micro['micro-thick-mat'].photosPerRow, 1);
   assert.strictEqual(r.body.rows.length, 2);
   const msid = r.body.id;
@@ -560,7 +560,7 @@ function call(method, path, params, body) {
   const twoRows = [{ marking_specimen: 'ABN.9.1-TS1', t1: '12.5', t2: '13', t3: '12.8', t5: '13.2', evil: 1 }, { marking_specimen: 'ABN.9.1-TS2' }];
   let x = await pagesPhotos('micro-weld', twoRows);
   assert.strictEqual(x.pages, 2);
-  assert.strictEqual(x.photos, 4);                 // 2 foto per spesimen x 2 spesimen
+  assert.strictEqual(x.photos, 2);                 // hanya foto mikrostruktur (s2, s4) per spesimen; foto makro tidak dicetak
   for (const s of ['micro-thick-weld/s1', 'micro-thick-weld/s2']) assert.strictEqual((await upMicro(s)).status, 201);
   x = await pagesPhotos('micro-thick-weld', twoRows);
   assert.strictEqual(x.pages, 2);
@@ -573,7 +573,7 @@ function call(method, path, params, body) {
   // hanya satu foto (makro dihapus): foto mikro mengisi area kedua kotak, di tengah, tanpa garis penunjuk
   x = await pagesPhotos('micro-weld', [{ marking_specimen: 'A' }]);
   const pointer = h => /<svg class="rt-shape"[^>]*><line x1="0" y1="0" x2="\d+" y2="7"/.test(h);   // garis miring (tinggi 7 px)
-  assert.ok(pointer(x.html), 'dua foto: garis penunjuk makro -> mikro dicetak');
+  assert.ok(!pointer(x.html), 'foto makro tidak dicetak lagi, garis penunjuk ikut hilang');
   await new Promise(resolve => routes['DELETE /api/test-reports/:id/photo']({ params: { id: String(msid) }, query: { slot: 'micro-weld/s1' } }, { json: resolve }));
   x = await pagesPhotos('micro-weld', [{ marking_specimen: 'A' }]);
   assert.strictEqual(x.photos, 1);
