@@ -734,6 +734,7 @@ async function initSchema() {
     ['Macro-etching & Examination', 'MC'], ['Fillet Weld Break', 'FW'], ['Flattening Test', 'FT'],
     ['Chemical Composition Test', 'CA'], ['Microstructure / Metallography', 'MS'],
     ['Ferrite Point Count/ Ferrite Content', 'FP'], ['Intergranular / Pitting Corrosion', 'IC'],
+    ['Bending Material', 'BM'], ['Intergranular Corrosion', 'IC'], ['Pitting Corrosion', 'PC'],
     ['Through Thickness', 'TT'], ['Compression Test', 'CP'], ['Flaring Test', 'FL'], ['Geser Las Test', 'GL'], ['Peel Test', 'PL'], ['Grain Size Test', 'GS'], ['SEM-EDX Test', 'SE'], ['Salt Spray Test', 'SP'], ['HIC Test', 'HC'], ['SCC Test', 'SC'], ['SSCC Test', 'SS']
   ];
   // Role bawaan: hanya dibuat saat tabel roles masih kosong, supaya role yang sengaja dihapus tidak muncul lagi.

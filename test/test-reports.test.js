@@ -23,6 +23,26 @@ const MAP = { 'Bend Root': 'bending', 'Bend Face': 'bending', 'Tensile Test': 't
   ['Compression Test', 'Compression test (ASTM E9)', 'compression', 'Uji Tekan'].forEach(n => assert.strictEqual(defaultTemplate(n, {}), 'tn-comp', n));
   assert.strictEqual(defaultTemplate('Tensile Test', {}), 'tn-mat');
   assert.strictEqual(defaultTemplate('Decorative Test', {}), null);
+  // Bending Material & Corrosion dipisah (Pitting / Intergranular); nama gabungan lama tetap memakai keenam form
+  {
+    const { templateOptions } = require(ROOT + 'lib/testReports.js');
+    const { fixedTestNames, TEST_TYPES } = require(ROOT + 'db/testTypes.js');
+    assert.strictEqual(defaultTemplate('Bending Material', { no_wps: 'WPS-1' }), 'bend-mat');
+    assert.deepStrictEqual(templateOptions('Pitting Corrosion').map(o => o.key), ['corr-pit-weld', 'corr-pit-mat']);
+    assert.strictEqual(templateOptions('Intergranular Corrosion').length, 4);
+    assert.strictEqual(templateOptions('Intergranular / Pitting Corrosion').length, 6);
+    assert.strictEqual(defaultTemplate('Pitting Corrosion', { ref_code: 'ASTM A262 Practice B' }), 'corr-pit-mat');
+    assert.strictEqual(defaultTemplate('Intergranular Corrosion', {}), 'corr-e-mat');
+    assert.strictEqual(defaultTemplate('Intergranular Corrosion', { no_wps: 'W' }), 'corr-b-weld');
+    assert.strictEqual(defaultTemplate('Intergranular Corrosion', { ref_code: 'G28' }), 'corr-g28');
+    assert.ok(TEST_TYPES.includes('Bending Material') && !TEST_TYPES.includes('Intergranular / Pitting Corrosion'));
+    assert.ok(fixedTestNames([{ test_name: 'Intergranular / Pitting Corrosion', checked: true }]).includes('Intergranular / Pitting Corrosion'));
+    assert.ok(!fixedTestNames([{ test_name: 'Intergranular / Pitting Corrosion', checked: false }]).includes('Intergranular / Pitting Corrosion'));
+    // Bend Weld hanya Root: kolom kanan berjudul Face Bend Test dan kosong
+    const { renderTemplateReportHtml } = require(ROOT + 'lib/testReportTemplatePrint.js');
+    const bh = renderTemplateReportHtml({ template: 'bend-sec', test_name: 'Bend Root', test_request: {}, coupon: {}, fields: {}, rows: [{ marking_specimen: 'X-BR1', observation: 'OK', result: 'accepted' }, { marking_specimen: 'X-BR2', observation: 'OK', result: 'accepted' }] });
+    assert.ok(bh.includes('Type of Bend: Root Bend Test') && bh.includes('Type of Bend: Face Bend Test'));
+  }
   // Charpy > 9 spesimen: dilanjutkan di halaman berikutnya, grup V-Notch tidak dipecah
   {
     const { renderTemplateReportHtml } = require(ROOT + 'lib/testReportTemplatePrint.js');

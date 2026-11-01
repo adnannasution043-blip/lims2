@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const { pool, initSchema } = require('./db/init');
-const { TEST_TYPES } = require('./db/testTypes');
+const { TEST_TYPES, LEGACY_TEST_TYPES, fixedTestNames } = require('./db/testTypes');
 const { renderPrintHtml } = require('./lib/printView');
 const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
 const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
@@ -85,13 +85,16 @@ async function serializeCouponRows(testRequestId) {
       `SELECT * FROM test_items WHERE coupon_test_id = $1 ORDER BY id ASC`,
       [c.id]
     );
-    const testTypeSet = new Set(TEST_TYPES);
+    const fixed = new Set([...TEST_TYPES, ...LEGACY_TEST_TYPES]);
+    const byName = {};
+    items.forEach(i => { if (fixed.has(i.test_name) && !byName[i.test_name]) byName[i.test_name] = { ...i, checked: !!i.checked }; });
     result.push({
       ...c,
       coupon_type: c.coupon_type || [], // jsonb column, pg parses it already
-      test_items: items.filter(i => testTypeSet.has(i.test_name)).map(i => ({ ...i, checked: !!i.checked })),
+      // jenis pengujian yang ditambahkan ke daftar setelah coupon dibuat tampil belum dicentang
+      test_items: fixedTestNames(Object.values(byName)).map(name => byName[name] || { test_name: name, checked: false, qty: '', method: '' }),
       // "Other Test" rows are free-typed names that don't match the fixed TEST_TYPES list.
-      other_tests: items.filter(i => !testTypeSet.has(i.test_name)).map(i => ({ ...i, checked: !!i.checked }))
+      other_tests: items.filter(i => !fixed.has(i.test_name)).map(i => ({ ...i, checked: !!i.checked }))
     });
   }
   return result;
@@ -156,7 +159,7 @@ const SPECIMEN_SIGNATURE_FIELDS = ['inspected_by_signature', 'approved_by_signat
 // (category 'general') so that every coupon can still get a Pengecekan Spesimen.
 const CATEGORY_TEST_NAMES = {
   tensile: ['Tensile Test'],
-  bending: ['Bend Root', 'Bend Face', 'Bend Side', 'Nick Break Test'],
+  bending: ['Bend Root', 'Bend Face', 'Bend Side', 'Bending Material', 'Nick Break Test'],
   charpy: ['Charpy Impact Test']
 };
 
@@ -288,7 +291,7 @@ async function insertCouponRows(client, testRequestId, couponRows) {
     const itemsByName = {};
     (row.test_items || []).forEach(ti => { itemsByName[ti.test_name] = ti; });
 
-    for (const name of TEST_TYPES) {
+    for (const name of fixedTestNames(row.test_items)) {
       const ti = itemsByName[name] || {};
       await client.query(
         `INSERT INTO test_items (coupon_test_id, test_name, checked, qty, method)
