@@ -367,6 +367,7 @@ function call(method, path, params, body) {
   const ferHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(fid) } }, { setHeader() {}, send: resolve }));
   // Pi 4,5,6 berulang -> rata-rata (Pi/16*100) = 31.25 ; 4 halaman (utama + 3 lampiran) ; halaman 'x of 4'
   assert.ok(ferHtml.includes('>31.25<'), 'mean 31.25');
+  assert.ok(/>31\.25 ± \d+\.\d{2}</.test(ferHtml), 'Estimated Volume ± 95% CI');
   assert.strictEqual((ferHtml.match(/class="paper"/g) || []).length, 4);
   assert.ok(ferHtml.includes('1 of 4') && ferHtml.includes('4 of 4'));
   r = await call('PUT', '/api/test-reports/:id', { id: String(fid) }, { template: 'ferrite-mat', fields: { ferrite: { 'Base Metal': { n: '30', pt: '16', pi } } }, status: 'draft' });
