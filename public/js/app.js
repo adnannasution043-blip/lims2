@@ -3647,6 +3647,10 @@
 
   function bindTestReportRowEvents() {
     const wrap = document.getElementById('testReportRowsWrap');
+    // baris spesimen mengikuti Qty pengujian: baris yang dihapus di bawah Qty akan ditambahkan lagi, jadi tombol hapus
+    // hanya tampil untuk baris di atas Qty
+    const qty = Number(state.testReport && state.testReport.qty) || 0;
+    if (qty && state.testReportRows.length <= qty) wrap.querySelectorAll('[data-trow-remove]').forEach(b => { b.style.display = 'none'; });
     wrap.addEventListener('input', handleTestReportRowInput);
     wrap.addEventListener('change', handleTestReportRowInput);
     wrap.addEventListener('change', handleMacroPhotoChange);

@@ -277,7 +277,8 @@ function call(method, path, params, body) {
   });
   assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.status, 'draft');
-  assert.strictEqual(r.body.rows.length, 2);
+  assert.strictEqual(r.body.rows.length, 3);           // Qty 3: spesimen yang kurang ditambahkan otomatis
+  assert.strictEqual(r.body.rows[2].marking_specimen, 'ABN.9.1-BR3');
   assert.strictEqual(r.body.rows[0].result, 'accepted');
   assert.strictEqual(r.body.rows[1].result, '');       // enum tidak valid -> dikosongkan
   assert.ok(!('evil' in r.body.rows[0]));
@@ -538,7 +539,7 @@ function call(method, path, params, body) {
   assert.ok(macroHtml.includes('>Accepted<') && macroHtml.includes('>Rejected<') && macroHtml.includes('>5X<') && macroHtml.includes('>10X<'));
   await call('PUT', '/api/test-reports/:id', { id: String(mid) }, { template: 'macro-mat', status: 'draft', rows: [{ marking_specimen: 'ABN.9.1-TS1', result: '' }] });
   macroHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(mid) } }, { setHeader() {}, send: resolve }));
-  assert.strictEqual((macroHtml.match(/class="paper"/g) || []).length, 1);
+  assert.strictEqual((macroHtml.match(/class="paper"/g) || []).length, 2);   // baris dihapus jadi 1, tetapi Qty 2: spesimen ke-2 ditambahkan lagi
 
   // ---- Microstructure ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Microstructure / Metallography' });
@@ -568,6 +569,11 @@ function call(method, path, params, body) {
   assert.ok(x.html.includes('>12.88<'), 'average dari spot terisi');
   r = await call('GET', '/api/test-reports/:id', { id: String(msid) });
   assert.ok(!('evil' in r.body.rows[0]) && r.body.rows[0].t5 === '13.2');
+  // Qty 2 tetapi Lembar hanya 1 baris -> spesimen ke-2 ditambahkan otomatis (baris mengikuti Qty)
+  x = await pagesPhotos('micro-mat', [{ marking_specimen: 'A' }]);
+  assert.strictEqual(x.pages, 2);
+  const microItem = WO.coupon_tests[0].test_items.find(t => t.test_name === 'Microstructure / Metallography');
+  microItem.qty = '1';
   x = await pagesPhotos('micro-mat', [{ marking_specimen: 'A' }]);
   assert.strictEqual(x.pages, 1);
   // hanya satu foto (makro dihapus): foto mikro mengisi area kedua kotak, di tengah, tanpa garis penunjuk
@@ -807,7 +813,7 @@ function call(method, path, params, body) {
   assert.ok(!sch.includes('168 h') && !sch.includes('168 H'), 'tidak ada sisa 168 jam');
   r = await call('PUT', '/api/test-reports/:id', { id: String(scid) }, { status: 'draft', rows: [{ marking_specimen: 'ABN.9.1-SC1' }], fields: { scc_period: '96 Hours', scc_summary: 'Teks sendiri 168 jam.' } });
   sch = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(scid) } }, { setHeader() {}, send: resolve }));
-  assert.ok(sch.includes('Teks sendiri 168 jam.') && sch.split('class="paper"').length - 1 === 1, 'teks sendiri dipakai apa adanya');
+  assert.ok(sch.includes('Teks sendiri 168 jam.') && sch.split('class="paper"').length - 1 === 2, 'teks sendiri dipakai apa adanya; Qty 2 tetap 2 halaman');
 
   // ---- SSCC FPB (nama bebas): 4 halaman; tabel pembebanan diketik; hasil 3 spesimen per halaman ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'SSCC FPB test' });
