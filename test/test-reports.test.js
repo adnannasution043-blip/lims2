@@ -181,7 +181,12 @@ const pool = {
       if (/^SELECT filename, mime_type, data/.test(q)) return { rows: F.filter(f => f.id === Number(params[0])) };
       if (/^DELETE FROM test_report_files/.test(q)) { const i = F.findIndex(f => f.id === Number(params[0])); if (i >= 0) F.splice(i, 1); return { rowCount: i >= 0 ? 1 : 0 }; }
     }
-    if (/^SELECT report_no FROM work_order_sample_marks WHERE work_order_id/.test(q)) return { rows: [{ report_no: params[1] === 1 ? 'DE.1/1026/0001' : '' }] };
+    if (/^SELECT report_no FROM work_order_sample_marks WHERE work_order_id/.test(q)) return { rows: [{ report_no: couponReportNos[params[1]] || '' }] };
+    // No. Laporan diketik manual di Lembar: disimpan per coupon; nomor coupon lain ditolak (indeks unik)
+    if (/^INSERT INTO work_order_sample_marks \(work_order_id, coupon_row_no, report_no\)/.test(q)) {
+      if (params[2] && Object.entries(couponReportNos).some(([row, v]) => Number(row) !== params[1] && v === params[2])) { const e = new Error('dup'); e.code = '23505'; throw e; }
+      couponReportNos[params[1]] = params[2] || ''; return { rows: [] };
+    }
     if (/^SELECT id FROM test_reports WHERE test_request_id = [$]1 AND coupon_row_no/.test(q)) return { rows: reports.filter(r => r.coupon_row_no === params[1] && r.test_name === params[2]) };
     if (/^SELECT test_name, status FROM specimen_inspections WHERE test_request_id/.test(q)) {
       return { rows: params[2].flatMap(n => (n === inspections.blockedTest ? (inspections.status ? [{ test_name: n, status: inspections.status }] : []) : [{ test_name: n, status: 'final' }])) };
@@ -217,6 +222,7 @@ const app = {
   put: (p, h) => { routes['PUT ' + p] = h; },
   delete: (p, h) => { routes['DELETE ' + p] = h; }
 };
+const couponReportNos = { 1: 'DE.1/1026/0001', 2: 'DE.1/1026/0002' };
 const computeMarkingInfo = async (reqId, testName, couponRowNo) => {
   const cp = WO.coupon_tests.find(c => c.row_no === couponRowNo);
   const item = cp.test_items.concat(cp.other_tests).find(t => t.test_name === testName);
@@ -293,7 +299,7 @@ function call(method, path, params, body) {
   assert.ok(r.body.problems.some(p => /Date of Tested/.test(p)));
   assert.ok(r.body.problems.some(p => /Belum ada data hasil/.test(p)));
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, {
-    date_tested: '2026-09-25', test_conducted_by: 'Budi', status: 'final',
+    report_no: 'DE.1/1126/0046', date_tested: '2026-09-25', test_conducted_by: 'Budi', status: 'final',
     rows: [{ marking_specimen: 'ABN.9.1-BR1', observation: 'OK', result: 'accepted' }, { marking_specimen: 'ABN.9.1-BR2', result: 'zzz' }]
   });
   assert.strictEqual(r.status, 400);
@@ -313,6 +319,13 @@ function call(method, path, params, body) {
   assert.strictEqual(r.body.rows[2].marking_specimen, 'ABN.9.1-BR3');
   assert.strictEqual(r.body.rows[0].result, 'accepted');
   assert.strictEqual(r.body.rows[1].result, '');       // enum tidak valid -> dikosongkan
+  // No. Laporan diketik manual: tersimpan untuk coupon (bukan nomor otomatis), nomor coupon lain ditolak
+  assert.strictEqual(r.body.report_no, 'RPT-1');
+  assert.strictEqual(couponReportNos[1], 'RPT-1');
+  const dupNo = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { report_no: 'DE.1/1026/0002', status: 'draft', rows: r.body.rows });
+  assert.strictEqual(dupNo.status, 400);
+  assert.ok(/sudah dipakai/.test(dupNo.body.error));
+  assert.strictEqual(couponReportNos[1], 'RPT-1');
   assert.ok(!('evil' in r.body.rows[0]));
 
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-mat', heat_no: 'H-9', pqr_no: 'PQR-2', rows: [{ marking_specimen: 'ABN.9.1-BR1', observation: 'No Crack was Observed', result: 'accepted' }], status: 'draft' });

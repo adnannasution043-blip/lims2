@@ -2854,7 +2854,7 @@
     if (stage.key === 'receiving') {
       extraFields = `<div class="field"><label>Diserahkan oleh <span class="en">Delivered by</span></label><input type="text" name="delivered_by" value="${esc(extra.delivered_by)}" placeholder="Nama pengirim / kurir"></div>`;
     } else if (stage.key === 'reporting') {
-      extraFields = `<div class="field full"><label>No. Laporan <span class="en">otomatis per coupon &middot; juga No. LHU</span></label>
+      extraFields = `<div class="field full"><label>No. Laporan <span class="en">diketik di Lembar Hasil Uji, satu per coupon &middot; juga No. LHU</span></label>
         <div class="report-no-list">${(extra.report_nos || []).map(r => `<span class="report-no-chip"><strong>${esc(r.report_no) || '-'}</strong> <span class="muted">${esc(r.sample_marking) || 'Coupon #' + r.coupon_row_no}</span></span>`).join('') || '<span class="muted">-</span>'}</div></div>`;
     }
     const body = { receiving: receivingBodyHtml, testing: testingBodyHtml, reporting: reportingBodyHtml,
@@ -4285,8 +4285,7 @@
         <div class="card">
           <p class="section-title">Info Laporan</p>
           <div class="form-grid">
-            <div class="field"><label>No. Laporan <span class="en">otomatis dari coupon</span></label><input type="text" value="${esc(r.report_no) || '-'}" disabled>
-              <input type="hidden" name="report_no" value="${esc(r.report_no)}"></div>
+            <div class="field"><label>No. Laporan <span class="en">diketik manual; berlaku untuk semua Lembar coupon ini (sekaligus No. LHU)</span></label><input type="text" name="report_no" value="${esc(r.report_no)}" maxlength="80" placeholder="mis. DE.1/1126/0046"></div>
             <div class="field"><label>Tanggal Diuji <span class="en">Date of Tested</span></label><input type="date" name="date_tested" value="${esc(r.date_tested)}"></div>
             <div class="field"><label>Environment Temp</label><input type="text" name="environment_temp" value="${esc(r.environment_temp)}" placeholder="25 &plusmn; 2 &deg;C"></div>
             <div class="field"><label>Test Method</label><input type="text" name="test_method" value="${esc(r.test_method) || esc(r.method)}"></div>

@@ -40,7 +40,9 @@ assert.strictEqual(p.length, 7);
 assert.ok(/dan 4 kekurangan lainnya/.test(p[6]));
 
 // ----- Lembar Hasil Uji -----
-const head = { date_tested: '2026-10-20', test_conducted_by: 'Budi' };
+const head = { report_no: 'DE.1/1126/0046', date_tested: '2026-10-20', test_conducted_by: 'Budi' };
+// No. Laporan diketik manual: wajib sebelum Final
+assert.ok(testReportProblems({ kind: 'bending', template: 'bend-sec', body: { ...head, report_no: ' ', rows: [{ marking_specimen: 'BR1', result: 'accepted' }] } }).includes('No. Laporan belum diisi'));
 // isian bawaan (marking, observation) tidak dihitung sebagai data
 p = testReportProblems({ kind: 'bending', template: 'bend-sec', body: { ...head, rows: [{ marking_specimen: 'BR1', observation: 'No Open Discontinuity was Observed', result: '' }] } });
 assert.deepStrictEqual(p, ['Belum ada data hasil pengujian yang diisi']);
@@ -58,6 +60,6 @@ assert.deepStrictEqual(testReportProblems({ kind: 'chemical', template: 'chem-ma
 assert.deepStrictEqual(testReportProblems({ kind: 'pset', template: 'salt', body: { ...head, rows: [{ marking_specimen: 'S1' }], fields: {} }, photoCount: 2 }), []);
 // header wajib
 p = testReportProblems({ kind: 'charpy', body: { rows: [{ marking_specimen: 'C1', impact: '100' }] } });
-assert.deepStrictEqual(p, ['Date of Tested belum diisi', 'Test Conducted By belum diisi']);
+assert.deepStrictEqual(p, ['No. Laporan belum diisi', 'Date of Tested belum diisi', 'Test Conducted By belum diisi']);
 
 console.log('completeness OK');
