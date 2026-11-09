@@ -45,6 +45,7 @@ const pool = {
     if (/^SELECT work_order_id, coupon_row_no FROM lhu_verify_tokens WHERE token/.test(q)) return { rows: state.tokens.filter(t => t.token === p[0]) };
     if (/^SELECT approver_name, approver_title, approval_date, updated_at FROM work_order_tasks/.test(q)) return { rows: [{ approver_name: 'Fajar Pangestu, S.Tr.T', approver_title: 'Technical Manager', approval_date: '2026-10-21' }] };
     if (/^SELECT test_report_id, filename, mime_type, data FROM test_report_files/.test(q)) return { rows: state.files.filter(f => p[0].includes(f.test_report_id)) };
+    if (/^SELECT filename, mime_type, data FROM lhu_attachments/.test(q)) return { rows: [{ work_order_id: 1, coupon_row_no: 1, filename: 'pendukung.png', mime_type: 'image/png', data: Buffer.from('SUP') }, { work_order_id: 1, coupon_row_no: null, filename: 'umum.pdf', mime_type: 'application/pdf', data: Buffer.from('%PDF') }, { work_order_id: 1, coupon_row_no: 2, filename: 'coupon2.png', mime_type: 'image/png', data: Buffer.from('C2') }].filter(a => a.work_order_id === p[0] && (a.coupon_row_no === p[1] || a.coupon_row_no === null)) };
     throw new Error('query tidak dikenal: ' + q.slice(0, 120));
   }
 };
@@ -115,6 +116,8 @@ const call = (key, params, body) => new Promise(resolve => {
   assert.ok(official.body.includes('grafik-tensile.png') && official.body.includes('data:image/png;base64,' + Buffer.from('PNGDATA').toString('base64')));
   assert.ok(official.body.includes('data-pdf="' + Buffer.from('%PDF-1.4').toString('base64') + '"') && official.body.includes('pdf.min.js'));
   assert.ok(!official.body.includes('lain.png'));
+  // Attachment Pendukung halaman LHU (coupon ini + yang untuk seluruh Work Order) juga ikut tercetak
+  assert.ok(official.body.includes('Attachment Pendukung') && official.body.includes('pendukung.png') && official.body.includes('umum.pdf') && !official.body.includes('coupon2.png'));
   assert.strictEqual((await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '7' })).status, 404);
 
   // QR verifikasi keaslian: ada di LHU resmi (bukan di Preliminary), berisi alamat /verify/<token acak>

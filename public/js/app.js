@@ -5322,7 +5322,7 @@
             </div>
             <p class="muted" style="margin:8px 0 14px;">Berisi semua Lembar Hasil Uji Final coupon ini dalam satu dokumen, dengan nomor halaman berurutan.</p>
             <p class="muted" style="margin:0 0 10px;">Foto kondisi sampel saat penerimaan: <a href="/work-orders/${r.work_order_id}/evidence/print" target="_blank" rel="noopener">Cetak Lampiran Foto Penerimaan</a></p>
-            <p class="lhu-sub-title">Attachment Pendukung</p>
+            <p class="lhu-sub-title">Attachment Pendukung <span class="muted" style="font-weight:400;font-size:12px;">PDF &amp; gambar ikut tercetak di akhir dokumen LHU</span></p>
             <input type="file" id="lhuAttInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,.zip,.xlsx,.xls,.docx,.doc" hidden>
             <div id="lhuAttList"><p class="muted">Memuat attachment...</p></div>
             <button type="button" class="btn btn-sm" id="btnLhuAttUpload" style="margin-top:10px;">+ Tambah Attachment</button>
