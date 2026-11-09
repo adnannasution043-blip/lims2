@@ -134,9 +134,10 @@ const call = (key, params, body) => new Promise(resolve => {
   r = await call('GET /verify/:token', { token });
   assert.strictEqual(r.status, 200);
   assert.ok(r.body.includes('Valid') && r.body.includes('DE.1/1026/0001') && r.body.includes('ABC.10.1') && r.body.includes('Tensile Test') && r.body.includes('Fajar Pangestu'));
-  assert.ok(r.body.includes('/verify/' + token + '/lhu'), 'tautan LHU asli');
+  // tombol Lihat / Unduh LHU asli dinonaktifkan (permintaan klien): halaman hanya menyatakan Valid, alamat unduh ditutup
+  assert.ok(!r.body.includes('/verify/' + token + '/lhu') && !r.body.includes('Unduh LHU asli'), 'tanpa tautan LHU asli');
   r = await call('GET /verify/:token/lhu', { token });
-  assert.ok(r.status === 200 && r.body.includes('salinan terverifikasi'));
+  assert.strictEqual(r.status, 404);
   r = await call('GET /verify/:token', { token: 'tidak-ada-token-seperti-ini' });
   assert.strictEqual(r.status, 404);
   assert.ok(r.body.includes('tidak terdaftar'));
