@@ -18,7 +18,8 @@ const state = {
   dist: [{ id: 1, work_order_id: 1, coupon_row_no: null, status: 'sent' }],
   reports: [{ id: 5, coupon_row_no: 1, status: 'final' }, { id: 6, coupon_row_no: 1, status: 'draft' }, { id: 7, coupon_row_no: 2, status: 'final' }],
   inserted: [],
-  tokens: []
+  tokens: [],
+  files: [{ test_report_id: 5, filename: 'grafik-tensile.png', mime_type: 'image/png', data: Buffer.from('PNGDATA') }, { test_report_id: 5, filename: 'grafik.pdf', mime_type: 'application/pdf', data: Buffer.from('%PDF-1.4') }, { test_report_id: 7, filename: 'lain.png', mime_type: 'image/png', data: Buffer.from('X') }]
 };
 const pool = {
   async query(sql, p = []) {
@@ -43,6 +44,7 @@ const pool = {
     if (/^INSERT INTO lhu_verify_tokens/.test(q)) { const t = { token: p[0], work_order_id: p[1], coupon_row_no: p[2] }; state.tokens.push(t); return { rows: [t] }; }
     if (/^SELECT work_order_id, coupon_row_no FROM lhu_verify_tokens WHERE token/.test(q)) return { rows: state.tokens.filter(t => t.token === p[0]) };
     if (/^SELECT approver_name, approver_title, approval_date, updated_at FROM work_order_tasks/.test(q)) return { rows: [{ approver_name: 'Fajar Pangestu, S.Tr.T', approver_title: 'Technical Manager', approval_date: '2026-10-21' }] };
+    if (/^SELECT test_report_id, filename, mime_type, data FROM test_report_files/.test(q)) return { rows: state.files.filter(f => p[0].includes(f.test_report_id)) };
     throw new Error('query tidak dikenal: ' + q.slice(0, 120));
   }
 };
@@ -109,6 +111,10 @@ const call = (key, params, body) => new Promise(resolve => {
   assert.ok(!/Approved Signatory|Technical Manager|Pangestu/.test(r.body), 'blok tanda tangan approval kosong');
   const official = await call('GET /lhu-reports/:id/print', { id: '1-1' });
   assert.ok(imgs(official.body).some(x => x >= 300) && official.body.includes('Approved Signatory') && !official.body.includes('PRELIMINARY'));
+  // Lampiran Hasil Mesin Uji Lembar Final coupon ini ikut terlampir (gambar langsung, PDF dirender pdf.js); coupon lain tidak
+  assert.ok(official.body.includes('grafik-tensile.png') && official.body.includes('data:image/png;base64,' + Buffer.from('PNGDATA').toString('base64')));
+  assert.ok(official.body.includes('data-pdf="' + Buffer.from('%PDF-1.4').toString('base64') + '"') && official.body.includes('pdf.min.js'));
+  assert.ok(!official.body.includes('lain.png'));
   assert.strictEqual((await call('GET /work-orders/:id/preliminary/:rowNo', { id: '1', rowNo: '7' })).status, 404);
 
   // QR verifikasi keaslian: ada di LHU resmi (bukan di Preliminary), berisi alamat /verify/<token acak>

@@ -4387,7 +4387,7 @@
 
         <div class="card">
           <div class="task-card-head">
-            <p class="section-title">Lampiran Hasil Mesin Uji <span class="en">(file langsung dari mesin, sebagai referensi &middot; tidak dicetak di laporan)</span></p>
+            <p class="section-title">Lampiran Hasil Mesin Uji <span class="en">(file langsung dari mesin, mis. grafik uji &middot; PDF &amp; gambar ikut terlampir di akhir LHU; CSV/Excel/ZIP hanya disimpan)</span></p>
             <button type="button" class="btn btn-sm" id="btnMachineFileUpload">+ Unggah file</button>
           </div>
           <input type="file" id="machineFileInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.csv,.txt,.xls,.xlsx,.zip" multiple hidden>
