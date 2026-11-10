@@ -337,6 +337,13 @@ function call(method, path, params, body) {
   r = await call('GET', '/api/test-reports/:id', { id: String(id) });
   assert.strictEqual(r.body.pqr_no, 'PQR-24A/ASME/SEK/26');
   delete WO.coupon_tests[0].pqr_no;
+  // ukuran uji Bend diketik di Lembar, nama baris Thickness / Diameter
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-sec', fields: { test_size: '12.7', test_size_kind: 'Diameter', evil: 1 }, rows: [{ marking_specimen: 'ABN.9.1-BR1', result: 'accepted' }], status: 'draft' });
+  assert.deepStrictEqual(r.body.fields, { test_size: '12.7', test_size_kind: 'Diameter' });
+  const bendSize = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(id) } }, { setHeader() {}, send: resolve }));
+  assert.ok(bendSize.includes('>Test Weldment Diameter<') && bendSize.includes('>12.7<'));
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-mat', fields: { test_size: '10', test_size_kind: 'zzz' }, rows: [{ marking_specimen: 'ABN.9.1-BR1', result: 'accepted' }], status: 'draft' });
+  assert.strictEqual(r.body.fields.test_size_kind, 'Thickness');
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'tensile-x', rows: [], status: 'draft' });
   assert.strictEqual(r.body.template, 'bend-sec');   // tidak valid -> default dari coupon (punya WPS)
 

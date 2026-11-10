@@ -3730,6 +3730,10 @@
       <div class="card">
         <p class="section-title">Dimensi Pengujian Bend <span class="en">sesuai form DE.1/TR/02/BEND.SEC</span></p>
         <div class="form-grid">
+          <div class="field"><label>Ukuran uji <span class="en">nama baris di laporan: Test Thickness / Test Diameter</span></label>
+            <select name="field_test_size_kind">${['Thickness', 'Diameter'].map(k => `<option ${((r.fields || {}).test_size_kind || 'Thickness') === k ? 'selected' : ''}>${k}</option>`).join('')}</select></div>
+          <div class="field"><label>Test Thickness / Diameter (mm) <span class="en">kosong = thickness coupon</span></label>
+            <input type="text" name="field_test_size" value="${esc((r.fields || {}).test_size)}" placeholder="${esc(((r.coupon || {}).thickness) || '')}"></div>
           ${pair('Test Specimen Width (mm)', 'specimen_width_code', 'specimen_width_actual', r.specimen_width_code, r.specimen_width_actual)}
           ${pair('Former Diameter (mm)', 'former_diameter_code', 'former_diameter_actual', r.former_diameter_code, r.former_diameter_actual)}
           ${pair('Bend Angle (Degree)', 'bend_angle_code', 'bend_angle_actual', r.bend_angle_code, r.bend_angle_actual, '180')}
