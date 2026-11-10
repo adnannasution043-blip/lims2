@@ -3291,7 +3291,7 @@
     state.view = 'test-report-form';
     state.testReport = data;
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
-    state.testReportFerrite = JSON.parse(JSON.stringify((data.fields || {}).ferrite || {}));
+    ferriteStateOf(data.fields);
     state.testReportHard = hardStateOf(data.fields);
     state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {})); state.testReportCorrIdx = 0;
     state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
@@ -4075,14 +4075,47 @@
     bindTestReportHardSketch();
   }
 
-  // Form Ferrite: tiap lokasi (Base Metal / HAZ / Weld Metal) punya n, PT dan hitungan titik Pi per medan.
+  // Form Ferrite: tiap lokasi punya n, PT dan hitungan titik Pi per medan. Lokasi bawaan form (Base Metal / HAZ /
+  // Weld Metal) bisa diganti namanya, ditambah satu per satu atau dihapus (permintaan klien, mis. Base Metal Cap / Root);
+  // begitu diubah, daftar lokasi disimpan sendiri di Lembar (ferrite_locs).
+  const FERRITE_MAX_LOCS = 10;
+  function ferriteLocsFor(templateKey) {
+    if (!state.testReportFerriteOwn) {
+      const names = ((state.testReport || {}).template_locations || {})[templateKey] || [];
+      state.testReportFerriteLocs = names.map(name => ({ name, n: '30', pt: '16', pi: [], ...(state.testReportFerrite[name] || {}) }));
+    }
+    return state.testReportFerriteLocs;
+  }
+  function ferriteStateOf(fields) {
+    const f = fields || {};
+    state.testReportFerrite = JSON.parse(JSON.stringify(f.ferrite || {}));
+    state.testReportFerriteOwn = Array.isArray(f.ferrite_locs) && f.ferrite_locs.length > 0;
+    state.testReportFerriteLocs = state.testReportFerriteOwn ? JSON.parse(JSON.stringify(f.ferrite_locs)) : [];
+  }
+  // isian disimpan: data per nama lokasi (Lembar lama / lokasi bawaan) dan, bila lokasi diubah, daftar lokasinya
+  function ferritePayload() {
+    const tk = (document.getElementById('testReportTemplate') || {}).value || state.testReport.template;
+    const locs = ferriteLocsFor(tk);
+    const ferrite = { ...state.testReportFerrite };
+    locs.forEach(l => { if (l.name) ferrite[l.name] = { n: l.n, pt: l.pt, pi: l.pi || [] }; });
+    return { ferrite, ferrite_locs: state.testReportFerriteOwn ? locs : [] };
+  }
+  function rerenderTestReportFerrite() {
+    const wrap = document.getElementById('testReportFerriteWrap');
+    const sel = document.getElementById('testReportTemplate');
+    if (wrap) wrap.innerHTML = testReportFerriteHtml((sel && sel.value) || state.testReport.template);
+  }
+
   function testReportFerriteHtml(templateKey) {
-    const locs = ((state.testReport || {}).template_locations || {})[templateKey] || [];
-    return locs.map(name => {
-      const d = state.testReportFerrite[name] || {};
+    const locs = ferriteLocsFor(templateKey);
+    return locs.map((d, li) => {
       const pi = d.pi || [];
-      return `<div class="ferrite-loc" data-floc="${esc(name)}" style="margin-bottom:16px;">
-        <p class="section-title" style="margin-top:0;">${esc(name)}</p>
+      return `<div class="ferrite-loc" data-floc="${li}" style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:6px;">
+          <div class="field" style="margin:0;flex:1;max-width:340px;"><label>Nama lokasi ${li + 1} <span class="en">mis. Base Metal Cap, Base Metal Root, HAZ, Weld Metal</span></label>
+            <input type="text" list="ferriteLocNames" data-fname value="${esc(d.name)}" maxlength="60"></div>
+          ${locs.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-floc-del="${li}" title="Hapus lokasi ini">&#128465; Hapus lokasi</button>` : ''}
+        </div>
         <div class="form-grid">
           <div class="field"><label>n <span class="en">jumlah medan (maks. 30)</span></label><input type="text" inputmode="numeric" data-ffield="n" value="${esc(d.n || '30')}"></div>
           <div class="field"><label>PT <span class="en">jumlah titik pada grid</span></label><input type="text" inputmode="numeric" data-ffield="pt" value="${esc(d.pt || '16')}"></div>
@@ -4091,7 +4124,10 @@
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;">${Array.from({ length: 30 }, (_, i) => `
           <div class="field" style="margin:0;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-fpi="${i}" value="${esc(pi[i] || '')}"></div>`).join('')}</div>
       </div>`;
-    }).join('');
+    }).join('') + `
+      <datalist id="ferriteLocNames"><option value="Base Metal"><option value="Base Metal Cap"><option value="Base Metal Root"><option value="HAZ"><option value="HAZ Cap"><option value="HAZ Root"><option value="Weld Metal"><option value="Weld Metal Cap"><option value="Weld Metal Root"></datalist>
+      ${locs.length < FERRITE_MAX_LOCS ? '<button type="button" class="btn btn-sm" data-floc-add>+ Tambah lokasi</button>' : ''}
+      <p class="muted" style="margin:6px 0 0;">Tiap lokasi dicetak sebagai satu baris di tabel halaman utama dan satu halaman Lampiran #16 (maks. ${FERRITE_MAX_LOCS} lokasi).</p>`;
   }
 
   function bindTestReportFerriteEvents() {
@@ -4100,11 +4136,30 @@
     wrap.addEventListener('input', e => {
       const loc = e.target.closest('[data-floc]');
       if (!loc) return;
-      const name = loc.dataset.floc;
-      const d = state.testReportFerrite[name] || (state.testReportFerrite[name] = { n: '30', pt: '16', pi: [] });
-      if (e.target.dataset.ffield) d[e.target.dataset.ffield] = e.target.value;
+      const d = state.testReportFerriteLocs[Number(loc.dataset.floc)];
+      if (!d) return;
+      if (e.target.dataset.fname !== undefined) { d.name = e.target.value; state.testReportFerriteOwn = true; }
+      else if (e.target.dataset.ffield) d[e.target.dataset.ffield] = e.target.value;
       else if (e.target.dataset.fpi !== undefined) { d.pi = d.pi || []; d.pi[Number(e.target.dataset.fpi)] = e.target.value; }
+      if (!state.testReportFerriteOwn) state.testReportFerrite[d.name] = { n: d.n, pt: d.pt, pi: d.pi || [] };   // lokasi bawaan: data per nama
       state.testReportDirty = true;
+    });
+    wrap.addEventListener('click', e => {
+      const t = e.target.closest('[data-floc-add],[data-floc-del]');
+      if (!t) return;
+      const list = state.testReportFerriteLocs;
+      if (t.dataset.flocDel !== undefined) {
+        const d = list[Number(t.dataset.flocDel)];
+        if (!confirm(`Hapus lokasi "${d.name || 'tanpa nama'}" beserta isiannya?`)) return;
+        list.splice(Number(t.dataset.flocDel), 1);
+      } else {
+        // lokasi baru meneruskan n & PT lokasi terakhir; nama diketik sendiri
+        const last = list[list.length - 1] || {};
+        list.push({ name: '', n: last.n || '30', pt: last.pt || '16', pi: [] });
+      }
+      state.testReportFerriteOwn = true;
+      state.testReportDirty = true;
+      rerenderTestReportFerrite();
     });
   }
 
@@ -4545,7 +4600,7 @@
     const payload = Object.fromEntries(new FormData(e.target).entries());
     payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
       : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
-      : (state.testReport && state.testReport.template_locations ? { ferrite: state.testReportFerrite }
+      : (state.testReport && state.testReport.template_locations ? ferritePayload()
         : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch, pattern: hardActivePattern(payload.template || state.testReport.template) }
           : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
@@ -4567,7 +4622,7 @@
       state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {})); state.testReportCorrIdx = 0;
       state.testReportHicLog = JSON.parse(JSON.stringify((state.testReport.fields || {}).hic_log || []));
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);
-      state.testReportFerrite = JSON.parse(JSON.stringify((state.testReport.fields || {}).ferrite || {}));
+      ferriteStateOf(state.testReport.fields);
       state.testReportHard = hardStateOf(state.testReport.fields);
       state.testReportDirty = false;
       toast((payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan')

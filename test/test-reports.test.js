@@ -416,6 +416,18 @@ function call(method, path, params, body) {
   assert.ok(/>31\.25 ± \d+\.\d{2}</.test(ferHtml), 'Estimated Volume ± 95% CI');
   assert.strictEqual((ferHtml.match(/class="paper"/g) || []).length, 4);
   assert.ok(ferHtml.includes('1 of 4') && ferHtml.includes('4 of 4'));
+  // lokasi bebas: ditambah satu per satu & diberi nama sendiri (Base Metal Cap / Root); tiap lokasi satu Lampiran #16
+  r = await call('PUT', '/api/test-reports/:id', { id: String(fid) }, { status: 'draft', fields: { sample_id: 'FC-1', ferrite_locs: [
+    { name: 'Base Metal Cap', n: '30', pt: '16', pi }, { name: 'Base Metal Root', n: '30', pt: '16', pi }, { name: 'HAZ', n: '30', pt: '16', pi },
+    { name: 'Weld Metal', n: '30', pt: '16', pi }, { evil: 1 }] } });
+  assert.deepStrictEqual(r.body.fields.ferrite_locs.map(l => l.name), ['Base Metal Cap', 'Base Metal Root', 'HAZ', 'Weld Metal', 'Location']);
+  const ferCustom = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(fid) } }, { setHeader() {}, send: resolve }));
+  assert.strictEqual((ferCustom.match(/class="paper"/g) || []).length, 6, 'halaman utama + 5 lampiran');
+  assert.ok(ferCustom.includes('>Base Metal Cap<') && ferCustom.includes('>Base Metal Root<') && ferCustom.includes('rowspan="5"'));
+  // daftar lokasi dikosongkan -> kembali ke lokasi bawaan form
+  r = await call('PUT', '/api/test-reports/:id', { id: String(fid) }, { status: 'draft', fields: { sample_id: 'FC-1', ferrite: { 'Base Metal': { n: '30', pt: '16', pi } }, ferrite_locs: [] } });
+  const ferBack = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(fid) } }, { setHeader() {}, send: resolve }));
+  assert.strictEqual((ferBack.match(/class="paper"/g) || []).length, 4);
   r = await call('PUT', '/api/test-reports/:id', { id: String(fid) }, { template: 'ferrite-mat', fields: { ferrite: { 'Base Metal': { n: '30', pt: '16', pi } } }, status: 'draft' });
   const matHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(fid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual((matHtml.match(/class="paper"/g) || []).length, 2);
