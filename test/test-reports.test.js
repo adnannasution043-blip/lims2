@@ -504,6 +504,12 @@ function call(method, path, params, body) {
     hardness: { lines: [['301'], ['302']] }, pattern: { name: 'Weld standar', kind: 'weld', lines: ['Line 1', 'Line 2'], zones: zones5.slice(0, 3) } } });
   const stdHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
   assert.ok(stdHtml.includes('>301<') && stdHtml.includes('top:626px') && !stdHtml.includes('>Location</td><td class="th-head"'));
+  // susunan khusus di Lembar (tanpa pola Master): 1 line, 6 titik HAZ saja; sketsa bawaan form tidak dicetak
+  r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
+    hardness: { lines: [['211', '212', '213', '214', '215', '216']] }, pattern: { id: null, name: 'Susunan khusus', kind: 'weld', lines: ['Line 1'], zones: [{ name: 'HAZ', points: 6 }] } } });
+  assert.deepStrictEqual(r.body.fields.pattern.zones, [{ name: 'HAZ', points: 6 }]);
+  const customHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
+  assert.ok(customHtml.includes('>216<') && customHtml.includes('>HAZ<') && !customHtml.includes('top:626px'), 'susunan khusus tanpa sketsa form');
   // pola lebih dari 15 titik ditolak (tidak disimpan)
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
     pattern: { name: 'x', kind: 'weld', lines: ['L1'], zones: [{ name: 'A', points: 16 }] } } });

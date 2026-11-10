@@ -3912,16 +3912,18 @@
     const custName = (state.testReport.test_request || {}).company || '';
     const choices = HARDNESS_PATTERNS.filter(p => p.kind === kind)
       .sort((a, b) => (b.customer === custName) - (a.customer === custName) || a.name.localeCompare(b.name, 'id'));
-    const known = pat && choices.some(p => p.id === pat.id);
+    const custom = !!(pat && !pat.id);
+    const known = pat && !custom && choices.some(p => p.id === pat.id);
     const patternSel = `
       <div class="form-grid" style="margin-bottom:12px;"><div class="field full">
-        <label>Pola Hardness <span class="en">dari Master Data &rarr; Pola Hardness; menentukan sketsa &amp; susunan titik</span></label>
+        <label>Pola Hardness <span class="en">dari Master Data &rarr; Pola Hardness, atau susunan khusus sesuai permintaan pelanggan</span></label>
         <select id="hardPatternSel">
           <option value="">— Susunan bawaan form (${info.lines} line × ${info.points} titik) —</option>
-          ${pat && !known ? `<option value="snapshot" selected>${esc(pat.name)} (tersimpan di Lembar ini)</option>` : ''}
+          <option value="custom" ${custom ? 'selected' : ''}>Susunan khusus — atur jumlah line, area &amp; titik di Lembar ini</option>
+          ${pat && !known && !custom ? `<option value="snapshot" selected>${esc(pat.name)} (tersimpan di Lembar ini)</option>` : ''}
           ${choices.map(p => `<option value="${p.id}" ${pat && known && pat.id === p.id ? 'selected' : ''}>${esc(p.name)}${p.customer ? ' — ' + esc(p.customer) : ''} · ${esc(hardLayoutText(p))}</option>`).join('')}
         </select>
-      </div></div>`;
+      </div></div>${custom ? hardCustomEditorHtml(pat) : ''}`;
     const layoutLines = pat ? pat.lines : Array.from({ length: info.lines }, (_, i) => info.lines > 1 ? 'Line ' + (i + 1) : 'Result (HV)');
     const layoutZones = pat ? pat.zones.map(z => [z.name || 'Titik uji', Number(z.points)]) : (info.points === 9 ? HARD_GROUPS : [['Titik uji', 5]]);
     const boxW = layoutZones.reduce((n, z) => n + z[1], 0) > 9 ? 60 : 78;   // pola banyak titik: kotak lebih ramping
@@ -3945,6 +3947,32 @@
         ${state.testReportHard.sketch ? `<div style="margin-top:8px;"><img src="${state.testReportHard.sketch}" alt="Sketsa" style="max-width:360px;max-height:200px;border:1px solid #ccc;"><br><button type="button" class="btn btn-sm btn-danger" id="btnHardSketchRemove" style="margin-top:6px;">Hapus sketsa</button></div>` : `<p class="muted" style="margin:6px 0 0;">Belum ada sketsa khusus; ${fallback}.</p>`}
       </div>`;
     return `${patternSel}<div class="form-grid"><div class="field full"><label>Material Specification</label><input type="text" name="field_spec" value="${esc((state.testReport.fields || {}).spec)}"></div></div>${lines.join('')}${sketch}`;
+  }
+
+  // Susunan khusus (permintaan klien): line (1-3) dan area/zona berurutan dengan jumlah titiknya, maks. 15 titik per line,
+  // diatur langsung di Lembar tanpa membuat pola di Master Data. Disimpan sebagai pola tanpa id di isian Lembar.
+  const HARD_MAX_LINES = 3, HARD_MAX_POINTS = 15;
+  function hardCustomEditorHtml(pat) {
+    const total = pat.zones.reduce((n, z) => n + (Number(z.points) || 0), 0);
+    const over = total > HARD_MAX_POINTS;
+    return `<div style="margin:0 0 14px;padding:12px;border:1px solid #d6dbe4;border-radius:8px;background:#f8f9fb;">
+      <p class="section-title" style="margin-top:0;">Susunan khusus <span class="en">urutan area dari kiri ke kanan; susunan sama untuk setiap line</span></p>
+      <div class="form-grid">
+        <div class="field"><label>Jumlah line</label><select data-hc="count">${[1, 2, 3].map(n => `<option ${pat.lines.length === n ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
+        ${pat.lines.map((l, i) => `<div class="field"><label>Nama line ${i + 1}</label><input type="text" data-hc="line" data-i="${i}" value="${esc(l)}" maxlength="40"></div>`).join('')}
+      </div>
+      <datalist id="hardZoneNames"><option value="Base Metal"><option value="HAZ"><option value="Weld Metal"><option value="Fusion Line"><option value="Cap"><option value="Root"></datalist>
+      <table class="task-table" style="max-width:520px;margin-top:6px;"><thead><tr><th>Area / Zona</th><th style="width:110px;">Jumlah titik</th><th style="width:50px;"></th></tr></thead><tbody>
+        ${pat.zones.map((z, i) => `<tr><td><input type="text" list="hardZoneNames" data-hc="zname" data-i="${i}" value="${esc(z.name)}" maxlength="40"></td>
+          <td><input type="number" min="1" max="${HARD_MAX_POINTS}" data-hc="zpts" data-i="${i}" value="${esc(z.points)}"></td>
+          <td>${pat.zones.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-hc="zdel" data-i="${i}">&#128465;</button>` : ''}</td></tr>`).join('')}
+      </tbody></table>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:6px;">
+        <button type="button" class="btn btn-sm" data-hc="zadd">+ Area</button>
+        <span class="${over ? '' : 'muted'}" style="${over ? 'color:#b00;font-weight:600;' : ''}">${total} titik per line (maks. ${HARD_MAX_POINTS})${over ? ' — kurangi jumlah titik' : ''}</span>
+      </div>
+      <p class="muted" style="margin:8px 0 0;">Sketsa posisi titik bisa diunggah di bagian Sketch Hardness di bawah.</p>
+    </div>`;
   }
 
   // Perkecil gambar sketsa di sisi klien (maks. 2000 px, JPEG 90%) agar muat di batas ukuran simpan.
@@ -3981,7 +4009,18 @@
     if (sel) sel.addEventListener('change', async () => {
       if (sel.value === 'snapshot') return;
       if (!sel.value) state.testReportHard.pattern = null;
-      else {
+      else if (sel.value === 'custom') {
+        // mulai dari susunan yang sedang tampil (pola terpilih atau bawaan form), lalu diubah sesuai permintaan
+        const tk = (document.getElementById('testReportTemplate') || {}).value || state.testReport.template;
+        const info = ((state.testReport || {}).template_hard || {})[tk] || { lines: 2, points: 9 };
+        const cur = hardActivePattern(tk);
+        state.testReportHard.pattern = {
+          id: null, name: 'Susunan khusus', kind: hardKindOf(tk), sketch: '',
+          lines: cur ? cur.lines.slice() : Array.from({ length: info.lines }, (_, i) => 'Line ' + (i + 1)),
+          zones: cur ? cur.zones.map(z => ({ name: z.name, points: z.points }))
+            : (info.points === 9 ? HARD_GROUPS : [['Titik uji', 5]]).map(([name, points]) => ({ name, points }))
+        };
+      } else {
         try {
           const p = await api(`/api/hardness-patterns/${sel.value}`);
           state.testReportHard.pattern = { id: p.id, name: p.name, kind: p.kind, lines: p.lines, zones: p.zones, sketch: p.sketch || '' };
@@ -4001,6 +4040,24 @@
     });
     const rm = document.getElementById('btnHardSketchRemove');
     if (rm) rm.addEventListener('click', () => { state.testReportHard.sketch = ''; state.testReportDirty = true; rerenderTestReportHard(); });
+    // editor susunan khusus: nama diketik tanpa menggambar ulang (fokus tetap); jumlah line/titik & tambah/hapus area digambar ulang
+    const p = state.testReportHard.pattern;
+    if (p && !p.id) document.querySelectorAll('#testReportHardWrap [data-hc]').forEach(el => {
+      const i = Number(el.dataset.i);
+      const redraw = () => { state.testReportDirty = true; rerenderTestReportHard(); };
+      const kind = el.dataset.hc;
+      if (kind === 'line') el.addEventListener('input', () => { p.lines[i] = el.value; state.testReportDirty = true; });
+      if (kind === 'zname') el.addEventListener('input', () => { p.zones[i].name = el.value; state.testReportDirty = true; });
+      if (kind === 'zpts') el.addEventListener('change', () => { p.zones[i].points = Math.max(1, Math.min(HARD_MAX_POINTS, Math.floor(Number(el.value)) || 1)); redraw(); });
+      if (kind === 'count') el.addEventListener('change', () => {
+        const n = Math.max(1, Math.min(HARD_MAX_LINES, Number(el.value) || 1));
+        while (p.lines.length < n) p.lines.push('Line ' + (p.lines.length + 1));
+        p.lines.length = n;
+        redraw();
+      });
+      if (kind === 'zdel') el.addEventListener('click', () => { p.zones.splice(i, 1); redraw(); });
+      if (kind === 'zadd') el.addEventListener('click', () => { p.zones.push({ name: '', points: 1 }); redraw(); });
+    });
   }
 
   function bindTestReportHardEvents() {
@@ -4492,6 +4549,11 @@
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
+    const hp = payload.fields.pattern;
+    if (hp && !hp.id && hp.zones.reduce((n, z) => n + (Number(z.points) || 0), 0) > HARD_MAX_POINTS) {
+      toast(`Susunan khusus Hardness: maksimal ${HARD_MAX_POINTS} titik per line`, 'error');
+      return;
+    }
     try {
       state.testReport = await api(`/api/test-reports/${state.testReport.id}`, {
         method: 'PUT',
