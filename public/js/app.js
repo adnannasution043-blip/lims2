@@ -3938,7 +3938,9 @@
         }).join('')}</div></div>`).join('');
       lines.push(`<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;">${esc(layoutLines[li])}</label><div style="display:flex;gap:18px;flex-wrap:wrap;">${cells}</div></div>`);
     }
-    const fallback = pat && pat.sketch ? 'sketsa dari pola dipakai' : (kind === 'weld' ? 'sketsa bawaan form Weld dipakai' : 'area sketsa tercetak kosong');
+    const fallback = pat && pat.sketch ? 'sketsa dari pola dipakai'
+      : (custom ? 'area sketsa tercetak kosong (sketsa bawaan form tidak dipakai untuk susunan khusus)'
+        : (kind === 'weld' ? 'sketsa bawaan form Weld dipakai' : 'area sketsa tercetak kosong'));
     const sketch = `
       <div style="margin-top:8px;">
         <label style="display:block;margin-bottom:4px;">Sketch Hardness <span class="en">dicetak di halaman 1; unggahan di sini menggantikan sketsa pola/form untuk Lembar ini saja</span></label>
