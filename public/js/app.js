@@ -165,6 +165,7 @@
       outside_diameter: '',
       thickness: '',
       heat_number: '',
+      pqr_no: '',
       welding_process: '',
       welding_position: '',
       ref_code: '',
@@ -1482,6 +1483,10 @@
                   <input type="text" data-row="${idx}" data-field="no_wps" value="${esc(row.no_wps)}">
                 </div>
                 <div class="field">
+                  <label>No PQR <span class="en">tercetak di Lembar Hasil Uji (form Weld)</span></label>
+                  <input type="text" data-row="${idx}" data-field="pqr_no" value="${esc(row.pqr_no)}">
+                </div>
+                <div class="field">
                   <label>Welder's Name <span class="en">opsional, tercetak di Lembar Hasil Uji</span></label>
                   <input type="text" data-row="${idx}" data-field="welder_name" value="${esc(row.welder_name)}">
                 </div>
@@ -1882,7 +1887,7 @@
       ['Material / Grade', row.material_type_grade], ['Ukuran Material', row.material_size],
       ['Outside Diameter', row.outside_diameter], ['Tebal', row.thickness], ['Heat Number', row.heat_number],
       ['Proses Pengelasan', row.welding_process], ['Posisi Pengelasan', row.welding_position],
-      ['Ref. Code', row.ref_code], ['No. WPS', row.no_wps], ['Tujuan Pengujian', row.testing_purpose]
+      ['Ref. Code', row.ref_code], ['No. WPS', row.no_wps], ['No. PQR', row.pqr_no], ['Tujuan Pengujian', row.testing_purpose]
     ].filter(([, value]) => value);
     const tests = couponTestsOf(row);
     const totalQty = tests.reduce((sum, t) => sum + qtyNumber(t.qty), 0);
@@ -4379,6 +4384,7 @@
             ${infoFactHtml('Jenis Pengujian', esc(r.test_name) || '-')}
             ${infoFactHtml('Qty', esc(r.qty) || '-')}
             ${infoFactHtml('WPS No', esc(coupon.no_wps) || '-')}
+            ${infoFactHtml('PQR No', esc(coupon.pqr_no) || '-')}
             ${infoFactHtml('Material Type/Grade', esc(coupon.material_type_grade) || '-')}
             ${infoFactHtml('Material Size', esc(coupon.material_size) || '-')}
             ${infoFactHtml('Test Weldment Thickness', esc(coupon.thickness) || '-')}
@@ -4407,7 +4413,8 @@
             <div class="field"><label>Reference Code</label><input type="text" name="reference_code" value="${esc(r.reference_code)}"></div>
             <div class="field"><label>Testing Purpose</label><input type="text" name="testing_purpose" value="${esc(r.testing_purpose)}"></div>
             ${(r.template_options || []).length ? `
-            <div class="field"><label>PQR No <span class="en">form Weld</span></label><input type="text" name="pqr_no" value="${esc(r.pqr_no)}"></div>
+            <div class="field"><label>PQR No <span class="en">dari coupon di Permintaan Uji</span></label><input type="text" value="${esc(r.pqr_no) || '-'}" disabled>
+              <input type="hidden" name="pqr_no" value="${esc(r.pqr_no)}"></div>
             <div class="field"><label>Heat No <span class="en">dari coupon di Permintaan Uji</span></label><input type="text" value="${esc(r.heat_no) || '-'}" disabled>
               <input type="hidden" name="heat_no" value="${esc(r.heat_no)}"></div>` : ''}
           </div>

@@ -331,6 +331,12 @@ function call(method, path, params, body) {
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-mat', heat_no: 'H-9', pqr_no: 'PQR-2', rows: [{ marking_specimen: 'ABN.9.1-BR1', observation: 'No Crack was Observed', result: 'accepted' }], status: 'draft' });
   assert.strictEqual(r.body.template, 'bend-mat');
   assert.strictEqual(r.body.heat_no, 'H-9');
+  // No. PQR: isian lama di Lembar dipakai selama coupon belum punya No PQR; begitu diisi di Permintaan Uji, coupon yang dipakai
+  assert.strictEqual(r.body.pqr_no, 'PQR-2');
+  WO.coupon_tests[0].pqr_no = 'PQR-24A/ASME/SEK/26';
+  r = await call('GET', '/api/test-reports/:id', { id: String(id) });
+  assert.strictEqual(r.body.pqr_no, 'PQR-24A/ASME/SEK/26');
+  delete WO.coupon_tests[0].pqr_no;
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'tensile-x', rows: [], status: 'draft' });
   assert.strictEqual(r.body.template, 'bend-sec');   // tidak valid -> default dari coupon (punya WPS)
 

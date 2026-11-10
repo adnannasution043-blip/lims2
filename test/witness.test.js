@@ -20,6 +20,9 @@ assert.ok(c.place.includes('Laboratorium'));
 assert.strictEqual(witnessText(c.attendees), 'Indra of PT Teknik Jaya Sakti, Entis R. of PT Grundfos Pompa');
 assert.strictEqual(materialText({ coupon_type: ['Plate'], material_type_grade: 'JIS G 3101 SS400', thickness: '12' }), 'Plate, JIS G 3101 SS400, 12 mm Thickness');
 assert.strictEqual(materialText({ coupon_type: [], coupon_type_other: 'Pipe', thickness: '8 mm' }), 'Pipe, 8 mm Thickness');
+// Material Size dari penerimaan sampel ikut; isian "-" tidak dicetak (dulu "- mm Thickness")
+assert.strictEqual(materialText({ coupon_type: ['Joint Pipe to Plate'], material_type_grade: 'A790 UNS S31803 to Plate A240 UNS S31803', material_size: '2" Sch 10 to Plate 10 mm', outside_diameter: '-', thickness: '-' }),
+  'Joint Pipe to Plate, A790 UNS S31803 to Plate A240 UNS S31803, 2" Sch 10 to Plate 10 mm');
 assert.deepStrictEqual(longDate('2026-10-15'), { day: 'Kamis', date: 15, month: 'Oktober', year: 2026, short: '15/10/2026' });
 
 // ---- hak akses ----

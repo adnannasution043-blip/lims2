@@ -272,8 +272,8 @@ async function insertCouponRows(client, testRequestId, couponRows) {
          material_size, outside_diameter, thickness, heat_number, welding_process,
          welding_position, ref_code, no_wps, testing_purpose, note,
          charpy_temp, charpy_wm, charpy_bm, charpy_haz, charpy_fl, charpy_fl2,
-         charpy_optional_label, charpy_optional, hardness_spot, welder_name
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+         charpy_optional_label, charpy_optional, hardness_spot, welder_name, pqr_no
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
        RETURNING id`,
       [
         testRequestId, rowNo, JSON.stringify(row.coupon_type || []), row.coupon_type_other || '',
@@ -283,7 +283,7 @@ async function insertCouponRows(client, testRequestId, couponRows) {
         row.testing_purpose || '', row.note || '',
         row.charpy_temp || '', row.charpy_wm || '', row.charpy_bm || '', row.charpy_haz || '',
         row.charpy_fl || '', row.charpy_fl2 || '', row.charpy_optional_label || '', row.charpy_optional || '',
-        row.hardness_spot || '', String(row.welder_name || '').trim().slice(0, 200)
+        row.hardness_spot || '', String(row.welder_name || '').trim().slice(0, 200), String(row.pqr_no || '').trim().slice(0, 120)
       ]
     );
 

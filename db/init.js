@@ -183,6 +183,8 @@ async function initSchema() {
     ALTER TABLE work_orders ADD COLUMN IF NOT EXISTS lhu_number TEXT;
     -- Welder's Name diisi sekali per coupon di Permintaan Uji (dulu di tiap Lembar Hasil Uji)
     ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS welder_name TEXT;
+    -- No. PQR diisi sekali per coupon di Permintaan Uji, di bawah No WPS (dulu di tiap Lembar Hasil Uji)
+    ALTER TABLE coupon_tests ADD COLUMN IF NOT EXISTS pqr_no TEXT;
 
     -- Kolom distribusi lama (satu status per Work Order) — sudah digantikan tabel
     -- lhu_distributions di bawah (riwayat, bisa kirim berkali-kali). Dibiarkan ada (tidak dipakai
