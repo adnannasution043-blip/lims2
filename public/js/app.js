@@ -3358,7 +3358,7 @@
     if (state.testReport && state.testReport.template_pset) return { marking_specimen: '' };
     if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
     if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
-    if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '' };
+    if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '', remarks: '' };
     if (state.testReport && state.testReport.template_macro) return { marking_specimen: '', thickness: '', width: '', mag: '', result: '' };
     if (state.testReport && state.testReport.template === 'flat') return { marking_specimen: '', length: '', od: '', wt: '', e: '', h: '', first: '', second: '' };
     if (state.testReport && state.testReport.template_fwb) return { marking_specimen: '', remarks: [], result: '' };
@@ -3523,11 +3523,12 @@
           ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:3px;">Hapus foto</button>` : ''}</div>`;
       }).join('');
       return `<div style="overflow-x:auto;"><table class="task-table">
-        <thead><tr><th>Specimen No.</th>${info.thick ? [1, 2, 3, 4, 5].map(k => `<th>Spot ${k} (&micro;m)</th>`).join('') + '<th>Average (&micro;m)</th>' : ''}<th>Foto</th><th></th></tr></thead>
+        <thead><tr><th>Specimen No.</th>${info.thick ? [1, 2, 3, 4, 5].map(k => `<th>Spot ${k} (&micro;m)</th>`).join('') + '<th>Average (&micro;m)</th>' : ''}<th>Remarks <span class="en" style="font-weight:400">dicetak di baris Remarks halaman ini, mis. Base Metal Cap</span></th><th>Foto</th><th></th></tr></thead>
         <tbody>${state.testReportRows.map((r, idx) => `
           <tr data-trow="${idx}">
             <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
             ${info.thick ? [1, 2, 3, 4, 5].map(k => `<td><input type="text" inputmode="decimal" data-tfield="t${k}" value="${esc(r['t' + k] || '')}" style="width:70px"></td>`).join('') + `<td class="muted">${avg(r)}</td>` : ''}
+            <td><input type="text" data-tfield="remarks" value="${esc(r.remarks || '')}" maxlength="300" placeholder="mis. Base Metal Cap" style="min-width:170px"></td>
             <td style="min-width:160px;">${photoCell(idx)}</td>
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>

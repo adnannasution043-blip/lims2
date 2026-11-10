@@ -653,6 +653,13 @@ function call(method, path, params, body) {
   assert.ok(x.html.includes('>12.88<'), 'average dari spot terisi');
   r = await call('GET', '/api/test-reports/:id', { id: String(msid) });
   assert.ok(!('evil' in r.body.rows[0]) && r.body.rows[0].t5 === '13.2');
+  // Remarks per foto/spesimen dicetak di baris Remarks halaman spesimen itu (bukan di samping Sample Identification)
+  x = await pagesPhotos('micro-weld', [{ marking_specimen: 'ABN.9.1-TS1', remarks: 'Base Metal Cap' }, { marking_specimen: 'ABN.9.1-TS2', remarks: 'Base Metal Root' }]);
+  const pagesHtml = x.html.split('class="paper"').slice(1);
+  assert.ok(pagesHtml[0].includes('>Base Metal Cap<') && !pagesHtml[0].includes('Base Metal Root'));
+  assert.ok(pagesHtml[1].includes('>Base Metal Root<') && !pagesHtml[1].includes('Base Metal Cap'));
+  r = await call('GET', '/api/test-reports/:id', { id: String(msid) });
+  assert.strictEqual(r.body.rows[1].remarks, 'Base Metal Root');
   // Qty 2 tetapi Lembar hanya 1 baris -> spesimen ke-2 ditambahkan otomatis (baris mengikuti Qty)
   x = await pagesPhotos('micro-mat', [{ marking_specimen: 'A' }]);
   assert.strictEqual(x.pages, 2);
