@@ -103,7 +103,9 @@ assert.strictEqual(A.readToken(secret, tok).u, 7);
 assert.strictEqual(A.readToken('rahasia-lain-lagi-lagi', tok), null);
 assert.strictEqual(A.readToken(secret, tok.slice(0, -2) + 'xx'), null);
 assert.strictEqual(A.readToken(secret, tok.replace(/^[^.]+/, m => m.slice(0, -1) + (m.slice(-1) === 'A' ? 'B' : 'A'))), null);
-assert.strictEqual(A.readToken(secret, A.makeToken(secret, fakeUser, Date.now() - 13 * 3600 * 1000)), null, 'kedaluwarsa');
+assert.strictEqual(A.SESSION_MS, 365 * 24 * 3600 * 1000, 'tetap login 1 tahun (diperpanjang tiap hari dipakai)');
+assert.ok(A.readToken(secret, A.makeToken(secret, fakeUser, Date.now() - 30 * 24 * 3600 * 1000)), 'sebulan tidak dibuka tetap login');
+assert.strictEqual(A.readToken(secret, A.makeToken(secret, fakeUser, Date.now() - A.SESSION_MS - 3600 * 1000)), null, 'kedaluwarsa');
 assert.strictEqual(A.readToken(secret, 'sampah'), null);
 assert.deepStrictEqual(A.parseCookies('a=1; detech_sid=abc.def; x=%20y'), { a: '1', detech_sid: 'abc.def', x: ' y' });
 
@@ -171,7 +173,7 @@ const login = async (username, password, ip) => call('POST', '/api/auth/login', 
   r = await login('nonaktif', 'nonaktif-pass-1', '9.9.9.3'); assert.strictEqual(r.status, 403);
   r = await login('Admin', 'admin-pass-123', '9.9.9.4');
   assert.strictEqual(r.status, 200); assert.strictEqual(r.body.user.username, 'admin'); assert.ok(!('password_hash' in r.body.user));
-  const ck = r.headers['Set-Cookie']; assert.ok(/HttpOnly/.test(ck) && /SameSite=Lax/.test(ck) && /Secure/.test(ck) && /Max-Age=43200/.test(ck));
+  const ck = r.headers['Set-Cookie']; assert.ok(/HttpOnly/.test(ck) && /SameSite=Lax/.test(ck) && /Secure/.test(ck) && new RegExp('Max-Age=' + A.SESSION_MS / 1000).test(ck));
   const adminC = cookieOf(r);
   assert.ok(users[0].last_login_at);
 
@@ -243,8 +245,10 @@ const login = async (username, password, ip) => call('POST', '/api/auth/login', 
   r = await login('citra', 'penguji-pass-1', '7.7.7.8'); assert.strictEqual(r.status, 200);
 
   // me memperpanjang sesi yang hampir habis; logout menghapus cookie
-  const nearly = A.makeToken(secretNow, users[0], Date.now() - (12 * 3600 * 1000 - 3600 * 1000));
-  r = await call('GET', '/api/auth/me', { cookie: 'detech_sid=' + nearly }); assert.ok(r.headers['Set-Cookie'] && /Max-Age=43200/.test(r.headers['Set-Cookie']));
+  const nearly = A.makeToken(secretNow, users[0], Date.now() - 2 * 24 * 3600 * 1000);   // dibuat 2 hari lalu -> diperbarui
+  r = await call('GET', '/api/auth/me', { cookie: 'detech_sid=' + nearly }); assert.ok(r.headers['Set-Cookie'] && new RegExp('Max-Age=' + A.SESSION_MS / 1000).test(r.headers['Set-Cookie']));
+  const fresh = A.makeToken(secretNow, users[0], Date.now() - 3600 * 1000);   // baru 1 jam -> tidak perlu diperbarui
+  r = await call('GET', '/api/auth/me', { cookie: 'detech_sid=' + fresh }); assert.ok(!r.headers['Set-Cookie']);
   r = await call('GET', '/api/auth/me', { cookie: adminC }); assert.ok(!r.headers['Set-Cookie'] || true);
   r = await call('POST', '/api/auth/logout', { cookie: adminC }); assert.ok(/Max-Age=0/.test(r.headers['Set-Cookie']));
 
