@@ -618,7 +618,7 @@ function call(method, path, params, body) {
   assert.deepStrictEqual(r.body.template_options.map(o => o.key), ['macro-butt', 'macro-fillet', 'macro-mat']);
   assert.strictEqual(r.body.template_macro['macro-fillet'].kv.length, 3);
   assert.strictEqual(r.body.rows.length, 2);
-  assert.deepStrictEqual(Object.keys(r.body.rows[0]).sort(), ['marking_specimen', 'mag', 'result', 'thickness', 'width'].sort());
+  assert.deepStrictEqual(Object.keys(r.body.rows[0]).sort(), ['marking_specimen', 'mag', 'result', 'thickness', 'width', 'remarks'].sort());
   const mid = r.body.id;
   r = await call('PUT', '/api/test-reports/:id', { id: String(mid) }, { template: 'macro-fillet', status: 'draft', rows: [
     { marking_specimen: 'ABN.9.1-TS1', thickness: '12', width: '25', mag: '', result: 'accepted', size_x: '6', size_y: '5', evil: 1 },
@@ -634,6 +634,13 @@ function call(method, path, params, body) {
   assert.strictEqual((macroHtml.match(/class="paper"/g) || []).length, 2);      // satu halaman per spesimen
   assert.strictEqual((macroHtml.match(/data:image\/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ/g) || []).length, 2);   // dua foto, masing-masing di halamannya
   assert.ok(macroHtml.includes('>Accepted<') && macroHtml.includes('>Rejected<') && macroHtml.includes('>5X<') && macroHtml.includes('>10X<'));
+  // Remarks per spesimen dicetak di baris Remarks halaman spesimen itu (bukan kolom Remarks tabel)
+  await call('PUT', '/api/test-reports/:id', { id: String(mid) }, { template: 'macro-butt', status: 'draft', rows: [
+    { marking_specimen: 'ABN.9.1-TS1', result: 'accepted', remarks: 'Weld Metal Root' }, { marking_specimen: 'ABN.9.1-TS2', result: 'accepted', remarks: 'Weld Metal Cap' }] });
+  macroHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(mid) } }, { setHeader() {}, send: resolve }));
+  const macroPages = macroHtml.split('class="paper"').slice(1);
+  assert.ok(macroPages[0].includes('>Weld Metal Root<') && !macroPages[0].includes('Weld Metal Cap'));
+  assert.ok(macroPages[1].includes('>Weld Metal Cap<') && !macroPages[1].includes('Weld Metal Root'));
   await call('PUT', '/api/test-reports/:id', { id: String(mid) }, { template: 'macro-mat', status: 'draft', rows: [{ marking_specimen: 'ABN.9.1-TS1', result: '' }] });
   macroHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(mid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual((macroHtml.match(/class="paper"/g) || []).length, 2);   // baris dihapus jadi 1, tetapi Qty 2: spesimen ke-2 ditambahkan lagi

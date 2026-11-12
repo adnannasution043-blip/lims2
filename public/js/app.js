@@ -3364,7 +3364,7 @@
     if (state.testReport && state.testReport.template_tn) return { marking_specimen: '', kind: 'Tensile', dia: '', thickness: '', width: '', area: '', load: '', strength: '', gauge: '', l1: '', elong: '', ra: '', yield: '', tensile: '', location: '', failure: '' };
     if (state.testReport && state.testReport.template === 'nickbreak') return { marking_specimen: '', defect: 'No Discontinuity was Observed', depth: '', length: '', distance: '', result: '' };
     if (state.testReport && state.testReport.template_micro) return { marking_specimen: '', t1: '', t2: '', t3: '', t4: '', t5: '', remarks: '' };
-    if (state.testReport && state.testReport.template_macro) return { marking_specimen: '', thickness: '', width: '', mag: '', result: '' };
+    if (state.testReport && state.testReport.template_macro) return { marking_specimen: '', thickness: '', width: '', mag: '', result: '', remarks: '' };
     if (state.testReport && state.testReport.template === 'flat') return { marking_specimen: '', length: '', od: '', wt: '', e: '', h: '', first: '', second: '' };
     if (state.testReport && state.testReport.template_fwb) return { marking_specimen: '', remarks: [], result: '' };
     if (state.testReport && state.testReport.category === 'charpy') {
@@ -3547,7 +3547,7 @@
       const info = state.testReport.template_macro[key] || { kv: [], magDef: '10X' };
       const last = state.testReportRows.length - 1;
       return `<div style="overflow-x:auto;"><table class="task-table">
-        <thead><tr><th>Specimen No.</th><th>Thickness (mm)</th><th>Width (mm)</th><th>Magnification</th><th>Result</th>${info.kv.map(f => `<th>${esc(f.label)}</th>`).join('')}<th>Foto makro</th><th></th></tr></thead>
+        <thead><tr><th>Specimen No.</th><th>Thickness (mm)</th><th>Width (mm)</th><th>Magnification</th><th>Result</th>${info.kv.map(f => `<th>${esc(f.label)}</th>`).join('')}<th>Remarks <span class="en" style="font-weight:400">dicetak di baris Remarks halaman ini</span></th><th>Foto makro</th><th></th></tr></thead>
         <tbody>${state.testReportRows.map((r, idx) => {
           const slot = key + '/s' + (idx + 1);
           const has = state.testReportPhotoSlots.has(slot);
@@ -3559,6 +3559,7 @@
             <td><input type="text" data-tfield="mag" value="${esc(r.mag || '')}" placeholder="${esc(info.magDef)}" style="width:80px"></td>
             <td><input type="text" list="macroResultList" data-tfield="result" value="${esc(r.result || '')}" style="width:100px"></td>
             ${info.kv.map(f => `<td><input type="text" data-tfield="${f.key}" value="${esc(r[f.key] || '')}" placeholder="${esc(f.def || '')}" style="width:110px"></td>`).join('')}
+            <td><input type="text" data-tfield="remarks" value="${esc(r.remarks || '')}" maxlength="300" placeholder="mis. Weld Metal Cap" style="min-width:170px"></td>
             <td style="min-width:150px;">${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">belum ada foto</span>'}
               <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
               ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}</td>
