@@ -5287,7 +5287,7 @@
         <div style="padding:22px 24px 8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
           <div>
             <p class="card-title">Daftar LHU</p>
-            <p class="card-desc">${total} LHU tersimpan</p>
+            <p class="card-desc">${total} LHU dari ${new Set(rows.map(r => r.job_number)).size} pekerjaan &middot; dikelompokkan per No. Work Order, klik untuk membuka</p>
           </div>
           <select id="lhuStatusFilter" style="max-width:220px;">
             <option value="">Semua Status Distribusi</option>
@@ -5297,37 +5297,77 @@
         <div id="lhuTableArea"></div>
       </div>`;
 
+    // Dikelompokkan per No. Work Order (job number, permintaan klien): satu baris per pekerjaan berisi ringkasan status
+    // kirim; diklik untuk membuka LHU-LHU (per No. Laporan) di dalamnya. Pencarian membuka kelompok yang cocok.
     const ui = { status: '' };
+    const openJobs = state.lhuOpenJobs = state.lhuOpenJobs || new Set();
     const filterSelect = document.getElementById('lhuStatusFilter');
+    const isSent = r => ['sent', 'delivered'].includes(r.distribution_status);
     const drawTable = () => {
       const filtered = ui.status ? rows.filter(r => r.distribution_status === ui.status) : rows;
+      const byJob = new Map();
+      filtered.forEach(r => {
+        const k = r.job_number || '-';
+        if (!byJob.has(k)) byJob.set(k, { job_number: k, company: r.company, project_name: r.project_name, items: [] });
+        byJob.get(k).items.push(r);
+      });
+      const groups = [...byJob.values()].map(g => {
+        g.items.sort((a, b) => String(a.lhu_number).localeCompare(String(b.lhu_number), 'id', { numeric: true }));
+        const sent = g.items.filter(isSent).length;
+        const latest = g.items.map(r => r.lhu_issue_date).filter(Boolean).sort().pop() || '';
+        return { ...g, sent, pending: g.items.length - sent, latest,
+          lhu_text: g.items.map(r => r.lhu_number).join(' '), marking_text: g.items.map(r => r.sample_marking).join(' ') };
+      }).sort((a, b) => String(b.latest).localeCompare(String(a.latest)) || String(b.job_number).localeCompare(String(a.job_number)));
+      const searching = () => !!String(((state.tableUI || {})['lhu-jobs'] || {}).search || '').trim();
       renderSearchablePaginatedTable({
-        key: 'lhu-reports',
+        key: 'lhu-jobs',
         containerEl: document.getElementById('lhuTableArea'),
-        allRows: filtered,
-        searchFields: ['lhu_number', 'sample_marking', 'job_number', 'company', 'project_name'],
-        searchPlaceholder: 'Cari No. LHU, Sample Marking, No. WO, Perusahaan, atau Nama Proyek...',
+        allRows: groups,
+        searchFields: ['job_number', 'company', 'project_name', 'lhu_text', 'marking_text'],
+        searchPlaceholder: 'Cari No. Work Order, No. LHU, Sample Marking, Perusahaan, atau Nama Proyek...',
         emptyHtml: '<p class="muted">Tidak ada LHU dengan status tersebut.</p>',
-        renderTableHtml: (pageRows) => `
+        renderTableHtml: (pageGroups) => `
           <table class="data-table">
             <thead><tr>
-              <th>No. LHU</th><th>Rev.</th><th>Coupon</th><th>No. Work Order</th><th>Perusahaan</th><th>Nama Proyek</th>
-              <th>Tanggal Terbit</th><th>Status Distribusi</th><th></th>
+              <th style="width:28px;"></th><th>No. Work Order</th><th>Perusahaan</th><th>Nama Proyek</th><th>Jumlah LHU</th>
+              <th>Terbit Terakhir</th><th>Status Kirim</th>
             </tr></thead>
-            <tbody>${pageRows.map(r => `
-              <tr>
-                <td><strong>${esc(r.lhu_number)}</strong></td>
-                <td>${r.revision}</td>
-                <td>${esc(r.sample_marking) || 'Coupon #' + r.coupon_row_no}</td>
-                <td>${esc(r.job_number)}</td>
-                <td>${esc(r.company)}</td>
-                <td>${esc(r.project_name)}</td>
-                <td>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</td>
-                <td><span class="st-pill ${LHU_DIST_PILL[r.distribution_status]}">${esc(LHU_DIST_LABELS[r.distribution_status])}</span></td>
-                <td><button class="btn btn-sm" data-lhu-view="${r.id}">Lihat</button></td>
-              </tr>`).join('')}</tbody>
+            <tbody>${pageGroups.map(g => {
+              const open = openJobs.has(g.job_number) || searching();
+              const status = g.pending
+                ? `<span class="st-pill st-pending">${g.pending} menunggu kirim</span>${g.sent ? ` <span class="st-pill st-final">${g.sent} terkirim</span>` : ''}`
+                : '<span class="st-pill st-final">Semua terkirim</span>';
+              return `
+              <tr data-lhu-job="${esc(g.job_number)}" style="cursor:pointer;" title="Klik untuk ${open ? 'menutup' : 'membuka'} daftar LHU">
+                <td style="font-size:12px;">${open ? '&#9660;' : '&#9654;'}</td>
+                <td><strong>${esc(g.job_number)}</strong></td>
+                <td>${esc(g.company)}</td>
+                <td>${esc(g.project_name)}</td>
+                <td>${g.items.length}</td>
+                <td>${g.latest ? esc(formatDateOnly(g.latest)) : '-'}</td>
+                <td>${status}</td>
+              </tr>
+              ${open ? `<tr class="lhu-job-items"><td></td><td colspan="6" style="padding:4px 0 14px;">
+                <table class="data-table" style="background:#f8f9fb;border-radius:8px;">
+                  <thead><tr><th>No. LHU</th><th>Rev.</th><th>Coupon</th><th>Tanggal Terbit</th><th>Status Distribusi</th><th></th></tr></thead>
+                  <tbody>${g.items.map(r => `
+                    <tr>
+                      <td><strong>${esc(r.lhu_number)}</strong></td>
+                      <td>${r.revision}</td>
+                      <td>${esc(r.sample_marking) || 'Coupon #' + r.coupon_row_no}</td>
+                      <td>${r.lhu_issue_date ? esc(formatDateOnly(r.lhu_issue_date)) : '-'}</td>
+                      <td><span class="st-pill ${LHU_DIST_PILL[r.distribution_status]}">${esc(LHU_DIST_LABELS[r.distribution_status])}</span></td>
+                      <td><button class="btn btn-sm" data-lhu-view="${r.id}">Lihat</button></td>
+                    </tr>`).join('')}</tbody>
+                </table></td></tr>` : ''}`;
+            }).join('')}</tbody>
           </table>`,
         bindRowEvents: (container) => {
+          container.querySelectorAll('[data-lhu-job]').forEach(tr => tr.addEventListener('click', () => {
+            const k = tr.dataset.lhuJob;
+            if (openJobs.has(k)) openJobs.delete(k); else openJobs.add(k);
+            drawTable();
+          }));
           container.querySelectorAll('[data-lhu-view]').forEach(btn => btn.addEventListener('click', () => {
             state.lhuViewId = btn.dataset.lhuView;
             state.view = 'lhu-detail';
