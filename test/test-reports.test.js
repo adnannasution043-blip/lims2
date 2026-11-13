@@ -680,6 +680,17 @@ function call(method, path, params, body) {
   assert.ok(pagesHtml[1].includes('>Base Metal Root<') && !pagesHtml[1].includes('Base Metal Cap'));
   r = await call('GET', '/api/test-reports/:id', { id: String(msid) });
   assert.strictEqual(r.body.rows[1].remarks, 'Base Metal Root');
+  // tanda tangan approval tercetak di semua form ber-Approved Signatory (dulu hilang di Microstructure: sel di bawahnya
+  // tertutup isian Remarks yang memanjang)
+  {
+    const { renderTemplateReportHtml, hasTemplate } = require(ROOT + 'lib/testReportTemplatePrint.js');
+    const { loadTemplate } = require(ROOT + 'lib/reportTemplate.js');
+    const fs = require('fs');
+    const missing = fs.readdirSync(ROOT + 'lib/reportTemplates').map(f => f.replace('.json', '')).filter(k => hasTemplate(k))
+      .filter(k => loadTemplate(k).rows.some(row => row.cells.some(c => /^Approved Signatory/.test(String(c.v || '').trim()) && c.c >= 26)))
+      .filter(k => !renderTemplateReportHtml({ template: k, test_request: {}, coupon: {}, fields: {}, rows: [{}], approved_signatory: { status: 'approved', name: 'X', signature: 'data:image/png;base64,SIGX' } }).includes('base64,SIGX'));
+    assert.deepStrictEqual(missing, [], 'form tanpa tanda tangan');
+  }
   // Qty 2 tetapi Lembar hanya 1 baris -> spesimen ke-2 ditambahkan otomatis (baris mengikuti Qty)
   x = await pagesPhotos('micro-mat', [{ marking_specimen: 'A' }]);
   assert.strictEqual(x.pages, 2);
