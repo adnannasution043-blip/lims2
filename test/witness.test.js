@@ -20,6 +20,10 @@ assert.ok(c.place.includes('Laboratorium'));
 assert.strictEqual(witnessText(c.attendees), 'Indra of PT Teknik Jaya Sakti, Entis R. of PT Grundfos Pompa');
 assert.strictEqual(materialText({ coupon_type: ['Plate'], material_type_grade: 'JIS G 3101 SS400', thickness: '12' }), 'Plate, JIS G 3101 SS400, 12 mm Thickness');
 assert.strictEqual(materialText({ coupon_type: [], coupon_type_other: 'Pipe', thickness: '8 mm' }), 'Pipe, 8 mm Thickness');
+// format BA resmi: jenis + grade / ukuran with tebal / proses las + posisi / WPS No / PQR No
+assert.deepStrictEqual(require('../lib/witness').materialLines({ coupon_type: ['Joint Pipe'], material_type_grade: 'A-790 UNS S31803 to A-790 UNS S31803', material_size: '8" Sch 80',
+  thickness: '10', welding_process: 'GTAW+SMAW', welding_position: '2G', no_wps: 'SEK-GS-P-10H10H-N11', pqr_no: 'PQR-11A/ASME/SEK/26' }),
+  ['Joint Pipe, A-790 UNS S31803 to A-790 UNS S31803', '8" Sch 80 with 10 mm Thickness', 'GTAW+SMAW 2G', 'WPS No : SEK-GS-P-10H10H-N11', 'PQR No : PQR-11A/ASME/SEK/26']);
 // Material Size dari penerimaan sampel ikut; isian "-" tidak dicetak (dulu "- mm Thickness")
 assert.strictEqual(materialText({ coupon_type: ['Joint Pipe to Plate'], material_type_grade: 'A790 UNS S31803 to Plate A240 UNS S31803', material_size: '2" Sch 10 to Plate 10 mm', outside_diameter: '-', thickness: '-' }),
   'Joint Pipe to Plate, A790 UNS S31803 to Plate A240 UNS S31803, 2" Sch 10 to Plate 10 mm');
@@ -113,7 +117,7 @@ const call = (key, params, body, query) => new Promise(resolve => {
   assert.ok(ba.includes('Pada Hari Kamis, Tanggal 15 Bulan Oktober Tahun 2026'));
   assert.ok(ba.includes('DE.1/1026/4470') && !ba.includes('DE.1/1026/4471'), 'hanya coupon yang disaksikan');
   assert.ok(ba.includes('>Tensile Test<') && ba.includes('>PMI<') && !ba.includes('>Bend Root<'), 'hanya pengujian yang dicentang');
-  assert.ok(ba.includes('Plate, SS400, 12 mm Thickness'));
+  assert.ok(ba.includes('Plate, SS400,<br>12 mm Thickness'), 'deskripsi material per baris');
   assert.ok(ba.includes('Fajar Pangestu, S.Tr.T.') && ba.includes('PT Teknik Jaya Sakti') && ba.includes(sigPng));
   assert.ok(ba.includes('DPI-LP-FR-39') && !ba.includes('DAFTAR KEHADIRAN'));
   r = await call('GET /witness-sessions/:sid/print', { sid: String(sid) }, null, { doc: 'dh' });
