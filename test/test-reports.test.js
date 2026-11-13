@@ -680,6 +680,16 @@ function call(method, path, params, body) {
   assert.ok(pagesHtml[1].includes('>Base Metal Root<') && !pagesHtml[1].includes('Base Metal Cap'));
   r = await call('GET', '/api/test-reports/:id', { id: String(msid) });
   assert.strictEqual(r.body.rows[1].remarks, 'Base Metal Root');
+  // Material Type/Grade panjang (kolom kanan) dipecah 2 baris: kolom kanan turun ke baris kosong, kolom kiri tetap rapat
+  {
+    const { renderTemplateReportHtml } = require(ROOT + 'lib/testReportTemplatePrint.js');
+    const h = renderTemplateReportHtml({ template: 'bend-sec', test_request: {}, fields: {}, rows: [{}], pqr_no: 'PQR-1',
+      coupon: { coupon_type: ['Plate'], material_type_grade: 'ASTM A333 Gr.6 to A516 Gr.70', no_wps: 'WPS-1', welding_position: '1G', welding_process: 'GTAW' } });
+    const rowOf = text => { const i = h.indexOf(text); return h.lastIndexOf('<tr', i); };
+    assert.ok(rowOf('>WPS-1<') === rowOf('ASTM A333'), 'grade baris 1 sejajar WPS No');
+    assert.ok(rowOf('>PQR-1<') !== rowOf('>WPS-1<') && rowOf('>Heat No<') !== rowOf('>PQR No<'), 'Heat No turun satu baris');
+    assert.ok(rowOf('>Welding Process<') === rowOf(">Welder's Name<") || rowOf('>Welding Process<') === rowOf('>Welder&#39;s Name<') || rowOf('>Welding Process<') === rowOf('Welder'), 'blok kanan berakhir di baris Welder');
+  }
   // tanda tangan approval tercetak di semua form ber-Approved Signatory (dulu hilang di Microstructure: sel di bawahnya
   // tertutup isian Remarks yang memanjang)
   {
