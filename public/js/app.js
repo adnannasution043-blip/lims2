@@ -1502,7 +1502,7 @@
                 <input type="text" data-row="${idx}" data-field="testing_purpose" value="${esc(row.testing_purpose)}">
               </div>
               <div class="field">
-                <label>Note</label>
+                <label>Note <span class="en">tercetak sebagai Remarks di Lembar Hasil Uji &amp; Berita Acara</span></label>
                 <textarea data-row="${idx}" data-field="note">${esc(row.note)}</textarea>
               </div>
             </div>
@@ -4508,7 +4508,7 @@
               <button type="button" class="btn btn-sm" id="btnAddWitness" style="align-self:flex-start;margin-top:4px;">+ Tambah saksi</button>
               <input type="hidden" name="witnessed_by" id="witnessedByValue" value="${esc(r.witnessed_by)}"></div>
             <div class="field"><label>Test Conducted by</label><input type="text" name="test_conducted_by" value="${esc(r.test_conducted_by) || esc(r.testing_pic)}"></div>
-            <div class="field full"><label>Remarks</label><textarea name="remarks">${esc(r.remarks)}</textarea></div>
+            <div class="field full"><label>Remarks <span class="en">bila kosong terisi dari Note coupon di Permintaan Uji</span></label><textarea name="remarks">${esc(r.remarks)}</textarea></div>
           </div>
         </div>
 

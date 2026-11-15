@@ -337,6 +337,14 @@ function call(method, path, params, body) {
   r = await call('GET', '/api/test-reports/:id', { id: String(id) });
   assert.strictEqual(r.body.pqr_no, 'PQR-24A/ASME/SEK/26');
   delete WO.coupon_tests[0].pqr_no;
+  // Remarks kosong di Lembar diambil dari Note coupon Permintaan Uji; isian Remarks di Lembar tetap diutamakan
+  WO.coupon_tests[0].note = 'Material Manufactured by : PT Lautan Steel Indonesia';
+  r = await call('GET', '/api/test-reports/:id', { id: String(id) });
+  assert.strictEqual(r.body.remarks, 'Material Manufactured by : PT Lautan Steel Indonesia');
+  assert.strictEqual(r.body.template, 'bend-mat');
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-mat', remarks: 'Catatan lab', rows: r.body.rows, status: 'draft' });
+  assert.strictEqual(r.body.remarks, 'Catatan lab');
+  delete WO.coupon_tests[0].note;
   // ukuran uji Bend diketik di Lembar, nama baris Thickness / Diameter
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-sec', fields: { test_size: '12.7', test_size_kind: 'Diameter', evil: 1 }, rows: [{ marking_specimen: 'ABN.9.1-BR1', result: 'accepted' }], status: 'draft' });
   assert.deepStrictEqual(r.body.fields, { test_size: '12.7', test_size_kind: 'Diameter' });
