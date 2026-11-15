@@ -24,6 +24,10 @@ assert.strictEqual(materialText({ coupon_type: [], coupon_type_other: 'Pipe', th
 assert.deepStrictEqual(require('../lib/witness').materialLines({ coupon_type: ['Joint Pipe'], material_type_grade: 'A-790 UNS S31803 to A-790 UNS S31803', material_size: '8" Sch 80',
   thickness: '10', welding_process: 'GTAW+SMAW', welding_position: '2G', no_wps: 'SEK-GS-P-10H10H-N11', pqr_no: 'PQR-11A/ASME/SEK/26' }),
   ['Joint Pipe, A-790 UNS S31803 to A-790 UNS S31803', '8" Sch 80 with 10 mm Thickness', 'GTAW+SMAW 2G', 'WPS No : SEK-GS-P-10H10H-N11', 'PQR No : PQR-11A/ASME/SEK/26']);
+// Heat Number, Welder's Name, dan Note (sebagai Remarks) ikut di bawah PQR No
+assert.deepStrictEqual(require('../lib/witness').materialLines({ coupon_type: ['Joint Plate'], material_type_grade: 'AISI 4130', material_size: 'Thk 22', welding_process: 'SMAW', welding_position: '1G',
+  no_wps: '005/WPS/PPDSI-2026', pqr_no: '005/PQR/PPDSI-2026', heat_number: 'H-123', welder_name: 'Faizal Rizky Januar', note: 'Material Manufactured by :\nPT Lautan Steel Indonesia' }).slice(4),
+  ['PQR No : 005/PQR/PPDSI-2026', 'Heat No : H-123', "Welder's Name : Faizal Rizky Januar", 'Remarks : Material Manufactured by : PT Lautan Steel Indonesia']);
 // Material Size dari penerimaan sampel ikut; isian "-" tidak dicetak (dulu "- mm Thickness")
 assert.strictEqual(materialText({ coupon_type: ['Joint Pipe to Plate'], material_type_grade: 'A790 UNS S31803 to Plate A240 UNS S31803', material_size: '2" Sch 10 to Plate 10 mm', outside_diameter: '-', thickness: '-' }),
   'Joint Pipe to Plate, A790 UNS S31803 to Plate A240 UNS S31803, 2" Sch 10 to Plate 10 mm');
