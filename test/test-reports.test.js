@@ -689,6 +689,15 @@ function call(method, path, params, body) {
     assert.ok(rowOf('>WPS-1<') === rowOf('ASTM A333'), 'grade baris 1 sejajar WPS No');
     assert.ok(rowOf('>PQR-1<') !== rowOf('>WPS-1<') && rowOf('>Heat No<') !== rowOf('>PQR No<'), 'Heat No turun satu baris');
     assert.ok(rowOf('>Welding Process<') === rowOf(">Welder's Name<") || rowOf('>Welding Process<') === rowOf('>Welder&#39;s Name<') || rowOf('>Welding Process<') === rowOf('Welder'), 'blok kanan berakhir di baris Welder');
+    // Macro: isian Welder's Name memanjang ke sisi kanan -> dipendekkan agar blok kanan tetap bisa turun
+    for (const template of ['macro-butt', 'macro-fillet']) {
+      const m = renderTemplateReportHtml({ template, test_request: {}, fields: {}, rows: [{}], pqr_no: 'PQR-1', welder_name: 'Uweyass',
+        coupon: { coupon_type: ['Plate'], material_type_grade: 'ASTM A333 Gr.6 to A516 Gr.70', no_wps: 'WPS-1', welding_position: '1G', welding_process: 'GTAW' } });
+      const rowM = text => { const i = m.indexOf(text); return m.lastIndexOf('<tr', i); };
+      assert.ok(rowM('>WPS-1<') === rowM('ASTM A333'), template + ': grade baris 1 sejajar WPS No');
+      assert.ok(rowM('>PQR-1<') !== rowM('>WPS-1<') && m.includes('>Uweyass<'), template + ': PQR rapat & Welder tetap tercetak');
+      assert.ok(rowM('>Heat No<') !== rowM('>PQR No<') && rowM('>GTAW<') !== rowM('>1G<'), template + ': blok kanan turun satu baris');
+    }
   }
   // tanda tangan approval tercetak di semua form ber-Approved Signatory (dulu hilang di Microstructure: sel di bawahnya
   // tertutup isian Remarks yang memanjang)
