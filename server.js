@@ -1000,6 +1000,12 @@ app.get('/work-orders/:id/print', async (req, res) => {
   try {
     const data = await getFullWorkOrder(req.params.id);
     if (!data) return res.status(404).send('Work Order tidak ditemukan');
+    // Remarks = metode tes; bila Metode tes di Permintaan Uji kosong, pakai Test Method yang diisi di Lembar Hasil Uji
+    const { rows: methods } = await pool.query(
+      `SELECT coupon_row_no, test_name, test_method FROM test_reports WHERE test_request_id = $1 AND COALESCE(test_method, '') <> ''`,
+      [data.test_request_id]);
+    data.report_methods = {};
+    methods.forEach(m => { data.report_methods[m.coupon_row_no + '|' + m.test_name] = m.test_method; });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(renderWorkOrderPrintHtml(data));
