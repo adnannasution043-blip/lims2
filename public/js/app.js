@@ -3904,6 +3904,17 @@
 
   // Form Hardness: hasil HV per titik (Weld: Line 1 & 2 x 9 titik; Material: 5 titik + sketsa unggahan).
   const HARD_GROUPS = [['Base Metal', 3], ['HAZ', 3], ['Weld Metal', 3]];
+  // Type of Test Hardness yang dipakai lab (permintaan klien); isian tetap bisa diketik bebas sesuai permintaan pelanggan
+  const HARD_TYPES = [
+    'Hardness Micro Vickers (HV) Load Test, 0.1 Kgf',
+    'Vickers Hardness Number (HV) Load Test, 10 Kgf',
+    'Hardness Rockwell A (HRA) Load Test, 60 Kgf',
+    'Hardness Rockwell B (HRB) Load Test, 100 Kgf',
+    'Hardness Rockwell C (HRC) Load Test, 150 Kgf',
+    'Hardness Rockwell D (HRD) Load Test, 100 Kgf',
+    'Hardness Rockwell F (HRF) Load Test, 60 Kgf',
+    'Hardness Rockwell G (HRG) Load Test, 150 Kgf'
+  ];
   function hardStateOf(fields) {
     const f = fields || {};
     return { lines: JSON.parse(JSON.stringify((f.hardness || {}).lines || [[], []])), sketch: f.sketch || '', pattern: f.pattern ? JSON.parse(JSON.stringify(f.pattern)) : null };
@@ -3925,7 +3936,18 @@
       .sort((a, b) => (b.customer === custName) - (a.customer === custName) || a.name.localeCompare(b.name, 'id'));
     const custom = !!(pat && !pat.id);
     const known = pat && !custom && choices.some(p => p.id === pat.id);
-    const patternSel = `
+    const typeTest = (state.testReport.fields || {}).type_test || '';
+    const typeSel = `
+      <div class="form-grid" style="margin-bottom:12px;">
+        <div class="field"><label>Jenis Hardness <span class="en">pilih, lalu beban bisa diubah di isian sebelahnya</span></label>
+          <select id="hardTypeSel">
+            <option value="">— Pilih jenis hardness —</option>
+            ${HARD_TYPES.map(t => `<option ${t === typeTest ? 'selected' : ''}>${esc(t)}</option>`).join('')}
+          </select></div>
+        <div class="field"><label>Type of Test <span class="en">tercetak di report; kosong = ${esc(HARD_TYPES[1])}</span></label>
+          <input type="text" name="field_type_test" id="hardTypeText" value="${esc(typeTest)}" maxlength="150" placeholder="${esc(HARD_TYPES[1])}"></div>
+      </div>`;
+    const patternSel = typeSel + `
       <div class="form-grid" style="margin-bottom:12px;"><div class="field full">
         <label>Pola Hardness <span class="en">dari Master Data &rarr; Pola Hardness, atau susunan khusus sesuai permintaan pelanggan</span></label>
         <select id="hardPatternSel">
@@ -4018,6 +4040,17 @@
   }
 
   function bindTestReportHardSketch() {
+    const typeSel = document.getElementById('hardTypeSel'), typeText = document.getElementById('hardTypeText');
+    if (typeSel && typeText) {
+      typeSel.addEventListener('change', () => {
+        if (typeSel.value) typeText.value = typeSel.value;
+        state.testReport.fields = { ...(state.testReport.fields || {}), type_test: typeText.value };
+      });
+      typeText.addEventListener('input', () => {
+        state.testReport.fields = { ...(state.testReport.fields || {}), type_test: typeText.value };
+        typeSel.value = HARD_TYPES.includes(typeText.value) ? typeText.value : '';
+      });
+    }
     const sel = document.getElementById('hardPatternSel');
     if (sel) sel.addEventListener('change', async () => {
       if (sel.value === 'snapshot') return;
@@ -4471,7 +4504,7 @@
         </div>` : ''}
         ${r.template_hard ? `
         <div class="card">
-          <p class="section-title">Hasil Hardness (HV) <span class="en">dicetak sebagai halaman Sketch Hardness + halaman hasil</span></p>
+          <p class="section-title">Hasil Hardness <span class="en">dicetak sebagai halaman Sketch Hardness + halaman hasil</span></p>
           <div id="testReportHardWrap">${testReportHardHtml(r.template)}</div>
         </div>` : ''}
         ${r.template_locations ? `

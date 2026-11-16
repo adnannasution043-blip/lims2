@@ -504,15 +504,16 @@ function call(method, path, params, body) {
   const hid = r.body.id;
   const png = 'data:image/png;base64,iVBORw0KGgo=';
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-mat', status: 'draft', fields: {
-    spec: 'ASTM A36', hardness: { lines: [['172', '175', null, '168', '174', 'x'.repeat(40)], ['9']] }, sketch: png, evil: 1 } });
+    spec: 'ASTM A36', type_test: 'Hardness Rockwell B (HRB) Load Test, 100 Kgf', hardness: { lines: [['172', '175', null, '168', '174', 'x'.repeat(40)], ['9']] }, sketch: png, evil: 1 } });
   assert.strictEqual(r.body.template, 'hard-mat');
   assert.strictEqual(r.body.fields.hardness.lines[0][2], '');
   assert.strictEqual(r.body.fields.hardness.lines[0][5].length, 12);
   assert.strictEqual(r.body.fields.sketch, png);
   assert.ok(!('evil' in r.body.fields));
+  assert.strictEqual(r.body.fields.type_test, 'Hardness Rockwell B (HRB) Load Test, 100 Kgf');
   const hardHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual((hardHtml.match(/class="paper"/g) || []).length, 2);   // Sketch Hardness + hasil
-  assert.ok(hardHtml.includes('>172<') && hardHtml.includes('ASTM A36') && hardHtml.includes(png));
+  assert.ok(hardHtml.includes('>172<') && hardHtml.includes('ASTM A36') && hardHtml.includes(png) && hardHtml.includes('Rockwell B (HRB)'));
   assert.ok(hardHtml.includes('1 of 2') && hardHtml.includes('2 of 2'));
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: { sketch: 'javascript:alert(1)' } });
   assert.ok(!('sketch' in r.body.fields), 'sketch bukan data:image ditolak');
@@ -697,6 +698,15 @@ function call(method, path, params, body) {
     assert.ok(rowOf('>WPS-1<') === rowOf('ASTM A333'), 'grade baris 1 sejajar WPS No');
     assert.ok(rowOf('>PQR-1<') !== rowOf('>WPS-1<') && rowOf('>Heat No<') !== rowOf('>PQR No<'), 'Heat No turun satu baris');
     assert.ok(rowOf('>Welding Process<') === rowOf(">Welder's Name<") || rowOf('>Welding Process<') === rowOf('>Welder&#39;s Name<') || rowOf('>Welding Process<') === rowOf('Welder'), 'blok kanan berakhir di baris Welder');
+    // Hardness: Type of Test bisa diganti (mis. Rockwell C); kosong = Vickers 10 Kgf seperti form aslinya
+    for (const template of ['hard-mat', 'hard-weld']) {
+      const base = { template, test_name: 'Hardness Test', test_request: {}, rows: [{}], coupon: { coupon_type: ['Plate'] } };
+      const def = renderTemplateReportHtml({ ...base, fields: {} });
+      assert.ok(def.includes('Vickers Hardness Number (HV)'), template + ': bawaan Vickers');
+      const hrc = renderTemplateReportHtml({ ...base, fields: { type_test: 'Hardness Rockwell C (HRC) Load Test, 150 Kgf' } });
+      assert.ok(!/Vickers/.test(hrc), template + ': Vickers diganti di semua halaman');
+      assert.ok((hrc.match(/Hardness Rockwell C \(HRC\) Load Test, 150 Kgf/g) || []).length >= 3, template + ': Type of Test kedua halaman + judul tabel');
+    }
     // Macro: isian Welder's Name memanjang ke sisi kanan -> dipendekkan agar blok kanan tetap bisa turun
     for (const template of ['macro-butt', 'macro-fillet']) {
       const m = renderTemplateReportHtml({ template, test_request: {}, fields: {}, rows: [{}], pqr_no: 'PQR-1', welder_name: 'Uweyass',
