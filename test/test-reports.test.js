@@ -698,6 +698,13 @@ function call(method, path, params, body) {
     assert.ok(rowOf('>WPS-1<') === rowOf('ASTM A333'), 'grade baris 1 sejajar WPS No');
     assert.ok(rowOf('>PQR-1<') !== rowOf('>WPS-1<') && rowOf('>Heat No<') !== rowOf('>PQR No<'), 'Heat No turun satu baris');
     assert.ok(rowOf('>Welding Process<') === rowOf(">Welder's Name<") || rowOf('>Welding Process<') === rowOf('>Welder&#39;s Name<') || rowOf('>Welding Process<') === rowOf('Welder'), 'blok kanan berakhir di baris Welder');
+    // Material Type/Grade "A to B" dipecah tepat setelah "to" (tidak di tengah nama grade)
+    {
+      const g = renderTemplateReportHtml({ template: 'bend-sec', test_name: 'Bend Root', test_request: {}, fields: {}, rows: [{}],
+        coupon: { coupon_type: ['Plate'], material_type_grade: 'JIS G 3101 SS400 to JIS G 3101 SS400', no_wps: 'WPS-1' } });
+      assert.ok(g.includes('>JIS G 3101 SS400 to</td>') && g.includes('>JIS G 3101 SS400</td>'), 'grade dipecah setelah "to"');
+      assert.ok(!g.includes('SS400 to JIS G'), 'nama grade kedua tidak terpotong');
+    }
     // Hardness: Type of Test bisa diganti (mis. Rockwell C); kosong = Vickers 10 Kgf seperti form aslinya
     for (const template of ['hard-mat', 'hard-weld']) {
       const base = { template, test_name: 'Hardness Test', test_request: {}, rows: [{}], coupon: { coupon_type: ['Plate'] } };
