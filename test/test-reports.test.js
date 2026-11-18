@@ -416,6 +416,13 @@ function call(method, path, params, body) {
   assert.deepStrictEqual(Object.keys(r.body.fields.elements).sort(), ['C', 'Cr']);   // kosong & non-string dibuang
   const chemHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(kid) } }, { setHeader() {}, send: resolve }));
   assert.ok(chemHtml.includes('>17.9<') && chemHtml.includes('DE.1/TR/15/CHEM/MAT'));
+  // PMI / Chemical: unsur tambahan di luar daftar form (diketik di Lembar) tersimpan dan tercetak
+  r = await call('PUT', '/api/test-reports/:id', { id: String(kid) }, { template: 'chem-mat-pmi', status: 'draft',
+    fields: { elements: { Cr: '18.2', Mo: '2.1', Nb: '0.3' }, extra_elements: ['Mo', 'Nb', 'Mo', '', 5, 'W'] } });
+  assert.deepStrictEqual(r.body.fields.extra_elements, ['Mo', 'Nb', 'W']);
+  const pmiHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(kid) } }, { setHeader() {}, send: resolve }));
+  assert.ok(['Cr', 'Mo', 'Nb'].every(l => pmiHtml.includes('>' + l + '<')) && pmiHtml.includes('>2.1<'), 'unsur tambahan tercetak');
+  assert.ok(!pmiHtml.includes('>W<') && !pmiHtml.includes('>Si<'), 'unsur kosong (form maupun tambahan) tidak tercetak');
   // Qty > 1: spesimen ke-2 dst. disimpan di fields.more (hanya kunci hasil spesimen)
   r = await call('PUT', '/api/test-reports/:id', { id: String(kid) }, { template: 'chem-mat-ss', fields: { elements: { Cr: '17.9' }, more: [{ elements: { Cr: '18.4' }, evil: 1 }, 'x'] }, status: 'draft' });
   assert.deepStrictEqual(r.body.fields.more, [{ elements: { Cr: '18.4' } }, { elements: {} }]);

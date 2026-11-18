@@ -3297,6 +3297,7 @@
     state.view = 'test-report-form';
     state.testReport = data;
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
+    state.testReportElExtra = [...((data.fields || {}).extra_elements || [])];
     ferriteStateOf(data.fields);
     state.testReportHard = hardStateOf(data.fields);
     specStateOf(data);
@@ -3762,10 +3763,19 @@
   }
 
   // Form Chemical: satu isian per elemen (daftar elemen mengikuti varian form yang dipilih).
+  // Unsur form + unsur tambahan yang diketik di Lembar (mis. PMI: hasil uji tidak baku, unsurnya berbeda-beda)
   function testReportElementsHtml(templateKey) {
     const labels = ((state.testReport || {}).template_elements || {})[templateKey] || [];
-    return `<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${labels.map(l => `
-      <div class="field"><label>${esc(l)}</label><input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`).join('')}</div>`;
+    const extra = (state.testReportElExtra || []).filter(l => !labels.includes(l));
+    const box = (l, own) => `
+      <div class="field"><label style="display:flex;justify-content:space-between;align-items:center;gap:4px;">${esc(l)}${own ? `<button type="button" class="btn btn-sm btn-danger" data-el-del="${esc(l)}" title="Hapus unsur ${esc(l)}" style="padding:0 6px;line-height:1.4;">&times;</button>` : ''}</label>
+        <input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`;
+    return `<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${labels.map(l => box(l, false)).join('')}${extra.map(l => box(l, true)).join('')}</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px;flex-wrap:wrap;">
+        <div class="field" style="margin:0;width:160px;"><label>Unsur tambahan <span class="en">mis. Mo, Nb, W</span></label><input type="text" id="elAddName" maxlength="12" placeholder="Simbol unsur"></div>
+        <button type="button" class="btn btn-sm" data-el-add>+ Unsur</button>
+        <span class="muted" style="font-size:12px;">Unsur tambahan ikut tercetak bila diisi; tabel unsur di report menyesuaikan.</span>
+      </div>`;
   }
 
   // Form Corrosion (Pitting / Intergranular): berat sebelum & sesudah uji (5 penimbangan), luas, jam uji, teks ringkasan
@@ -4559,6 +4569,31 @@
       state.testReportElements[e.target.dataset.element] = e.target.value;
       state.testReportDirty = true;
     });
+    const rerender = () => { wrap.innerHTML = testReportElementsHtml((document.getElementById('testReportTemplate') || {}).value || state.testReport.template); };
+    const addOne = () => {
+      const inp = document.getElementById('elAddName');
+      const name = (inp.value || '').trim().slice(0, 12);
+      if (!name) return;
+      const labels = (state.testReport.template_elements || {})[(document.getElementById('testReportTemplate') || {}).value || state.testReport.template] || [];
+      if (labels.includes(name) || (state.testReportElExtra || []).includes(name)) { toast(`Unsur ${name} sudah ada`, 'error'); return; }
+      state.testReportElExtra = [...(state.testReportElExtra || []), name];
+      state.testReportDirty = true;
+      rerender();
+      const box = wrap.querySelector(`[data-element="${CSS.escape(name)}"]`);
+      if (box) box.focus();
+    };
+    wrap.addEventListener('click', e => {
+      if (e.target.closest('[data-el-add]')) addOne();
+      const del = e.target.closest('[data-el-del]');
+      if (del) {
+        const name = del.dataset.elDel;
+        state.testReportElExtra = (state.testReportElExtra || []).filter(l => l !== name);
+        delete state.testReportElements[name];
+        state.testReportDirty = true;
+        rerender();
+      }
+    });
+    wrap.addEventListener('keydown', e => { if (e.target.id === 'elAddName' && e.key === 'Enter') { e.preventDefault(); addOne(); } });
   }
 
   function renderTestReportForm() {
@@ -4820,7 +4855,7 @@
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
     payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
-      : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
+      : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements, extra_elements: state.testReportElExtra || [] }
       : (state.testReport && state.testReport.template_locations ? ferritePayload()
         : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines, more: state.testReportHard.more.slice(0, Math.max(0, (state.testReport.hard_markings || []).length - 1)) }, sketch: state.testReportHard.sketch, pattern: hardActivePattern(payload.template || state.testReport.template) }
           : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
@@ -4842,6 +4877,7 @@
       });
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
+      state.testReportElExtra = [...((state.testReport.fields || {}).extra_elements || [])];
       state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {})); state.testReportCorrIdx = 0;
       state.testReportHicLog = JSON.parse(JSON.stringify((state.testReport.fields || {}).hic_log || []));
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);
