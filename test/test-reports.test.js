@@ -504,13 +504,15 @@ function call(method, path, params, body) {
   const hid = r.body.id;
   const png = 'data:image/png;base64,iVBORw0KGgo=';
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-mat', status: 'draft', fields: {
-    spec: 'ASTM A36', type_test: 'Hardness Rockwell B (HRB) Load Test, 100 Kgf', hardness: { lines: [['172', '175', null, '168', '174', 'x'.repeat(40)], ['9']] }, sketch: png, evil: 1 } });
+    spec: 'ASTM A36', type_test: 'Hardness Rockwell B (HRB) Load Test, 100 Kgf', hardness: { lines: [['172', '175', null, '168', '174', 'x'.repeat(40)], ['9']], more: [{ lines: [['201']] }, 'x'] }, sketch: png, evil: 1 } });
   assert.strictEqual(r.body.template, 'hard-mat');
   assert.strictEqual(r.body.fields.hardness.lines[0][2], '');
   assert.strictEqual(r.body.fields.hardness.lines[0][5].length, 12);
   assert.strictEqual(r.body.fields.sketch, png);
   assert.ok(!('evil' in r.body.fields));
   assert.strictEqual(r.body.fields.type_test, 'Hardness Rockwell B (HRB) Load Test, 100 Kgf');
+  assert.strictEqual(r.body.fields.hardness.more[0].lines[0][0], '201');   // spesimen ke-2 (Qty > 1)
+  assert.deepStrictEqual(r.body.fields.hardness.more[1].lines, [[], [], []]);
   const hardHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual((hardHtml.match(/class="paper"/g) || []).length, 2);   // Sketch Hardness + hasil
   assert.ok(hardHtml.includes('>172<') && hardHtml.includes('ASTM A36') && hardHtml.includes(png) && hardHtml.includes('Rockwell B (HRB)'));
@@ -698,6 +700,17 @@ function call(method, path, params, body) {
     assert.ok(rowOf('>WPS-1<') === rowOf('ASTM A333'), 'grade baris 1 sejajar WPS No');
     assert.ok(rowOf('>PQR-1<') !== rowOf('>WPS-1<') && rowOf('>Heat No<') !== rowOf('>PQR No<'), 'Heat No turun satu baris');
     assert.ok(rowOf('>Welding Process<') === rowOf(">Welder's Name<") || rowOf('>Welding Process<') === rowOf('>Welder&#39;s Name<') || rowOf('>Welding Process<') === rowOf('Welder'), 'blok kanan berakhir di baris Welder');
+    // Hardness Qty 2: satu halaman hasil per spesimen, Sample Marking = marking spesimen
+    {
+      const h2 = renderTemplateReportHtml({ template: 'hard-weld', test_name: 'Hardness Test', test_request: {}, rows: [{}], sample_marking: 'PDS.11.1',
+        hard_markings: ['PDS.11.1-HD1', 'PDS.11.1-HD2'], coupon: { coupon_type: ['Plate'] },
+        fields: { hardness: { lines: [['185'], []], more: [{ lines: [['201']] }] } } });
+      assert.strictEqual((h2.match(/class="paper"/g) || []).length, 3, 'sketsa + 2 halaman hasil');
+      assert.ok(h2.includes('3 of 3') && h2.includes('PDS.11.1-HD1') && h2.includes('PDS.11.1-HD2'));
+      assert.ok(h2.indexOf('>185<') < h2.indexOf('>201<') && h2.indexOf('PDS.11.1-HD2') < h2.indexOf('>201<'), 'hasil spesimen 2 di halaman HD2');
+      const h1 = renderTemplateReportHtml({ template: 'hard-weld', test_name: 'Hardness Test', test_request: {}, rows: [{}], hard_markings: ['X-HD1'], coupon: {}, fields: {} });
+      assert.strictEqual((h1.match(/class="paper"/g) || []).length, 2, 'Qty 1 tetap 2 halaman');
+    }
     // Material Type/Grade "A to B" dipecah tepat setelah "to" (tidak di tengah nama grade)
     {
       const g = renderTemplateReportHtml({ template: 'bend-sec', test_name: 'Bend Root', test_request: {}, fields: {}, rows: [{}],

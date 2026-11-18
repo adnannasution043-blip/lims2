@@ -3917,7 +3917,19 @@
   ];
   function hardStateOf(fields) {
     const f = fields || {};
-    return { lines: JSON.parse(JSON.stringify((f.hardness || {}).lines || [[], []])), sketch: f.sketch || '', pattern: f.pattern ? JSON.parse(JSON.stringify(f.pattern)) : null };
+    return {
+      lines: JSON.parse(JSON.stringify((f.hardness || {}).lines || [[], []])),
+      // spesimen ke-2 dst. (Qty > 1): set hasil sendiri, susunan line/titik sama
+      more: JSON.parse(JSON.stringify((f.hardness || {}).more || [])).map(m => ({ lines: (m && m.lines) || [] })),
+      sketch: f.sketch || '', pattern: f.pattern ? JSON.parse(JSON.stringify(f.pattern)) : null
+    };
+  }
+  // set hasil spesimen ke-si (0 = spesimen pertama)
+  function hardSet(si) {
+    const h = state.testReportHard;
+    if (!si) return h.lines;
+    while (h.more.length < si) h.more.push({ lines: [] });
+    return h.more[si - 1].lines;
   }
   const hardKindOf = templateKey => (templateKey === 'hard-mat' ? 'material' : 'weld');
   // pola yang berlaku untuk bentuk form terpilih (pola Weld tidak dipakai di form Material, dan sebaliknya)
@@ -3961,15 +3973,22 @@
     const layoutZones = pat ? pat.zones.map(z => [z.name || 'Titik uji', Number(z.points)]) : (info.points === 9 ? HARD_GROUPS : [['Titik uji', 5]]);
     const boxW = layoutZones.reduce((n, z) => n + z[1], 0) > 9 ? 60 : 78;   // pola banyak titik: kotak lebih ramping
     const lines = [];
-    for (let li = 0; li < layoutLines.length; li++) {
-      const vals = state.testReportHard.lines[li] || [];
-      let n = 0;
-      const cells = layoutZones.map(([g, c]) => `
-        <div><p class="muted" style="margin:0 0 4px;">${esc(g)}</p><div style="display:flex;gap:6px;">${Array.from({ length: c }, () => {
-          const i = n++;
-          return `<div class="field" style="margin:0;width:${boxW}px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-hline="${li}" data-hpt="${i}" value="${esc(vals[i] || '')}"></div>`;
-        }).join('')}</div></div>`).join('');
-      lines.push(`<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;">${esc(layoutLines[li])}</label><div style="display:flex;gap:18px;flex-wrap:wrap;">${cells}</div></div>`);
+    // satu set hasil per spesimen sesuai Qty (X-HD1, X-HD2, ...); tiap spesimen dicetak di halaman hasilnya sendiri
+    const marks = (state.testReport.hard_markings || []).filter(Boolean);
+    const nSpec = Math.max(1, marks.length);
+    for (let si = 0; si < nSpec; si++) {
+      if (nSpec > 1) lines.push(`<p class="section-title" style="margin:${si ? '18px' : '4px'} 0 8px;">Spesimen ${si + 1} &mdash; ${esc(marks[si])} <span class="en">halaman hasil sendiri</span></p>`);
+      const set = si ? ((state.testReportHard.more[si - 1] || {}).lines || []) : state.testReportHard.lines;
+      for (let li = 0; li < layoutLines.length; li++) {
+        const vals = set[li] || [];
+        let n = 0;
+        const cells = layoutZones.map(([g, c]) => `
+          <div><p class="muted" style="margin:0 0 4px;">${esc(g)}</p><div style="display:flex;gap:6px;">${Array.from({ length: c }, () => {
+            const i = n++;
+            return `<div class="field" style="margin:0;width:${boxW}px;"><label style="font-size:11px;">${i + 1}</label><input type="text" inputmode="decimal" data-hspec="${si}" data-hline="${li}" data-hpt="${i}" value="${esc(vals[i] || '')}"></div>`;
+          }).join('')}</div></div>`).join('');
+        lines.push(`<div style="margin-bottom:12px;"><label style="display:block;margin-bottom:4px;">${esc(layoutLines[li])}</label><div style="display:flex;gap:18px;flex-wrap:wrap;">${cells}</div></div>`);
+      }
     }
     const fallback = pat && pat.sketch ? 'sketsa dari pola dipakai'
       : (custom ? 'area sketsa tercetak kosong (sketsa bawaan form tidak dipakai untuk susunan khusus)'
@@ -4112,8 +4131,9 @@
     wrap.addEventListener('input', e => {
       if (e.target.dataset.hline === undefined) return;
       const li = Number(e.target.dataset.hline);
-      state.testReportHard.lines[li] = state.testReportHard.lines[li] || [];
-      state.testReportHard.lines[li][Number(e.target.dataset.hpt)] = e.target.value;
+      const set = hardSet(Number(e.target.dataset.hspec) || 0);
+      set[li] = set[li] || [];
+      set[li][Number(e.target.dataset.hpt)] = e.target.value;
       state.testReportDirty = true;
     });
     bindTestReportHardSketch();
@@ -4647,7 +4667,7 @@
     payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
       : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements }
       : (state.testReport && state.testReport.template_locations ? ferritePayload()
-        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines }, sketch: state.testReportHard.sketch, pattern: hardActivePattern(payload.template || state.testReport.template) }
+        : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines, more: state.testReportHard.more.slice(0, Math.max(0, (state.testReport.hard_markings || []).length - 1)) }, sketch: state.testReportHard.sketch, pattern: hardActivePattern(payload.template || state.testReport.template) }
           : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
