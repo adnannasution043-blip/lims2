@@ -34,6 +34,25 @@ Buka http://localhost:3000
    akan otomatis membuat tabel kalau belum ada.
 4. `PORT` otomatis di-set Railway lewat env var, sudah dihandle di `server.js`.
 
+## Integrasi dengan aplikasi Administrasi & Keuangan
+
+LIMS dan aplikasi Administrasi (`detech-admin`, repo terpisah) saling tersambung lewat API dengan token bersama,
+supaya customer, Job, dan status pembayaran tidak diketik dua kali. Set env berikut di service LIMS:
+
+| Variabel | Isi |
+|---|---|
+| `INTEGRATION_TOKEN` | Token rahasia acak, minimal 24 karakter. **Nilainya harus sama persis** dengan `INTEGRATION_TOKEN` di aplikasi Administrasi |
+| `ADMIN_APP_URL` | Alamat aplikasi Administrasi, mis. `https://admin.detech.co.id` (dipakai untuk menampilkan status tagihan di halaman LHU) |
+
+Yang terjadi bila keduanya diisi (lihat `lib/integration.js`):
+
+- Administrasi membaca master customer, Job (coupon + jenis uji), dan No. Laporan LHU lewat `/api/integration/v1/*`
+  (tanpa sesi login, wajib `Authorization: Bearer <INTEGRATION_TOKEN>`). Customer baru di Administrasi dikirim ke master
+  customer LIMS (upsert per ID Perusahaan + Atas Nama, tidak peka huruf besar/kecil).
+- Halaman detail LHU menampilkan kotak **Status Tagihan (Administrasi)**: invoice Job, sisa, dan apakah sudah lunas —
+  report asli dikirim setelah lunas.
+- Tanpa `INTEGRATION_TOKEN`, API integrasi menjawab 503 dan kotak status tagihan tidak tampil; LIMS berjalan seperti biasa.
+
 ## Struktur
 
 ```

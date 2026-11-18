@@ -5533,6 +5533,11 @@
             <button type="button" class="btn btn-sm" id="btnLhuAttUpload" style="margin-top:10px;">+ Tambah Attachment</button>
           </div>
 
+          <div class="card" id="lhuBillingCard" hidden>
+            <p class="section-title">Status Tagihan (Administrasi)</p>
+            <div id="lhuBilling"><p class="muted">Memuat status tagihan...</p></div>
+          </div>
+
           <div class="card">
             <div class="task-card-head">
               <p class="section-title">Informasi Distribusi</p>
@@ -5563,6 +5568,33 @@
 
     initLhuAttachments(r.id);
     initLhuDistributions(r.id);
+    initLhuBilling(wo.job_number);
+  }
+
+  // Status tagihan Job dari aplikasi Administrasi & Keuangan: report ASLI sebaiknya dikirim hanya bila invoice lunas.
+  // Kotak disembunyikan bila integrasi belum diatur (ADMIN_APP_URL / INTEGRATION_TOKEN kosong).
+  async function initLhuBilling(jobNo) {
+    const card = document.getElementById('lhuBillingCard');
+    const box = document.getElementById('lhuBilling');
+    if (!card || !box || !jobNo) return;
+    let b;
+    try { b = await api(`/api/billing/jobs/${encodeURIComponent(jobNo)}`); } catch (e) { return; }
+    if (!b || !b.enabled) return;
+    card.hidden = false;
+    if (b.error) { box.innerHTML = `<p class="muted">${esc(b.error)}</p>`; return; }
+    const rp = n => Number(n || 0).toLocaleString('id-ID');
+    const PAY = { paid: ['st-final', 'Lunas'], partial: ['st-draft', 'Sebagian'], unpaid: ['st-rejected', 'Belum bayar'] };
+    const inv = b.invoices || [];
+    const head = !inv.length
+      ? `<div class="alert-box" style="background:#FFF4E5;border:1px solid #F5C77E;border-radius:8px;padding:10px 12px;margin-bottom:8px;"><strong>Belum ada invoice untuk Job ini.</strong><br>Konfirmasi ke bagian Administrasi sebelum mengirim report asli.</div>`
+      : b.all_paid
+        ? `<div style="background:var(--success-bg);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:var(--success);"><strong>Semua invoice lunas.</strong> Report asli boleh dikirim.</div>`
+        : `<div style="background:var(--danger-bg);border-radius:8px;padding:10px 12px;margin-bottom:8px;color:var(--danger);"><strong>Invoice belum lunas (sisa Rp ${rp(b.outstanding)}).</strong> Report asli diberikan setelah pelunasan — kirim salinan dulu atau minta persetujuan Administrasi.</div>`;
+    box.innerHTML = head + (inv.length ? `<table class="table" style="width:100%;font-size:13px;"><thead><tr><th style="text-align:left">Invoice</th><th style="text-align:right">Total (Rp)</th><th style="text-align:right">Sisa (Rp)</th><th>Status</th></tr></thead><tbody>${
+      inv.map(i => `<tr><td>${esc(i.number || '-')}<div class="muted" style="font-size:12px">${esc(i.doc_type === 'proforma' ? 'Pro-forma' : 'Invoice')} · ${esc(formatDateOnly(i.invoice_date))}</div></td>
+        <td style="text-align:right">${rp(i.total)}</td><td style="text-align:right">${rp(i.outstanding)}</td>
+        <td><span class="st-pill ${(PAY[i.pay_status] || PAY.unpaid)[0]}">${(PAY[i.pay_status] || PAY.unpaid)[1]}</span></td></tr>`).join('')
+    }</tbody></table>` : '');
   }
 
   function initLhuAttachments(woId) {

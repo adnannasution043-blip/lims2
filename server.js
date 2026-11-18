@@ -19,6 +19,7 @@ const { nextNumber, ensureUniqueNumbers, isUniqueViolation, couponChangeProblem,
 const { auditTrail, registerAuditRoutes } = require('./lib/audit');
 const { registerDashboardRoutes } = require('./lib/dashboard');
 const { specimenSheetProblems } = require('./lib/completeness');
+const { registerIntegrationRoutes, registerBillingRoutes } = require('./lib/integration');
 
 const app = express();
 // Route peka huruf besar-kecil: tanpa ini Express 4 menerima "/API/..." sebagai "/api/..." sementara middleware
@@ -29,6 +30,10 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
+// API integrasi dengan aplikasi Administrasi & Keuangan: memakai token bersama (INTEGRATION_TOKEN), bukan sesi login,
+// jadi dipasang sebelum middleware login (lihat lib/integration.js).
+const integrationApi = registerIntegrationRoutes(app, { pool });
+
 // Login & role: semua /api/* (kecuali /api/auth/*) dan halaman cetak wajib login saat penerapan aktif (lihat lib/auth.js).
 const auth = createAuth(pool);
 app.use(auth.middleware());
@@ -38,6 +43,8 @@ auth.registerRoutes(app, { rawBody: express.raw({ type: () => true, limit: '2mb'
 registerAuditRoutes(app, { pool });
 // Setelah LHU terbit, Permintaan Uji / Work Order / hasil uji / pengecekan spesimen terkunci (lihat lib/integrity.js).
 app.use(lockGuard(pool));
+// Status tagihan Job dari aplikasi Administrasi (ditampilkan di halaman LHU sebelum report asli dikirim).
+registerBillingRoutes(app, { api: integrationApi });
 
 // ---------- helpers ----------
 
