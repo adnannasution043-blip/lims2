@@ -3298,6 +3298,7 @@
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
     ferriteStateOf(data.fields);
     state.testReportHard = hardStateOf(data.fields);
+    specStateOf(data);
     state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {})); state.testReportCorrIdx = 0;
     state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
     state.testReportPhotoSlots = new Set(data.photos || []);
@@ -4139,6 +4140,77 @@
     bindTestReportHardSketch();
   }
 
+  // Chemical / Ferrite / Grain dengan Qty > 1: hasil per spesimen. Tombol "Spesimen n" menukar isian di editor;
+  // spesimen ke-1 disimpan di tempat lama (Lembar lama tetap), spesimen ke-2 dst. di fields.more.
+  const GRAIN_SUM_KEYS = ['grain_g', 'grain_mm2', 'grain_dia', 'grain_area'];
+  function specStateOf(data) {
+    const marks = (data.spec_markings || []).filter(Boolean);
+    const more = (data.fields || {}).more || [];
+    state.testReportSpec = {
+      kind: data.spec_kind || '', marks, cur: 0,
+      snaps: marks.map((m, i) => (i ? JSON.parse(JSON.stringify(more[i - 1] || (data.spec_kind === 'ferrite' ? { sample_id: m } : {}))) : null))
+    };
+  }
+  const specInput = n => document.querySelector(`[name="${n}"]`);
+  function specCapture() {
+    const k = (state.testReportSpec || {}).kind;
+    if (k === 'chem') return { elements: { ...state.testReportElements } };
+    if (k === 'ferrite') return { sample_id: (specInput('field_sample_id') || {}).value || '', ...ferritePayload() };
+    if (k === 'grain') {
+      const o = { rows: JSON.parse(JSON.stringify(state.testReportRows)) };
+      GRAIN_SUM_KEYS.forEach(f => { o[f] = (specInput('field_' + f) || {}).value || ''; });
+      return o;
+    }
+    return {};
+  }
+  function specLoad(snap) {
+    const k = state.testReportSpec.kind, s = snap || {};
+    const setInput = (n, v) => { const el = specInput(n); if (el) el.value = v || ''; };
+    if (k === 'chem') {
+      state.testReportElements = { ...(s.elements || {}) };
+      const w = document.getElementById('testReportElementsWrap');
+      if (w) w.innerHTML = testReportElementsHtml((document.getElementById('testReportTemplate') || {}).value || state.testReport.template);
+    } else if (k === 'ferrite') {
+      ferriteStateOf(s);
+      setInput('field_sample_id', s.sample_id);
+      rerenderTestReportFerrite();
+    } else if (k === 'grain') {
+      state.testReportRows = (s.rows && s.rows.length) ? JSON.parse(JSON.stringify(s.rows)) : Array.from({ length: 5 }, () => ({ l1: '', l2: '', l3: '', len: '' }));
+      GRAIN_SUM_KEYS.forEach(f => setInput('field_' + f, s[f]));
+      rerenderTestReportRows();
+    }
+  }
+  function specBarHtml() {
+    const sp = state.testReportSpec;
+    if (!sp || sp.marks.length < 2) return '';
+    return `<div class="spec-bar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:0 0 12px;">${sp.marks.map((m, i) =>
+      `<button type="button" class="btn btn-sm${i === sp.cur ? ' btn-primary' : ''}" data-spec-go="${i}">Spesimen ${i + 1} &mdash; ${esc(m)}</button>`).join('')}
+      <span class="muted" style="font-size:12px;">isian di bawah untuk spesimen terpilih; tiap spesimen dicetak di halaman sendiri</span></div>`;
+  }
+  function specGo(j) {
+    const sp = state.testReportSpec;
+    if (!sp || j === sp.cur) return;
+    sp.snaps[sp.cur] = specCapture();
+    sp.cur = j;
+    specLoad(sp.snaps[j]);
+    document.querySelectorAll('.spec-bar').forEach(b => { b.outerHTML = specBarHtml(); });
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-spec-go]');
+    if (b) specGo(Number(b.dataset.specGo));
+  });
+  // isian siap simpan: spesimen ke-1 di tempat lama, sisanya di fields.more
+  function specApplyPayload(payload) {
+    const sp = state.testReportSpec;
+    if (!sp || sp.marks.length < 2) return;
+    sp.snaps[sp.cur] = specCapture();
+    const s0 = sp.snaps[0] || {};
+    if (sp.kind === 'chem') payload.fields.elements = s0.elements || {};
+    if (sp.kind === 'ferrite') { payload.fields.ferrite = s0.ferrite; payload.fields.ferrite_locs = s0.ferrite_locs; payload.fields.sample_id = s0.sample_id; }
+    if (sp.kind === 'grain') { payload.rows = s0.rows; GRAIN_SUM_KEYS.forEach(f => { payload.fields[f] = s0[f]; }); }
+    payload.fields.more = sp.snaps.slice(1).map(s => s || {});
+  }
+
   // Form Ferrite: tiap lokasi punya n, PT dan hitungan titik Pi per medan. Lokasi bawaan form (Base Metal / HAZ /
   // Weld Metal) bisa diganti namanya, ditambah satu per satu atau dihapus (permintaan klien, mis. Base Metal Cap / Root);
   // begitu diubah, daftar lokasi disimpan sendiri di Lembar (ferrite_locs).
@@ -4510,6 +4582,7 @@
         ${r.template_grain ? `
         <div class="card">
           <p class="section-title">Ringkasan Grain Size <span class="en">diketik; belum dihitung otomatis (rumus klien belum dikonfirmasi)</span></p>
+          ${specBarHtml()}
           <div class="form-grid">
             <div class="field"><label>Grain Size Indices (G)</label><input type="text" name="field_grain_g" value="${esc((r.fields || {}).grain_g)}" placeholder="mis. 7.5"></div>
             <div class="field"><label>Grain / mm²</label><input type="text" name="field_grain_mm2" value="${esc((r.fields || {}).grain_mm2)}"></div>
@@ -4530,16 +4603,19 @@
         ${r.template_locations ? `
         <div class="card">
           <p class="section-title">Ferrite Content <span class="en">dicetak sebagai halaman utama + Lampiran #16 per lokasi; rata-rata, s, 95% CI &amp; % RA dihitung otomatis</span></p>
+          ${specBarHtml()}
           <div class="form-grid"><div class="field"><label>Sample Identification</label><input type="text" name="field_sample_id" value="${esc((r.fields || {}).sample_id)}"></div></div>
           <div id="testReportFerriteWrap" style="margin-top:12px;">${testReportFerriteHtml(r.template)}</div>
         </div>` : ''}
         ${r.template_elements ? `
         <div class="card">
           <p class="section-title">Elements Analyzed (%) <span class="en">isi hanya elemen yang terukur; kolom kosong tercetak kosong</span></p>
+          ${specBarHtml()}
           <div id="testReportElementsWrap">${testReportElementsHtml(r.template)}</div>
         </div>` : ((r.template_locations || r.template_hard || r.template_corr) ? '' : `
         <div class="card">
           <p class="section-title">${r.template_grain ? 'Hasil per Field Pengamatan' : 'Hasil per Spesimen'}</p>
+          ${r.template_grain ? specBarHtml() : ''}
           <div id="testReportRowsWrap">${testReportRowsHtml()}</div>
           <button type="button" class="btn btn-sm" id="btnAddReportRow" style="display:none;">+ Tambah Baris</button>
         </div>`)}
@@ -4672,6 +4748,7 @@
     Object.keys(payload).filter(k => k.startsWith('field_')).forEach(k => { payload.fields[k.slice(6)] = payload[k]; delete payload[k]; });
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
+    specApplyPayload(payload);
     const hp = payload.fields.pattern;
     if (hp && !hp.id && hp.zones.reduce((n, z) => n + (Number(z.points) || 0), 0) > HARD_MAX_POINTS) {
       toast(`Susunan khusus Hardness: maksimal ${HARD_MAX_POINTS} titik per line`, 'error');
@@ -4690,6 +4767,7 @@
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);
       ferriteStateOf(state.testReport.fields);
       state.testReportHard = hardStateOf(state.testReport.fields);
+      specStateOf(state.testReport);
       state.testReportDirty = false;
       toast((payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan')
         + (state.testReport.witness_linked ? ` · Witnessed By juga diisi di ${state.testReport.witness_linked} Lembar lain` : ''), 'success');

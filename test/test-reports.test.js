@@ -416,6 +416,10 @@ function call(method, path, params, body) {
   assert.deepStrictEqual(Object.keys(r.body.fields.elements).sort(), ['C', 'Cr']);   // kosong & non-string dibuang
   const chemHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(kid) } }, { setHeader() {}, send: resolve }));
   assert.ok(chemHtml.includes('>17.9<') && chemHtml.includes('DE.1/TR/15/CHEM/MAT'));
+  // Qty > 1: spesimen ke-2 dst. disimpan di fields.more (hanya kunci hasil spesimen)
+  r = await call('PUT', '/api/test-reports/:id', { id: String(kid) }, { template: 'chem-mat-ss', fields: { elements: { Cr: '17.9' }, more: [{ elements: { Cr: '18.4' }, evil: 1 }, 'x'] }, status: 'draft' });
+  assert.deepStrictEqual(r.body.fields.more, [{ elements: { Cr: '18.4' } }, { elements: {} }]);
+  assert.strictEqual(r.body.spec_kind, 'chem');
   r = await call('PUT', '/api/test-reports/:id', { id: String(kid) }, { template: 'nope', status: 'draft' });
   assert.strictEqual(r.body.template, 'chem-weld-cs');
 
@@ -710,6 +714,23 @@ function call(method, path, params, body) {
       assert.ok(h2.indexOf('>185<') < h2.indexOf('>201<') && h2.indexOf('PDS.11.1-HD2') < h2.indexOf('>201<'), 'hasil spesimen 2 di halaman HD2');
       const h1 = renderTemplateReportHtml({ template: 'hard-weld', test_name: 'Hardness Test', test_request: {}, rows: [{}], hard_markings: ['X-HD1'], coupon: {}, fields: {} });
       assert.strictEqual((h1.match(/class="paper"/g) || []).length, 2, 'Qty 1 tetap 2 halaman');
+    }
+    // Chemical / Ferrite / Grain Qty 2: satu set halaman per spesimen, hasil spesimen ke-2 dari fields.more
+    {
+      const base = { test_request: {}, coupon: { coupon_type: ['Plate'] }, sample_marking: 'PDS.1', spec_markings: ['PDS.1-CM1', 'PDS.1-CM2'] };
+      const chem = renderTemplateReportHtml({ ...base, template: 'chem-mat-ss', test_name: 'Chemical Composition Test', rows: [{}],
+        fields: { elements: { Cr: '17.9' }, more: [{ elements: { Cr: '18.4' } }] } });
+      assert.strictEqual((chem.match(/class="paper"/g) || []).length, 2, 'chemical: 1 halaman per spesimen');
+      assert.ok(chem.indexOf('PDS.1-CM1') < chem.indexOf('>17.9<') && chem.indexOf('PDS.1-CM2') < chem.indexOf('>18.4<') && chem.indexOf('>17.9<') < chem.indexOf('PDS.1-CM2'));
+      const fer = renderTemplateReportHtml({ ...base, template: 'ferrite-mat', test_name: 'Ferrite Point Count/ Ferrite Content', rows: [{}],
+        fields: { sample_id: 'S-1', ferrite: {}, more: [{ sample_id: 'S-2', ferrite: {} }] } });
+      assert.ok(fer.includes('S-1') && fer.includes('S-2') && fer.includes('PDS.1-CM2'), 'ferrite: Sample Identification per spesimen');
+      const gr = renderTemplateReportHtml({ ...base, template: 'grain', test_name: 'Grain size test', rows: [{ l1: '11' }],
+        fields: { grain_g: '7.5', more: [{ grain_g: '8.0', rows: [{ l1: '22' }] }] } });
+      assert.strictEqual((gr.match(/class="paper"/g) || []).length, 4, 'grain: halaman utama + halaman field per spesimen');
+      assert.ok(gr.includes('>7.5<') && gr.includes('>8.0<') && gr.indexOf('PDS.1-CM2') < gr.indexOf('>8.0<'));
+      const one = renderTemplateReportHtml({ ...base, spec_markings: ['PDS.1-CM1'], template: 'chem-mat-ss', test_name: 'Chemical Composition Test', rows: [{}], fields: { elements: {} } });
+      assert.strictEqual((one.match(/class="paper"/g) || []).length, 1, 'Qty 1 tidak berubah');
     }
     // Material Type/Grade "A to B" dipecah tepat setelah "to" (tidak di tengah nama grade)
     {
