@@ -10,6 +10,7 @@ const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
 const { registerTestReportRoutes, canonicalTestName } = require('./lib/testReports');
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerHardnessPatternRoutes } = require('./lib/hardnessPatterns');
+const { registerAcceptanceCriteriaRoutes } = require('./lib/acceptanceCriteria');
 const { registerWitnessRoutes } = require('./lib/witness');
 const { registerBackupRoutes } = require('./lib/backup');
 const { registerLhuReportRoutes } = require('./lib/lhuReports');
@@ -830,6 +831,7 @@ registerEquipmentRoutes(app, { pool, rawBody: express.raw({ type: () => true, li
 
 // Master Data > Pola Hardness (sketsa & susunan titik uji Hardness).
 registerHardnessPatternRoutes(app, { pool });
+registerAcceptanceCriteriaRoutes(app, { pool });
 
 // Pengguna & Role (hak akses); diterapkan oleh middleware login di lib/auth.js.
 registerUserRoutes(app, { pool });

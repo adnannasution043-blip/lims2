@@ -489,6 +489,17 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS witness_sessions_wo ON witness_sessions (work_order_id);
 
+    -- Master Data > Acceptance Criteria: kalimat kriteria penerimaan per standar (Fillet Weld Break / Peel)
+    CREATE TABLE IF NOT EXISTS acceptance_criteria_sets (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      customer TEXT,
+      criteria JSONB NOT NULL DEFAULT '[]',  -- [{"text":"The fractured surface ...","remark":"Showing complete fusion"}]
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Master Data > Pola Hardness: sketsa posisi titik + susunan titik uji (line, zona & jumlah titik) per client
     CREATE TABLE IF NOT EXISTS hardness_patterns (
       id SERIAL PRIMARY KEY,
@@ -780,6 +791,16 @@ async function initSchema() {
       );
     }
     await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_hardness_patterns', '1') ON CONFLICT (key) DO NOTHING`);
+  }
+  // Acceptance Criteria bawaan (kalimat form resmi FWB / Peel) ditambahkan sekali; boleh diubah atau dihapus
+  const seededCrit = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_acceptance_criteria'`);
+  if (!seededCrit.rows.length) {
+    for (const s of require('../lib/acceptanceCriteria').defaultSets()) {
+      await pool.query(
+        `INSERT INTO acceptance_criteria_sets (name, criteria, notes) VALUES ($1,$2,$3) ON CONFLICT (name) DO NOTHING`,
+        [s.name, JSON.stringify(s.criteria), s.notes]);
+    }
+    await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_acceptance_criteria', '1') ON CONFLICT (key) DO NOTHING`);
   }
 
   for (const [testName, code] of TEST_TYPE_CODE_SEED) {

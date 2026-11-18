@@ -30,6 +30,7 @@
   let CUSTOMERS = [];
   let EQUIPMENT = [];
   let HARDNESS_PATTERNS = [];
+  let ACCEPTANCE_SETS = [];   // Master Data > Acceptance Criteria (Fillet Weld Break / Peel)
   let state = { view: 'dashboard', editingId: null, couponRows: [], tableUI: {} };
 
   // ---------- utils ----------
@@ -3299,6 +3300,7 @@
     ferriteStateOf(data.fields);
     state.testReportHard = hardStateOf(data.fields);
     specStateOf(data);
+    fwbCritStateOf(data.fields);
     state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {})); state.testReportCorrIdx = 0;
     state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
     state.testReportPhotoSlots = new Set(data.photos || []);
@@ -3587,8 +3589,9 @@
     if (state.testReport && state.testReport.template_fwb) {
       const sel = document.getElementById('testReportTemplate');
       const key = (sel && sel.value) || state.testReport.template;
-      const crit = state.testReport.template_fwb[key] || [];
-      return `<table class="task-table">
+      const own = state.testReportFwbCrit;
+      const crit = own ? own.criteria.map(c => c.remark) : (state.testReport.template_fwb[key] || []);
+      return `${fwbCriteriaEditorHtml(key)}<table class="task-table">
         <thead><tr><th>Specimen No.</th>${crit.map((c, i) => `<th>Remarks ${i + 1}</th>`).join('')}<th>Test Result</th><th></th></tr></thead>
         <tbody>${state.testReportRows.map((r, idx) => `
           <tr data-trow="${idx}">
@@ -4139,6 +4142,82 @@
     });
     bindTestReportHardSketch();
   }
+
+  // Fillet Weld Break / Peel: Acceptance Criteria dipilih dari Master Data (per standar) atau diketik di Lembar.
+  // Kosong = kalimat bawaan form. Set yang dipilih disalin ke Lembar (snapshot), jadi bisa diubah khusus Lembar ini.
+  async function loadAcceptanceSets() {
+    try { ACCEPTANCE_SETS = (await api('/api/acceptance-criteria')).items; } catch (e) { ACCEPTANCE_SETS = []; }
+  }
+  const FWB_MAX_CRIT = 8;
+  function fwbCritStateOf(fields) {
+    const s = (fields || {}).fwb_criteria;
+    state.testReportFwbCrit = s && Array.isArray(s.criteria) && s.criteria.length ? JSON.parse(JSON.stringify(s)) : null;
+  }
+  function fwbCriteriaEditorHtml(key) {
+    const own = state.testReportFwbCrit;
+    const defaults = ((state.testReport.template_fwb_crit || {})[key]) || [];
+    const known = own && own.id && ACCEPTANCE_SETS.some(s => s.id === own.id);
+    const list = own ? own.criteria : defaults;
+    return `<div style="margin:0 0 14px;padding:12px;border:1px solid #d6dbe4;border-radius:8px;background:#f8f9fb;">
+      <div class="field" style="margin:0 0 10px;"><label>Acceptance Criteria <span class="en">pilih standar dari Master Data &rarr; Acceptance Criteria, atau ketik khusus untuk Lembar ini</span></label>
+        <select id="fwbCritSel">
+          <option value="">&mdash; Kalimat bawaan form (${defaults.length} kriteria) &mdash;</option>
+          <option value="custom" ${own && !own.id ? 'selected' : ''}>Susunan khusus &mdash; ketik kalimat di Lembar ini</option>
+          ${own && own.id && !known ? `<option value="snapshot" selected>${esc(own.name)} (tersimpan di Lembar ini)</option>` : ''}
+          ${ACCEPTANCE_SETS.map(s => `<option value="${s.id}" ${own && own.id === s.id ? 'selected' : ''}>${esc(s.name)}${s.customer ? ' &mdash; ' + esc(s.customer) : ''} (${(s.criteria || []).length} kriteria)</option>`).join('')}
+        </select></div>
+      ${own ? `<table class="task-table"><thead><tr><th style="width:36px;">No</th><th>Kalimat Acceptance Criteria</th><th style="width:220px;">Remarks bawaan</th><th style="width:50px;"></th></tr></thead><tbody>
+        ${list.map((c, i) => `<tr><td>${i + 1}</td>
+          <td><textarea rows="2" data-fcrit="${i}" style="width:100%;">${esc(c.text)}</textarea></td>
+          <td><input type="text" data-fcrit-remark="${i}" value="${esc(c.remark)}" placeholder="mis. Showing complete fusion"></td>
+          <td><button type="button" class="btn btn-sm btn-danger" data-fcrit-del="${i}" title="Hapus kriteria">&#128465;</button></td></tr>`).join('')}
+      </tbody></table>
+      ${list.length < FWB_MAX_CRIT ? '<button type="button" class="btn btn-sm" data-fcrit-add style="margin-top:6px;">+ Kriteria</button>' : ''}
+      <p class="muted" style="margin:6px 0 0;">Perubahan di sini hanya untuk Lembar ini; set di Master Data tidak berubah. Kolom Remarks di bawah mengikuti daftar ini.</p>`
+      : `<ol style="margin:0;padding-left:20px;" class="muted">${defaults.map(c => `<li>${esc(c.text)}</li>`).join('')}</ol>`}
+    </div>`;
+  }
+  document.addEventListener('change', e => {
+    if (e.target.id !== 'fwbCritSel' || !state.testReport) return;
+    const v = e.target.value;
+    if (v === 'snapshot') return;
+    const key = (document.getElementById('testReportTemplate') || {}).value || state.testReport.template;
+    if (!v) state.testReportFwbCrit = null;
+    else if (v === 'custom') {
+      const from = state.testReportFwbCrit ? state.testReportFwbCrit.criteria : ((state.testReport.template_fwb_crit || {})[key] || []);
+      state.testReportFwbCrit = { id: null, name: 'Susunan khusus', criteria: JSON.parse(JSON.stringify(from)) };
+    } else {
+      const s = ACCEPTANCE_SETS.find(x => String(x.id) === v);
+      if (s) state.testReportFwbCrit = { id: s.id, name: s.name, criteria: JSON.parse(JSON.stringify(s.criteria || [])) };
+    }
+    state.testReportDirty = true;
+    rerenderTestReportRows();
+  });
+  document.addEventListener('input', e => {
+    const own = state.testReportFwbCrit;
+    if (!own) return;
+    if (e.target.dataset.fcrit !== undefined) own.criteria[Number(e.target.dataset.fcrit)].text = e.target.value;
+    else if (e.target.dataset.fcritRemark !== undefined) {
+      own.criteria[Number(e.target.dataset.fcritRemark)].remark = e.target.value;
+      const ph = document.querySelectorAll(`[data-tremark="${e.target.dataset.fcritRemark}"]`);
+      ph.forEach(i => { i.placeholder = e.target.value; });
+    } else return;
+    state.testReportDirty = true;
+  });
+  document.addEventListener('click', e => {
+    const own = state.testReportFwbCrit;
+    if (!own || !e.target.closest) return;
+    const add = e.target.closest('[data-fcrit-add]'), del = e.target.closest('[data-fcrit-del]');
+    if (add) own.criteria.push({ text: '', remark: '' });
+    else if (del) {
+      const i = Number(del.dataset.fcritDel);
+      own.criteria.splice(i, 1);
+      state.testReportRows.forEach(r => { if (Array.isArray(r.remarks)) r.remarks.splice(i, 1); });   // Remarks ikut bergeser
+      if (!own.criteria.length) state.testReportFwbCrit = null;
+    } else return;
+    state.testReportDirty = true;
+    rerenderTestReportRows();
+  });
 
   // Chemical / Ferrite / Grain dengan Qty > 1: hasil per spesimen. Tombol "Spesimen n" menukar isian di editor;
   // spesimen ke-1 disimpan di tempat lama (Lembar lama tetap), spesimen ke-2 dst. di fields.more.
@@ -4749,6 +4828,7 @@
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
     specApplyPayload(payload);
+    if (state.testReport && state.testReport.template_fwb) payload.fields.fwb_criteria = state.testReportFwbCrit;
     const hp = payload.fields.pattern;
     if (hp && !hp.id && hp.zones.reduce((n, z) => n + (Number(z.points) || 0), 0) > HARD_MAX_POINTS) {
       toast(`Susunan khusus Hardness: maksimal ${HARD_MAX_POINTS} titik per line`, 'error');
@@ -4768,6 +4848,7 @@
       ferriteStateOf(state.testReport.fields);
       state.testReportHard = hardStateOf(state.testReport.fields);
       specStateOf(state.testReport);
+      fwbCritStateOf(state.testReport.fields);
       state.testReportDirty = false;
       toast((payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan')
         + (state.testReport.witness_linked ? ` · Witnessed By juga diisi di ${state.testReport.witness_linked} Lembar lain` : ''), 'success');
@@ -7372,7 +7453,8 @@
     { key: 'specimen-types', label: 'Tipe Spesimen' },
     { key: 'test-type-codes', label: 'Kode Jenis Pengujian' },
     { key: 'equipment', label: 'Equipment' },
-    { key: 'hardness-patterns', label: 'Pola Hardness' }
+    { key: 'hardness-patterns', label: 'Pola Hardness' },
+    { key: 'acceptance-criteria', label: 'Acceptance Criteria' }
   ];
 
   async function loadWoPics() {
@@ -7396,7 +7478,8 @@
     'specimen-types': { icon: 'ruler', desc: 'Tipe spesimen dan nilai Code untuk auto-isi form Pengecekan Spesimen.' },
     'test-type-codes': { icon: 'hash', desc: 'Kode singkat tiap Jenis Pengujian untuk membentuk Marking Specimen.' },
     'equipment': { icon: 'gauge', desc: 'Alat uji beserta status dan masa kalibrasinya.' },
-    'hardness-patterns': { icon: 'target', desc: 'Sketsa posisi titik dan susunan titik uji Hardness (line, zona, jumlah titik) per client.' }
+    'hardness-patterns': { icon: 'target', desc: 'Sketsa posisi titik dan susunan titik uji Hardness (line, zona, jumlah titik) per client.' },
+    'acceptance-criteria': { icon: 'check', desc: 'Kalimat Acceptance Criteria per standar pengujian untuk report Fillet Weld Break / Peel.' }
   };
   const MASTER_ICONS = {
     flame: '<path d="M12 3c1 3.5 5 5 5 10a5 5 0 0 1-10 0c0-2 1-3 2-4 .3 1.2 1 2 2 2-.5-3 .5-5 1-8z"/>',
@@ -7409,7 +7492,8 @@
     ruler: '<path d="m3 17 14-14 4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/>',
     hash: '<path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/>',
     gauge: '<path d="M4.5 18a9 9 0 1 1 15 0"/><path d="m12 13 4-5"/><circle cx="12" cy="13" r="1.3"/>',
-    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3"/>'
+    target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3"/>',
+    check: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 2 2 4-4"/><path d="M8 15h8"/>'
   };
   function masterIcon(key, size = 22) {
     return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MASTER_ICONS[(MASTER_META[key] || {}).icon] || ''}</svg>`;
@@ -7424,7 +7508,8 @@
       api('/api/specimen-types').then(r => ['specimen-types', (r.types || []).length]),
       api('/api/test-type-codes').then(r => ['test-type-codes', (r.codes || []).length]),
       api('/api/equipment').then(r => ['equipment', (r.items || []).length]),
-      api('/api/hardness-patterns').then(r => ['hardness-patterns', (r.items || []).length])
+      api('/api/hardness-patterns').then(r => ['hardness-patterns', (r.items || []).length]),
+      api('/api/acceptance-criteria').then(r => ['acceptance-criteria', (r.items || []).length])
     ];
     const done = await Promise.allSettled(jobs);
     done.forEach(d => { if (d.status === 'fulfilled') state.masterCounts[d.value[0]] = d.value[1]; });
@@ -7486,6 +7571,8 @@
       await renderEquipmentMaster();
     } else if (activeTab === 'hardness-patterns') {
       await renderHardnessPatternMaster();
+    } else if (activeTab === 'acceptance-criteria') {
+      await renderAcceptanceCriteriaMaster();
     } else {
       await renderSimpleMaster(activeTab, MASTER_TABS.find(t => t.key === activeTab).label);
     }
@@ -8135,6 +8222,122 @@
     });
   }
 
+  // Master Data > Acceptance Criteria: satu set per standar (nama, kalimat kriteria + Remarks bawaan). Dipilih di
+  // Lembar Fillet Weld Break / Peel; isi set disalin ke Lembar, jadi laporan lama tidak berubah bila set diedit.
+  async function renderAcceptanceCriteriaMaster() {
+    const wrap = document.getElementById('masterTabContent');
+    await loadAcceptanceSets();
+    const items = ACCEPTANCE_SETS;
+    let ed = state.acEdit;
+    if (!ed) ed = state.acEdit = { id: null, name: '', customer: '', notes: '', criteria: [{ text: '', remark: '' }] };
+    const companies = [...new Set(CUSTOMERS.map(customerCompany).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">${ed.id ? `Edit Acceptance Criteria &mdash; ${esc(ed.name)}` : 'Tambah Acceptance Criteria'}</p>
+        <form id="acForm">
+          <div class="form-grid">
+            <div class="field"><label>Nama Standar</label><input type="text" name="name" value="${esc(ed.name)}" placeholder="mis. AWS B4.0M:2016 Butir 9.2" autocomplete="off"></div>
+            <div class="field"><label>Customer <span class="en">opsional</span></label><input type="text" name="customer" value="${esc(ed.customer)}" list="acCustomerList" autocomplete="off" placeholder="Kosongkan bila berlaku umum"></div>
+            <div class="field full"><label>Catatan</label><input type="text" name="notes" value="${esc(ed.notes)}" autocomplete="off"></div>
+          </div>
+          <p class="subcard-title" style="margin-top:16px;">Kalimat Acceptance Criteria <span class="en">urut seperti di report; maks. ${FWB_MAX_CRIT}; Remarks bawaan tercetak bila Remarks spesimen tidak diisi</span></p>
+          <table class="data-table">
+            <thead><tr><th style="width:40px;">No</th><th>Kalimat</th><th style="width:240px;">Remarks bawaan</th><th style="width:60px;"></th></tr></thead>
+            <tbody>${ed.criteria.map((c, i) => `
+              <tr><td>${i + 1}</td>
+                <td><textarea rows="2" data-ac-text="${i}" style="width:100%;" placeholder="mis. The fractured surface shall show no evidence of cracks or incomplete root fusion">${esc(c.text)}</textarea></td>
+                <td><input type="text" data-ac-remark="${i}" value="${esc(c.remark)}" placeholder="mis. Showing complete fusion"></td>
+                <td>${ed.criteria.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-ac-del="${i}" aria-label="Hapus kriteria">&times;</button>` : ''}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+          ${ed.criteria.length < FWB_MAX_CRIT ? '<button type="button" class="btn btn-sm" id="acAdd" style="margin-top:8px;">+ Tambah kriteria</button>' : ''}
+          <div class="form-actions">
+            <div>${ed.id ? '<button type="button" class="btn" id="acCancel">Batal Edit</button>' : ''}</div>
+            <div class="right"><button type="submit" class="btn btn-primary">${ed.id ? 'Simpan Perubahan' : '+ Tambah Acceptance Criteria'}</button></div>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Acceptance Criteria</p>
+          <p class="card-desc">${items.length} standar tersimpan &mdash; dipilih di Lembar Hasil Uji Fillet Weld Break / Peel</p>
+        </div>
+        <div id="acTableArea"></div>
+      </div>
+      <datalist id="acCustomerList">${companies.map(c => `<option value="${esc(c)}">`).join('')}</datalist>`;
+
+    renderSearchablePaginatedTable({
+      key: 'acceptance-criteria',
+      containerEl: document.getElementById('acTableArea'),
+      allRows: items,
+      searchFields: ['name', 'customer', 'notes'],
+      searchPlaceholder: 'Cari standar atau customer...',
+      emptyHtml: '<p class="muted" style="padding:0 24px 16px;">Belum ada Acceptance Criteria. Tambahkan lewat form di atas.</p>',
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Standar</th><th>Customer</th><th>Kriteria</th><th></th></tr></thead>
+          <tbody>${pageRows.map(s => `
+            <tr>
+              <td><strong>${esc(s.name)}</strong>${s.notes ? `<br><span class="muted">${esc(s.notes)}</span>` : ''}</td>
+              <td>${esc(s.customer) || '<span class="muted">Umum</span>'}</td>
+              <td><ol style="margin:0;padding-left:18px;">${(s.criteria || []).map(c => `<li>${esc(c.text)}${c.remark ? ` <span class="muted">&rarr; ${esc(c.remark)}</span>` : ''}</li>`).join('')}</ol></td>
+              <td style="white-space:nowrap;">
+                <button class="btn btn-sm" data-ac-edit="${s.id}">Edit</button>
+                <button class="btn btn-sm btn-danger" data-ac-rm="${s.id}">Hapus</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-ac-edit]').forEach(btn => btn.addEventListener('click', () => {
+          const s = ACCEPTANCE_SETS.find(x => x.id === Number(btn.dataset.acEdit));
+          if (!s) return;
+          state.acEdit = { id: s.id, name: s.name, customer: s.customer || '', notes: s.notes || '', criteria: JSON.parse(JSON.stringify(s.criteria || [])) };
+          renderAcceptanceCriteriaMaster();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }));
+        container.querySelectorAll('[data-ac-rm]').forEach(btn => btn.addEventListener('click', async () => {
+          if (!confirm('Hapus Acceptance Criteria ini? Lembar yang sudah memakainya tidak berubah.')) return;
+          try {
+            await api(`/api/acceptance-criteria/${btn.dataset.acRm}`, { method: 'DELETE' });
+            toast('Acceptance Criteria dihapus', 'success');
+            if (state.acEdit && state.acEdit.id === Number(btn.dataset.acRm)) state.acEdit = null;
+            renderAcceptanceCriteriaMaster();
+          } catch (err) { toast(err.message, 'error'); }
+        }));
+      }
+    });
+
+    const form = document.getElementById('acForm');
+    const syncHead = () => { ['name', 'customer', 'notes'].forEach(k => { ed[k] = form.elements[k].value; }); };
+    form.addEventListener('input', e => {
+      const t = e.target;
+      if (t.dataset.acText !== undefined) ed.criteria[Number(t.dataset.acText)].text = t.value;
+      else if (t.dataset.acRemark !== undefined) ed.criteria[Number(t.dataset.acRemark)].remark = t.value;
+      else syncHead();
+    });
+    const add = document.getElementById('acAdd');
+    if (add) add.addEventListener('click', () => { syncHead(); ed.criteria.push({ text: '', remark: '' }); renderAcceptanceCriteriaMaster(); });
+    const cancel = document.getElementById('acCancel');
+    if (cancel) cancel.addEventListener('click', () => { state.acEdit = null; renderAcceptanceCriteriaMaster(); });
+    form.querySelectorAll('[data-ac-del]').forEach(b => b.addEventListener('click', () => { syncHead(); ed.criteria.splice(Number(b.dataset.acDel), 1); renderAcceptanceCriteriaMaster(); }));
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      syncHead();
+      if (!ed.name.trim()) { toast('Nama standar wajib diisi', 'error'); return; }
+      const criteria = ed.criteria.filter(c => c.text.trim());
+      if (!criteria.length) { toast('Isi minimal 1 kalimat Acceptance Criteria', 'error'); return; }
+      try {
+        await api(ed.id ? `/api/acceptance-criteria/${ed.id}` : '/api/acceptance-criteria', {
+          method: ed.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: ed.name, customer: ed.customer, notes: ed.notes, criteria })
+        });
+        toast(ed.id ? 'Acceptance Criteria diperbarui' : 'Acceptance Criteria ditambahkan', 'success');
+        state.acEdit = null;
+        renderAcceptanceCriteriaMaster();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
+
   async function loadEquipment() {
     try {
       EQUIPMENT = (await api('/api/equipment')).items;
@@ -8419,6 +8622,7 @@
     await loadCustomers();
     await loadEquipment();
     await loadHardnessPatterns();
+    await loadAcceptanceSets();
     if (!can('dashboard')) {   // role tanpa akses Dashboard: buka menu pertama yang boleh
       const first = [...document.querySelectorAll('.nav-item[data-nav]')].find(n => !n.hidden && n.dataset.nav !== 'keluar');
       if (first) { first.click(); return; }
