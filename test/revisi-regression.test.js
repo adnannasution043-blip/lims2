@@ -82,4 +82,13 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(!html.slice(i, i + 400).includes('Manggis.') || html.slice(i, i + 400).includes('<br'), 'Project Name dipecah beberapa baris');
 }
 
+// Chat (16 Nov): Hardness Material bisa dicustom seperti Weld (tambah line & titik)
+{
+  const pattern = { id: null, name: 'Susunan khusus', kind: 'material', sketch: '', lines: ['Line 1', 'Line 2'], zones: [{ name: 'Surface', points: 4 }, { name: 'Core', points: 7 }] };
+  const html = R({ ...base, template: 'hard-mat', test_name: 'Hardness Test', rows: [{}],
+    fields: { pattern, hardness: { lines: [['97.5'], ['98.0', '', '', '', '', '', '', '', '', '', '99.9']] } } });
+  assert.ok(html.includes('>Line 2<') && html.includes('>Surface<') && html.includes('>Core<') && html.includes('>11<'), 'tabel mengikuti susunan khusus');
+  assert.ok(html.includes('>97.5<') && html.includes('>99.9<'), 'nilai line 1 & titik ke-11 line 2 tercetak');
+}
+
 console.log('revisi-regression.test.js OK');
