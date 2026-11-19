@@ -118,4 +118,20 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(!/font-size:7\.5pt/.test(few), 'titik sedikit tetap ukuran normal');
 }
 
+// 19 Nov: tanggal di semua report bulan-tanggal-tahun (October 12, 2026)
+{
+  const { reportDate } = require('../lib/testReportTemplatePrint');
+  assert.strictEqual(reportDate('2026-10-12'), 'October 12, 2026');
+  assert.strictEqual(reportDate('2026-10-01'), 'October 1, 2026');
+  assert.strictEqual(reportDate(''), '');
+  KEYS.filter(hasTemplate).forEach(k => {
+    const html = R({ ...base, template: k, test_name: 'X', rows: [{}], date_tested: '2026-10-01', test_request: { job_number: 'J', received_date: '2026-09-29' } });
+    assert.ok(html.includes('September 29, 2026') && html.includes('October 1, 2026'), k + ': Date of Received / Tested format bulan tanggal, tahun');
+    assert.ok(!html.includes('29/09/2026'), k + ': format lama tidak tercetak');
+  });
+  const { renderTestReportPrintHtml } = require('../lib/testReportPrintView');
+  const gen = renderTestReportPrintHtml({ test_name: 'Leak Test', category: 'general', rows: [], fields: {}, test_request: { received_date: '2026-09-29' }, date_tested: '2026-10-01', coupon: {} });
+  assert.ok(gen.includes('September 29, 2026') && gen.includes('October 1, 2026'), 'report umum ikut format baru');
+}
+
 console.log('revisi-regression.test.js OK');

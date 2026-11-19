@@ -1019,7 +1019,7 @@ function call(method, path, params, body) {
   assert.strictEqual(hch.split('class="paper"').length - 1, 3, 'kondisi + hasil + log');
   // angka workbook klien: CT1 s1 0.13/5.06/2.65, s2 0.45/10.72/4.19; rata-rata CT1 0.19/5.26/2.28; CT2 0.12/3.26/1.20; CT3 0.32/6.48/3.19; rata-rata 3 spesimen 0.21/5.00/2.22
   ['>0.13<', '>5.06<', '>2.65<', '>0.45<', '>10.72<', '>4.19<', '>0.19<', '>5.26<', '>2.28<', '>0.35<', '>9.78<', '>3.59<', '>0.12<', '>3.26<', '>1.20<', '>0.34<', '>8.65<', '>3.92<', '>0.61<', '>10.80<', '>5.64<', '>0.32<', '>6.48<', '>3.19<', '>0.21<', '>5.00<', '>2.22<'].forEach(t => assert.ok(hch.includes(t), 'hic hitung memuat ' + t));
-  ['720 Hours', '720 h', '1500 mL', 'Nitrogen', 'ABN.9.1-HC1', 'ABN.9.1-HC3', 'Monitoring', '20/01/2025', '>2437<', 'DE.1/TR/32'].forEach(t => assert.ok(hch.includes(t), 'hic cetak memuat ' + t));
+  ['720 Hours', '720 h', '1500 mL', 'Nitrogen', 'ABN.9.1-HC1', 'ABN.9.1-HC3', 'Monitoring', 'January 20, 2025', '>2437<', 'DE.1/TR/32'].forEach(t => assert.ok(hch.includes(t), 'hic cetak memuat ' + t));
   assert.ok(!hch.includes('96 Hours'));
   // tanpa log: dua halaman saja; section tanpa W/T dicetak "-"
   await call('PUT', '/api/test-reports/:id', { id: String(hcid) }, { status: 'draft', rows: [mkRow('ABN.9.1-HC1', sec('', '', '', ''), sec('20', '15', '', ''), sec('20', '15', '1', '1'))], fields: {} });
@@ -1073,7 +1073,7 @@ function call(method, path, params, body) {
   let sfh = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(sfid) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual(sfh.split('class="paper"').length - 1, 4, 'kondisi + pembebanan + hasil (3 per halaman) + log');
   assert.strictEqual(sfh.split('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ').length - 1, 3, 'tiga foto');
-  ['5000 mL', ': &gt;2.300 mg/L', ': Nitrogen', ': 720 h', '>388<', '>210<', '110.12 x 19.87 x 5.02', '110.41 x 20.01 x 4.98', '>0.843<', '>0.85<', 'CT1', 'CT3', 'No Crack was Observed', 'Test Result (Observation After 720h)', 'DE.1/TR/30', '20/01/2025'].forEach(t => assert.ok(sfh.includes(t), 'fpb memuat ' + t));
+  ['5000 mL', ': &gt;2.300 mg/L', ': Nitrogen', ': 720 h', '>388<', '>210<', '110.12 x 19.87 x 5.02', '110.41 x 20.01 x 4.98', '>0.843<', '>0.85<', 'CT1', 'CT3', 'No Crack was Observed', 'Test Result (Observation After 720h)', 'DE.1/TR/30', 'January 20, 2025'].forEach(t => assert.ok(sfh.includes(t), 'fpb memuat ' + t));
   // diisi: lama uji mengubah judul hasil; nilai H2S diberi awalan ": " seperti bawaan form; empat spesimen -> dua halaman hasil
   r = await call('PUT', '/api/test-reports/:id', { id: String(sfid) }, { status: 'draft', fields: { hic_period: '1000 Hours', hic_h2s: '>3 mg/L' }, rows: fpbRows.concat([fpbRow('CT4', '110 x 20 x 5', '0.9')]) });
   sfh = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(sfid) } }, { setHeader() {}, send: resolve }));
