@@ -345,6 +345,15 @@ function call(method, path, params, body) {
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-mat', remarks: 'Catatan lab', rows: r.body.rows, status: 'draft' });
   assert.strictEqual(r.body.remarks, 'Catatan lab');
   delete WO.coupon_tests[0].note;
+  // Type of Test bisa diubah di semua Lembar (termasuk Bend); kosong = teks form, tidak disimpan
+  r = await call('GET', '/api/test-reports/:id', { id: String(id) });
+  assert.strictEqual(r.body.template_defaults['bend-sec'].type_test, 'Bending Test (Transverse Welding)');
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-sec', fields: { type_test: 'Bending Test (Longitudinal Welding)' }, rows: r.body.rows, status: 'draft' });
+  assert.strictEqual(r.body.fields.type_test, 'Bending Test (Longitudinal Welding)');
+  const bendType = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(id) } }, { setHeader() {}, send: resolve }));
+  assert.ok(bendType.includes('Bending Test (Longitudinal Welding)') && !bendType.includes('Transverse Welding'));
+  r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-sec', fields: { type_test: '  ' }, rows: r.body.rows, status: 'draft' });
+  assert.ok(!('type_test' in r.body.fields), 'kosong tidak disimpan');
   // ukuran uji Bend diketik di Lembar, nama baris Thickness / Diameter
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-sec', fields: { test_size: '12.7', test_size_kind: 'Diameter', evil: 1 }, rows: [{ marking_specimen: 'ABN.9.1-BR1', result: 'accepted' }], status: 'draft' });
   assert.deepStrictEqual(r.body.fields, { test_size: '12.7', test_size_kind: 'Diameter' });

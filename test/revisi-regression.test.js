@@ -91,4 +91,20 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(html.includes('>97.5<') && html.includes('>99.9<'), 'nilai line 1 & titik ke-11 line 2 tercetak');
 }
 
+// 19 Nov: teks form "terisi tapi bisa diubah" - Type of Test di semua form & catatan metode Ferrite
+{
+  const { formDefaults } = require('../lib/testReportTemplatePrint');
+  KEYS.filter(hasTemplate).forEach(k => {
+    const d = formDefaults(k);
+    assert.ok(d.type_test, k + ': ada teks Type of Test bawaan');
+    const same = R({ ...base, template: k, test_name: 'X', rows: [{}] });
+    assert.ok(same.includes(d.type_test.slice(0, 20).replace(/&/g, '&amp;')), k + ': tanpa isian tetap teks form');
+    assert.ok(R({ ...base, template: k, test_name: 'X', rows: [{}], fields: { type_test: 'ZZ Custom Type ZZ' } }).includes('ZZ Custom Type ZZ'), k + ': Type of Test bisa diganti');
+  });
+  assert.ok(formDefaults('ferrite-weld').method_note.startsWith('Specimen was electrolityc etched'));
+  assert.strictEqual(formDefaults('tn-red').method_note, '', 'form tanpa catatan metode');
+  const fer = R({ ...base, template: 'ferrite-mat', test_name: 'Ferrite', rows: [{}], fields: { method_note: 'Specimen was etched using KOH solution.' } });
+  assert.ok(fer.includes('KOH solution') && !fer.includes('NaOH'), 'catatan metode Ferrite bisa diganti');
+}
+
 console.log('revisi-regression.test.js OK');

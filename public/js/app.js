@@ -3805,10 +3805,10 @@
     const orderRow = `
       <div style="display:flex;gap:8px;align-items:flex-end;margin:0 0 12px;flex-wrap:wrap;padding:10px 12px;border:1px solid #d6dbe4;border-radius:8px;background:#f8f9fb;">
         <div class="field" style="margin:0;flex:1;min-width:240px;"><label>Susunan unsur <span class="en">urutan kotak &amp; urutan cetak; pisahkan dengan spasi, mis. Al Fe Ni Cu Mn</span></label>
-          <input type="text" id="elOrderText" value="${esc(own.join(' '))}" placeholder="${esc(formLabels.join(' '))}"></div>
+          <input type="text" id="elOrderText" value="${esc((own.length ? own : formLabels).join(' '))}"></div>
         <button type="button" class="btn btn-sm" data-el-order-apply>Terapkan</button>
         ${own.length ? '<button type="button" class="btn btn-sm" data-el-order-reset>Pakai unsur form</button>' : ''}
-        <span class="muted" style="font-size:12px;flex-basis:100%;">${own.length ? 'Memakai susunan sendiri: hanya unsur di daftar ini yang tampil dan tercetak, sesuai urutannya.' : 'Kosong = unsur bawaan form. Isi bila unsur hasil uji berbeda dari form (mis. PMI).'}</span>
+        <span class="muted" style="font-size:12px;flex-basis:100%;">${own.length ? 'Memakai susunan sendiri: hanya unsur di daftar ini yang tampil dan tercetak, sesuai urutannya.' : 'Terisi unsur bawaan form. Bila unsur hasil uji berbeda (mis. PMI), ubah daftarnya lalu klik Terapkan.'}</span>
       </div>`;
     const boxes = labels.map(l => box(l, own.length > 0)).join('') + extra.map(l => box(l, true)).join('');
     return `${orderRow}<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${boxes}</div>
@@ -3998,6 +3998,9 @@
     return p && p.kind === hardKindOf(templateKey) ? p : null;
   }
 
+  // teks bawaan form yang bisa diubah di Lembar (Type of Test, catatan metode); isian Lembar terisi teks ini lebih dulu
+  const formDefault = (key, field) => (((state.testReport || {}).template_defaults || {})[key] || {})[field] || '';
+
   function testReportHardHtml(templateKey) {
     const info = ((state.testReport || {}).template_hard || {})[templateKey];
     if (!info) return '';
@@ -4008,7 +4011,7 @@
       .sort((a, b) => (b.customer === custName) - (a.customer === custName) || a.name.localeCompare(b.name, 'id'));
     const custom = !!(pat && !pat.id);
     const known = pat && !custom && choices.some(p => p.id === pat.id);
-    const typeTest = (state.testReport.fields || {}).type_test || '';
+    const typeTest = (state.testReport.fields || {}).type_test || formDefault(templateKey, 'type_test');
     const typeSel = `
       <div class="form-grid" style="margin-bottom:12px;">
         <div class="field"><label>Jenis Hardness <span class="en">pilih, lalu beban bisa diubah di isian sebelahnya</span></label>
@@ -4017,7 +4020,7 @@
             ${HARD_TYPES.map(t => `<option ${t === typeTest ? 'selected' : ''}>${esc(t)}</option>`).join('')}
           </select></div>
         <div class="field"><label>Type of Test <span class="en">tercetak di report; kosong = ${esc(HARD_TYPES[1])}</span></label>
-          <input type="text" name="field_type_test" id="hardTypeText" value="${esc(typeTest)}" maxlength="150" placeholder="${esc(HARD_TYPES[1])}"></div>
+          <input type="text" name="field_type_test" id="hardTypeText" value="${esc(typeTest)}" maxlength="150"></div>
       </div>`;
     const patternSel = typeSel + `
       <div class="form-grid" style="margin-bottom:12px;"><div class="field full">
@@ -4222,15 +4225,14 @@
           ${own && own.id && !known ? `<option value="snapshot" selected>${esc(own.name)} (tersimpan di Lembar ini)</option>` : ''}
           ${ACCEPTANCE_SETS.map(s => `<option value="${s.id}" ${own && own.id === s.id ? 'selected' : ''}>${esc(s.name)}${s.customer ? ' &mdash; ' + esc(s.customer) : ''} (${(s.criteria || []).length} kriteria)</option>`).join('')}
         </select></div>
-      ${own ? `<table class="task-table"><thead><tr><th style="width:36px;">No</th><th>Kalimat Acceptance Criteria</th><th style="width:220px;">Remarks bawaan</th><th style="width:50px;"></th></tr></thead><tbody>
+      <table class="task-table"><thead><tr><th style="width:36px;">No</th><th>Kalimat Acceptance Criteria</th><th style="width:220px;">Remarks bawaan</th><th style="width:50px;"></th></tr></thead><tbody>
         ${list.map((c, i) => `<tr><td>${i + 1}</td>
           <td><textarea rows="2" data-fcrit="${i}" style="width:100%;">${esc(c.text)}</textarea></td>
           <td><input type="text" data-fcrit-remark="${i}" value="${esc(c.remark)}" placeholder="mis. Showing complete fusion"></td>
           <td><button type="button" class="btn btn-sm btn-danger" data-fcrit-del="${i}" title="Hapus kriteria">&#128465;</button></td></tr>`).join('')}
       </tbody></table>
       ${list.length < FWB_MAX_CRIT ? '<button type="button" class="btn btn-sm" data-fcrit-add style="margin-top:6px;">+ Kriteria</button>' : ''}
-      <p class="muted" style="margin:6px 0 0;">Perubahan di sini hanya untuk Lembar ini; set di Master Data tidak berubah. Kolom Remarks di bawah mengikuti daftar ini.</p>`
-      : `<ol style="margin:0;padding-left:20px;" class="muted">${defaults.map(c => `<li>${esc(c.text)}</li>`).join('')}</ol>`}
+      <p class="muted" style="margin:6px 0 0;">${own ? 'Perubahan di sini hanya untuk Lembar ini; set di Master Data tidak berubah.' : 'Terisi kalimat bawaan form; ubah langsung bila standar berbeda (otomatis menjadi Susunan khusus Lembar ini).'} Kolom Remarks di bawah mengikuti daftar ini.</p>
     </div>`;
   }
   document.addEventListener('change', e => {
@@ -4249,9 +4251,19 @@
     state.testReportDirty = true;
     rerenderTestReportRows();
   });
+  // kalimat bawaan form yang mulai diubah / ditambah / dihapus menjadi Susunan khusus Lembar ini
+  function fwbOwnCriteria() {
+    if (state.testReportFwbCrit) return state.testReportFwbCrit;
+    const key = (document.getElementById('testReportTemplate') || {}).value || state.testReport.template;
+    state.testReportFwbCrit = { id: null, name: 'Susunan khusus', criteria: JSON.parse(JSON.stringify((state.testReport.template_fwb_crit || {})[key] || [])) };
+    const sel = document.getElementById('fwbCritSel');
+    if (sel) sel.value = 'custom';
+    return state.testReportFwbCrit;
+  }
   document.addEventListener('input', e => {
-    const own = state.testReportFwbCrit;
-    if (!own) return;
+    if (!state.testReport || !state.testReport.template_fwb) return;
+    if (e.target.dataset.fcrit === undefined && e.target.dataset.fcritRemark === undefined) return;
+    const own = fwbOwnCriteria();
     if (e.target.dataset.fcrit !== undefined) own.criteria[Number(e.target.dataset.fcrit)].text = e.target.value;
     else if (e.target.dataset.fcritRemark !== undefined) {
       own.criteria[Number(e.target.dataset.fcritRemark)].remark = e.target.value;
@@ -4261,9 +4273,10 @@
     state.testReportDirty = true;
   });
   document.addEventListener('click', e => {
-    const own = state.testReportFwbCrit;
-    if (!own || !e.target.closest) return;
+    if (!state.testReport || !state.testReport.template_fwb || !e.target.closest) return;
     const add = e.target.closest('[data-fcrit-add]'), del = e.target.closest('[data-fcrit-del]');
+    if (!add && !del) return;
+    const own = fwbOwnCriteria();
     if (add) own.criteria.push({ text: '', remark: '' });
     else if (del) {
       const i = Number(del.dataset.fcritDel);
@@ -4634,6 +4647,12 @@
     const applyOrder = () => {
       const list = [...new Set(String((document.getElementById('elOrderText') || {}).value || '').split(/[\s,;]+/).map(x => x.trim().slice(0, 12)).filter(Boolean))].slice(0, 40);
       if (!list.length) { toast('Ketik daftar unsur, mis. Al Fe Ni Cu Mn', 'error'); return; }
+      const formLabels = (state.testReport.template_elements || {})[(document.getElementById('testReportTemplate') || {}).value || state.testReport.template] || [];
+      if (list.join(' ') === formLabels.join(' ')) {   // daftar tidak diubah: tetap memakai unsur form
+        state.testReportElOrder = [];
+        rerender();
+        return;
+      }
       Object.keys(state.testReportElements).forEach(k => { if (!list.includes(k)) delete state.testReportElements[k]; });
       state.testReportElOrder = list;
       state.testReportElExtra = [];
@@ -4723,6 +4742,7 @@
             <div class="field"><label>Tanggal Diuji <span class="en">Date of Tested</span></label><input type="date" name="date_tested" value="${esc(r.date_tested)}"></div>
             <div class="field"><label>Environment Temp</label><input type="text" name="environment_temp" value="${esc(r.environment_temp)}" placeholder="25 &plusmn; 2 &deg;C"></div>
             <div class="field"><label>Test Method</label><input type="text" name="test_method" value="${esc(r.test_method) || esc(r.method)}"></div>
+            ${!r.template_hard && formDefault(r.template, 'type_test') ? `<div class="field"><label>Type of Test <span class="en">terisi teks form; ubah bila perlu</span></label><input type="text" name="field_type_test" id="typeTestText" value="${esc((r.fields || {}).type_test || formDefault(r.template, 'type_test'))}" maxlength="150"></div>` : ''}
             <div class="field"><label>Reference Code</label><input type="text" name="reference_code" value="${esc(r.reference_code)}"></div>
             <div class="field"><label>Testing Purpose</label><input type="text" name="testing_purpose" value="${esc(r.testing_purpose)}"></div>
             ${(r.template_options || []).length ? `
@@ -4788,6 +4808,7 @@
           <p class="section-title">Ferrite Content <span class="en">dicetak sebagai halaman utama + Lampiran #16 per lokasi; rata-rata, s, 95% CI &amp; % RA dihitung otomatis</span></p>
           ${specBarHtml()}
           <div class="form-grid"><div class="field"><label>Sample Identification</label><input type="text" name="field_sample_id" value="${esc((r.fields || {}).sample_id)}"></div></div>
+          ${formDefault(r.template, 'method_note') ? `<div class="field" style="margin-top:10px;"><label>Catatan metode <span class="en">terisi teks form (cara etsa, mikroskop, grid); ubah bila metode berbeda</span></label><textarea name="field_method_note" id="methodNoteText" rows="3" maxlength="800">${esc((r.fields || {}).method_note || formDefault(r.template, 'method_note'))}</textarea></div>` : ''}
           <div id="testReportFerriteWrap" style="margin-top:12px;">${testReportFerriteHtml(r.template)}</div>
         </div>` : ''}
         ${r.template_elements ? `
@@ -4913,6 +4934,11 @@
           state.testReportRows.forEach(row => { if (row.observation === oldObs) row.observation = newObs; });
           rerenderTestReportRows();
         }
+        // Type of Test / catatan metode yang belum diubah (masih teks form lama) ikut berganti ke teks form baru
+        [['typeTestText', 'type_test'], ['methodNoteText', 'method_note']].forEach(([id, k]) => {
+          const el = document.getElementById(id);
+          if (el && (!el.value.trim() || el.value.trim() === formDefault(prev, k))) el.value = formDefault(tplSel.value, k);
+        });
         prev = tplSel.value;
       });
     }
@@ -4933,6 +4959,11 @@
     payload.rows = state.testReportRows;
     specApplyPayload(payload);
     if (state.testReport && state.testReport.template_fwb) payload.fields.fwb_criteria = state.testReportFwbCrit;
+    // teks form yang tidak diubah disimpan kosong, jadi tetap mengikuti teks form (mis. saat form diganti)
+    const tplNow = payload.template || state.testReport.template;
+    ['type_test', 'method_note'].forEach(k => {
+      if (payload.fields[k] !== undefined && String(payload.fields[k]).trim() === formDefault(tplNow, k)) payload.fields[k] = '';
+    });
     const hp = payload.fields.pattern;
     if (hp && !hp.id && hp.zones.reduce((n, z) => n + (Number(z.points) || 0), 0) > HARD_MAX_POINTS) {
       toast(`Susunan khusus Hardness: maksimal ${HARD_MAX_POINTS} titik per line`, 'error');
