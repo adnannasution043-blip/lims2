@@ -21,6 +21,31 @@
   };
 
   let TEST_TYPES = [];
+  // Other Test: pola nama -> jenis pengujian yang form report-nya dipakai (aturan sama dengan server, dari /api/test-types)
+  let FORM_ALIASES = [];
+  let FORM_NAMES = [];
+  function otherFormOf(name) {
+    const n = String(name || '').trim();
+    if (!n) return '';
+    if (TEST_TYPES.includes(n)) return n;
+    const hit = FORM_ALIASES.find(([re]) => re.test(n));
+    if (hit) return hit[1];
+    return /\bPMI\b/i.test(n) ? 'Chemical Composition Test (PMI)' : '';
+  }
+  function otherHintHtml(name, row) {
+    const n = String(name || '').trim();
+    if (!n) return '<span class="muted">Pilih dari daftar atau ketik nama pengujian</span>';
+    const fixed = TEST_TYPES.find(t => t.toLowerCase() === n.toLowerCase());
+    if (fixed) {
+      const checked = ((row && row.test_items) || []).some(i => i.test_name === fixed && i.checked);
+      return checked
+        ? `<span style="color:#b00;">&ldquo;${esc(fixed)}&rdquo; sudah dicentang di atas &mdash; beri nama lain bila diuji dua kali (mis. &ldquo;${esc(fixed.replace(/ Test$/, ''))} Rockwell&rdquo;)</span>`
+        : `<span style="color:#1f7a4d;">&#10003; Saat disimpan, &ldquo;${esc(fixed)}&rdquo; di daftar Jenis Pengujian otomatis dicentang (Qty &amp; metode ikut)</span>`;
+    }
+    const form = otherFormOf(n);
+    return form ? `<span style="color:#1f7a4d;">&#10003; Form report: ${esc(form)}</span>`
+      : '<span class="muted">Tanpa form report khusus &mdash; Lembar Hasil Uji memakai isian umum</span>';
+  }
   let WELDING_PROCESSES = [];
   let WELDING_POSITIONS = [];
   let REF_CODES = [];
@@ -1100,6 +1125,9 @@
       <datalist id="testMethodList">
         ${TEST_METHODS.map(p => `<option value="${esc(p)}">`).join('')}
       </datalist>
+      <datalist id="otherTestNameList">
+        ${FORM_NAMES.map(p => `<option value="${esc(p)}">`).join('')}
+      </datalist>
       <form id="reqForm">
 
         <div class="card">
@@ -1413,7 +1441,8 @@
     const otherTestRows = row.other_tests.map((ot, oIdx) => `
       <tr>
         <td>${oIdx + 1}</td>
-        <td><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="test_name" value="${esc(ot.test_name)}" placeholder="Nama pengujian"></td>
+        <td><input type="text" list="otherTestNameList" autocomplete="off" data-row="${idx}" data-other="${oIdx}" data-other-field="test_name" value="${esc(ot.test_name)}" placeholder="Pilih / ketik nama pengujian">
+          <div data-other-hint style="font-size:12px;margin-top:3px;">${otherHintHtml(ot.test_name, row)}</div></td>
         <td style="width:48px;"><input type="text" data-row="${idx}" data-other="${oIdx}" data-other-field="qty" value="${esc(ot.qty)}" placeholder="Qty"></td>
         <td><input type="text" list="testMethodList" autocomplete="off" data-row="${idx}" data-other="${oIdx}" data-other-field="method" value="${esc(ot.method)}" placeholder="Metode tes"></td>
         <td><button type="button" class="btn btn-sm btn-danger" data-remove-other="${idx}:${oIdx}">&#128465;</button></td>
@@ -1599,6 +1628,8 @@
       else item[t.dataset.itemField] = t.value;
     } else if (t.dataset.other !== undefined) {
       row.other_tests[Number(t.dataset.other)][t.dataset.otherField] = t.value;
+      const hint = t.dataset.otherField === 'test_name' && t.closest('td') && t.closest('td').querySelector('[data-other-hint]');
+      if (hint) hint.innerHTML = otherHintHtml(t.value, row);
     }
   }
 
@@ -8646,6 +8677,8 @@
     try {
       const r = await api('/api/test-types');
       TEST_TYPES = r.testTypes;
+      FORM_ALIASES = (r.formAliases || []).map(([src, flags, name]) => [new RegExp(src, flags), name]);
+      FORM_NAMES = r.formNames || TEST_TYPES;
     } catch (e) {
       TEST_TYPES = [];
     }

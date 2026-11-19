@@ -1,13 +1,13 @@
 const express = require('express');
 const path = require('path');
 const { pool, initSchema } = require('./db/init');
-const { TEST_TYPES, LEGACY_TEST_TYPES, fixedTestNames } = require('./db/testTypes');
+const { TEST_TYPES, LEGACY_TEST_TYPES, fixedTestNames, normalizeOtherTests, otherTestProblem } = require('./db/testTypes');
 const { renderPrintHtml } = require('./lib/printView');
 const { renderWorkOrderPrintHtml } = require('./lib/workOrderPrintView');
 const { renderSpecimenPrintHtml } = require('./lib/specimenPrintView');
 const { PROCESS_STEPS } = require('./db/workOrderSteps');
 const { registerWorkOrderTaskRoutes } = require('./lib/workOrderTasks');
-const { registerTestReportRoutes, canonicalTestName } = require('./lib/testReports');
+const { registerTestReportRoutes, canonicalTestName, formAliases, templateOptions, withCanonicalCategory } = require('./lib/testReports');
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerHardnessPatternRoutes } = require('./lib/hardnessPatterns');
 const { registerAcceptanceCriteriaRoutes } = require('./lib/acceptanceCriteria');
@@ -170,10 +170,13 @@ const CATEGORY_TEST_NAMES = {
   charpy: ['Charpy Impact Test']
 };
 
-const TEST_NAME_TO_CATEGORY = {};
+const CATEGORY_BY_NAME = {};
 Object.entries(CATEGORY_TEST_NAMES).forEach(([cat, names]) => {
-  names.forEach(name => { TEST_NAME_TO_CATEGORY[name] = cat; });
+  names.forEach(name => { CATEGORY_BY_NAME[name] = cat; });
 });
+// Nama "Other Test" bebas (mis. "Impact Test", "Tensile All Weld") memakai kategori nama bakunya, jadi Pengecekan
+// Spesimen & Lembar Hasil Uji-nya sama dengan jenis tetapnya.
+const TEST_NAME_TO_CATEGORY = withCanonicalCategory(CATEGORY_BY_NAME);
 
 // Kategori form Pengecekan Spesimen untuk satu Jenis Pengujian. Hampir sama dengan TEST_NAME_TO_CATEGORY
 // (yang juga dipakai Lembar Hasil Uji & antrian, jadi tidak diubah), kecuali dua form resmi sendiri:
@@ -182,7 +185,7 @@ Object.entries(CATEGORY_TEST_NAMES).forEach(([cat, names]) => {
 const NO_SHAPE_CATEGORIES = ['charpy', 'nickbreak', 'hic', 'general'];
 function specimenCategoryOf(testName) {
   const name = String(testName || '');
-  if (name === 'Nick Break Test') return 'nickbreak';
+  if (name === 'Nick Break Test' || canonicalTestName(name) === 'Nick Break Test') return 'nickbreak';
   if (TEST_NAME_TO_CATEGORY[name]) return TEST_NAME_TO_CATEGORY[name];
   if (/\b(HIC|SSCC|SCC)\b/i.test(name)) return 'hic';
   return 'general';
@@ -403,7 +406,10 @@ async function autoAssignSampleMarks(workOrderId, testRequest, rowNos) {
 // ---------- API routes ----------
 
 app.get('/api/test-types', (req, res) => {
-  res.json({ testTypes: TEST_TYPES });
+  // formAliases: pola nama Other Test -> nama baku yang punya form report (lihat NAME_ALIASES di lib/testReports.js);
+  // formNames: semua nama yang bisa dipilih untuk Other Test (jenis tetap + jenis yang hanya lewat Other Test)
+  const extra = [...new Set(formAliases().map(a => a[2]))].filter(n => !TEST_TYPES.includes(n) && templateOptions(n).length);
+  res.json({ testTypes: TEST_TYPES, formAliases: formAliases(), formNames: [...TEST_TYPES, ...extra, 'PMI'] });
 });
 
 app.get('/api/welding-processes', async (req, res) => {
@@ -623,6 +629,8 @@ app.post('/api/requests', async (req, res) => {
   if ((b.status || 'draft') === 'final' && !b.confirmation_agreed) {
     return res.status(400).json({ error: 'Konfirmasi persetujuan permintaan harus dicentang sebelum Finalisasi' });
   }
+  const otherProblem = otherTestProblem(normalizeOtherTests(b.coupon_tests));
+  if (otherProblem) return res.status(400).json({ error: otherProblem });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -684,6 +692,8 @@ app.put('/api/requests/:id', async (req, res) => {
   if ((b.status || 'draft') === 'final' && !b.confirmation_agreed) {
     return res.status(400).json({ error: 'Konfirmasi persetujuan permintaan harus dicentang sebelum Finalisasi' });
   }
+  const otherProblem = otherTestProblem(normalizeOtherTests(b.coupon_tests));
+  if (otherProblem) return res.status(400).json({ error: otherProblem });
   const client = await pool.connect();
   try {
     const { rows: existingRows } = await client.query(`SELECT id, status FROM test_requests WHERE id = $1`, [id]);
