@@ -99,6 +99,9 @@
       Object.assign(e, err);
       throw e;
     }
+    // form berhasil disimpan -> cadangan isian di browser untuk form itu dihapus
+    const method = String((opts && opts.method) || 'GET').toUpperCase();
+    if (method !== 'GET') draftOnSaved(method, String(path).split('?')[0]);
     return res.status === 204 ? null : res.json();
   }
 
@@ -6585,6 +6588,203 @@
     document.querySelectorAll('.nav-item[data-nav]').forEach(n => n.classList.toggle('active', n.dataset.nav === key));
   }
 
+  // ---------- cadangan isian yang belum disimpan (di browser) ----------
+  // Isian form disimpan otomatis di browser (localStorage) saat mengetik; bila form dibuka lagi (setelah tab tertutup,
+  // refresh, atau redeploy) muncul tawaran Pulihkan / Buang. Tidak ada yang dikirim ke server tanpa tombol simpan.
+  // Cadangan dihapus setelah form berhasil disimpan. Tanda tangan / gambar besar tidak ikut dicadangkan.
+  const DRAFT_PREFIX = 'lims-draft:';
+  const DRAFT_MAX_AGE = 30 * 24 * 3600 * 1000;   // cadangan lebih dari 30 hari dibuang
+  // per pengguna: di komputer lab yang dipakai bergantian, isian satu orang tidak ditawarkan ke orang lain
+  const draftKey = k => DRAFT_PREFIX + ((AUTH && AUTH.user && AUTH.user.id) || 'anon') + ':' + k;
+  const draftStore = {
+    get(k) { try { const s = localStorage.getItem(draftKey(k)); return s ? JSON.parse(s) : null; } catch (e) { return null; } },
+    set(k, v) { try { localStorage.setItem(draftKey(k), JSON.stringify(v)); return true; } catch (e) { return false; } },
+    del(k) { try { localStorage.removeItem(draftKey(k)); } catch (e) {} }
+  };
+  const BIG = '__BIG__';
+  const isBig = v => typeof v === 'string' && v.length > 20000 && v.startsWith('data:');
+  const draftClone = o => JSON.parse(JSON.stringify(o === undefined ? null : o, (k, v) => (isBig(v) ? BIG : v)));
+  // nilai besar yang tidak dicadangkan diambil dari isian sekarang
+  function unBig(saved, cur) {
+    if (saved === BIG) return cur;
+    if (Array.isArray(saved)) return saved.map((x, i) => unBig(x, cur && cur[i]));
+    if (saved && typeof saved === 'object') { const o = {}; Object.keys(saved).forEach(k => { o[k] = unBig(saved[k], cur && cur[k]); }); return o; }
+    return saved;
+  }
+  const formValues = form => { const o = {}; if (form) new FormData(form).forEach((v, k) => { if (typeof v === 'string') o[k] = v; }); return o; };
+  const pickState = keys => Object.fromEntries(keys.map(k => [k, state[k]]));
+  // isian form dibaca dari DOM (untuk form yang membaca DOM saat simpan, mis. tahap Work Order)
+  function domCapture(form) {
+    const out = [], seen = {};
+    if (!form) return out;
+    form.querySelectorAll('input, select, textarea').forEach(el => {
+      if (['file', 'password', 'submit', 'button'].includes(el.type)) return;
+      const sig = [el.tagName, el.name || '', el.id || '', JSON.stringify(el.dataset)].join('|');
+      const n = seen[sig] = (seen[sig] || 0) + 1;
+      out.push({ sig, n, v: el.value, c: (el.type === 'checkbox' || el.type === 'radio') ? el.checked : undefined });
+    });
+    return out;
+  }
+  function domRestore(form, items) {
+    if (!form) return;
+    const seen = {}, els = {};
+    form.querySelectorAll('input, select, textarea').forEach(el => {
+      const sig = [el.tagName, el.name || '', el.id || '', JSON.stringify(el.dataset)].join('|');
+      const n = seen[sig] = (seen[sig] || 0) + 1;
+      els[sig + '#' + n] = el;
+    });
+    (items || []).forEach(it => {
+      const el = els[it.sig + '#' + it.n];
+      if (!el) return;
+      if (it.c !== undefined) { if (el.checked !== it.c) { el.checked = it.c; el.dispatchEvent(new Event('change', { bubbles: true })); } return; }
+      if (el.value !== it.v) { el.value = it.v; el.dispatchEvent(new Event('input', { bubbles: true })); el.dispatchEvent(new Event('change', { bubbles: true })); }
+    });
+  }
+  const TR_STATE = ['testReportRows', 'testReportElements', 'testReportElExtra', 'testReportElOrder', 'testReportHard', 'testReportCorr',
+    'testReportCorrIdx', 'testReportHicLog', 'testReportFerrite', 'testReportFerriteOwn', 'testReportFerriteLocs', 'testReportSpec', 'testReportFwbCrit'];
+  const DRAFT_ADAPTERS = {
+    'test-report-form': {
+      label: 'Lembar Hasil Uji',
+      key: () => (state.testReport && state.testReport.id ? 'tr:' + state.testReport.id : ''),
+      saved: (method, path) => method === 'PUT' && path === '/api/test-reports/' + state.testReport.id,
+      capture: () => ({ fd: formValues(document.getElementById('testReportForm')), st: draftClone(pickState(TR_STATE)) }),
+      restore: d => {
+        Object.assign(state, unBig(d.st || {}, pickState(TR_STATE)));
+        const r = state.testReport;
+        r.fields = { ...(r.fields || {}) };
+        Object.entries(d.fd || {}).forEach(([k, v]) => { if (k.startsWith('field_')) r.fields[k.slice(6)] = v; else r[k] = v; });
+        render();
+      }
+    },
+    form: {
+      label: 'Permintaan Uji',
+      key: () => 'req:' + (state.editingId || 'baru'),
+      saved: (method, path) => (method === 'PUT' || method === 'POST') && /^\/api\/requests(\/\d+)?$/.test(path),
+      capture: () => {
+        const form = document.getElementById('reqForm');
+        const fd = formValues(form);
+        if (form) form.querySelectorAll('.yn-toggle[data-field]').forEach(g => { fd[g.dataset.field] = g.dataset.value || ''; });
+        return { fd, st: draftClone({ couponRows: state.couponRows }) };
+      },
+      restore: d => {
+        state.formData = { ...(state.formData || {}), ...(d.fd || {}) };
+        if (d.st && Array.isArray(d.st.couponRows)) state.couponRows = unBig(d.st.couponRows, state.couponRows);
+        render();
+      }
+    },
+    'specimen-form': {
+      label: 'Pengecekan Spesimen',
+      key: () => (state.specimenEditingId ? 'sp:' + state.specimenEditingId : ''),
+      saved: (method, path) => method === 'PUT' && path === '/api/specimen-inspections/' + state.specimenEditingId,
+      capture: () => ({ fd: formValues(document.getElementById('specForm')), st: draftClone({ specimenRows: state.specimenRows }) }),
+      restore: d => {
+        state.specimenData = { ...state.specimenData, ...(d.fd || {}) };
+        if (d.st && Array.isArray(d.st.specimenRows)) state.specimenRows = unBig(d.st.specimenRows, state.specimenRows);
+        render();
+      }
+    },
+    'wo-task': {
+      label: 'tahap Work Order',
+      key: () => (state.woTask && state.woTask.work_order ? 'task:' + state.woTask.work_order.id + ':' + state.woTask.stage.key : ''),
+      saved: (method, path) => method === 'PUT' && state.woTask && path === `/api/work-orders/${state.woTask.work_order.id}/tasks/${state.woTask.stage.key}`,
+      capture: () => ({ dom: domCapture(document.getElementById('woTaskForm')) }),
+      restore: d => domRestore(document.getElementById('woTaskForm'), d.dom)
+    },
+    'witness-form': {
+      label: 'Berita Acara Witness',
+      key: () => (state.witnessJob && state.witnessEdit ? 'wit:' + state.witnessJob.id + ':' + (state.witnessEdit.id || 'baru') : ''),
+      saved: (method, path) => (method === 'PUT' || method === 'POST') && /^\/api\/(witness-sessions\/\d+|work-orders\/\d+\/witness)$/.test(path),
+      capture: () => {
+        const ed = { ...(state.witnessEdit || {}) };
+        const form = document.getElementById('witnessForm');
+        Object.entries(formValues(form)).forEach(([k, v]) => { if (k in ed) ed[k] = v; });
+        return { ed: draftClone(ed) };
+      },
+      restore: d => { state.witnessEdit = unBig(d.ed, state.witnessEdit); renderWitnessForm(); }
+    }
+  };
+  const draft = { key: '', view: '', base: {}, offered: {}, timer: null, quietUntil: 0 };
+  const draftAdapter = () => DRAFT_ADAPTERS[state.view];
+  const sameData = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  function draftCapture() { const a = draftAdapter(); try { return a ? a.capture() : null; } catch (e) { return null; } }
+  // dipanggil setiap kali isi halaman diganti (render penuh)
+  function draftAfterRender() {
+    const a = draftAdapter();
+    const key = a ? a.key() : '';
+    draft.view = key ? state.view : '';
+    draft.key = key;
+    if (!key) return;
+    const now = draftCapture();
+    if (!(key in draft.base)) draft.base[key] = now;   // isian dari server saat pertama dibuka (pembanding)
+    const saved = draftStore.get(key);
+    if (!saved || draft.offered[key] || document.getElementById('draftBanner')) return;
+    if (Date.now() - (saved.at || 0) > DRAFT_MAX_AGE || sameData(saved.data, now)) { draftStore.del(key); return; }
+    draft.offered[key] = true;
+    const when = new Date(saved.at).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const bar = document.createElement('div');
+    bar.id = 'draftBanner';
+    bar.className = 'card';
+    bar.style.cssText = 'border:1px solid #e0b84d;background:#fff8e1;display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 16px;';
+    bar.innerHTML = `<span style="flex:1;min-width:240px;"><b>Ada isian ${esc(a.label)} yang belum disimpan</b> (terakhir diketik ${esc(when)}). Pulihkan untuk melanjutkan, lalu tekan Simpan.${JSON.stringify(saved.data).includes(BIG) ? ' Tanda tangan / gambar perlu dibuat ulang.' : ''}</span>
+      <button type="button" class="btn btn-primary btn-sm" id="draftRestore">Pulihkan</button>
+      <button type="button" class="btn btn-sm" id="draftDiscard">Buang</button>`;
+    contentEl.prepend(bar);
+    bar.querySelector('#draftRestore').addEventListener('click', () => {
+      bar.remove();
+      try { a.restore(saved.data); toast('Isian yang belum disimpan dipulihkan. Jangan lupa Simpan.', 'success'); }
+      catch (e) { toast('Sebagian isian tidak bisa dipulihkan (susunan form berubah)', 'error'); }
+    });
+    bar.querySelector('#draftDiscard').addEventListener('click', () => { draftStore.del(key); bar.remove(); });
+  }
+  // simpan cadangan sesaat setelah pengguna berhenti mengetik / mengklik
+  function draftSchedule() {
+    if (!draft.key || state.view !== draft.view) return;
+    clearTimeout(draft.timer);
+    draft.timer = setTimeout(() => {
+      if (Date.now() < draft.quietUntil || !draft.key || state.view !== draft.view) return;
+      const a = draftAdapter();
+      if (!a || a.key() !== draft.key) return;
+      const now = draftCapture();
+      if (!now) return;
+      if (sameData(now, draft.base[draft.key])) draftStore.del(draft.key);   // kembali seperti semula: tidak perlu cadangan
+      else draftStore.set(draft.key, { at: Date.now(), view: draft.view, data: now });
+    }, 800);
+  }
+  // dipanggil api(): setelah form berhasil disimpan, cadangannya dihapus
+  function draftOnSaved(method, path) {
+    const a = draftAdapter();
+    if (!a || !draft.key) return;
+    let hit = false;
+    try { hit = a.saved(method, path); } catch (e) {}
+    if (!hit) return;
+    clearTimeout(draft.timer);
+    draft.quietUntil = Date.now() + 1500;
+    draftStore.del(draft.key);
+    delete draft.base[draft.key];   // pembanding baru diambil dari isian tersimpan saat render berikutnya
+    delete draft.offered[draft.key];
+  }
+  function draftInit() {
+    // buang cadangan kedaluwarsa
+    try {
+      Object.keys(localStorage).filter(k => k.startsWith(DRAFT_PREFIX)).forEach(k => {
+        let v = null;
+        try { v = JSON.parse(localStorage.getItem(k)); } catch (e) {}
+        if (!v || Date.now() - (v.at || 0) > DRAFT_MAX_AGE) localStorage.removeItem(k);
+      });
+    } catch (e) {}
+    ['input', 'change'].forEach(t => contentEl.addEventListener(t, draftSchedule));
+    contentEl.addEventListener('click', e => { if (e.target.closest && e.target.closest('button')) draftSchedule(); });
+    // render penuh = isi contentEl diganti
+    let t = null;
+    new MutationObserver(() => { clearTimeout(t); t = setTimeout(draftAfterRender, 60); }).observe(contentEl, { childList: true });
+    // peringatan browser saat menutup tab / refresh bila ada isian yang belum disimpan
+    window.addEventListener('beforeunload', e => {
+      if (!draft.key || state.view !== draft.view) return;
+      const now = draftCapture();
+      if (now && !sameData(now, draft.base[draft.key])) { draftStore.set(draft.key, { at: Date.now(), view: draft.view, data: now }); e.preventDefault(); e.returnValue = ''; }
+    });
+  }
+
   function render() {
     syncNavActive();
     refreshQueueBadges();
@@ -8762,6 +8962,7 @@
     await loadEquipment();
     await loadHardnessPatterns();
     await loadAcceptanceSets();
+    draftInit();
     if (!can('dashboard')) {   // role tanpa akses Dashboard: buka menu pertama yang boleh
       const first = [...document.querySelectorAll('.nav-item[data-nav]')].find(n => !n.hidden && n.dataset.nav !== 'keluar');
       if (first) { first.click(); return; }
