@@ -107,4 +107,15 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(fer.includes('KOH solution') && !fer.includes('NaOH'), 'catatan metode Ferrite bisa diganti');
 }
 
+// 19 Nov: Hardness sampai 30 titik per line; tabel cetak dirapatkan (> 22 titik) agar nilai tidak terpotong
+{
+  const zones = [{ name: 'Base Metal', points: 3 }, { name: 'HAZ', points: 3 }, { name: 'Weld Metal', points: 13 }, { name: 'HAZ', points: 3 }, { name: 'Base Metal', points: 3 }];
+  const lines = [0, 1, 2].map(li => Array.from({ length: 25 }, (_, i) => String(200 + li * 30 + i)));
+  const html = R({ ...base, template: 'hard-weld', test_name: 'Hardness Test', rows: [{}], fields: { pattern: { id: null, name: 'K', kind: 'weld', lines: ['Line 1', 'Line 2', 'Line 3'], zones }, hardness: { lines } } });
+  assert.ok(html.includes('>200<') && html.includes('>284<'), 'semua 25 titik x 3 line tercetak');
+  assert.ok(/font-size:7\.5pt/.test(html), 'tabel dirapatkan untuk titik banyak');
+  const few = R({ ...base, template: 'hard-weld', test_name: 'Hardness Test', rows: [{}], fields: { pattern: { id: null, name: 'K', kind: 'weld', lines: ['Line 1'], zones: zones.slice(0, 3) }, hardness: { lines: [['1']] } } });
+  assert.ok(!/font-size:7\.5pt/.test(few), 'titik sedikit tetap ukuran normal');
+}
+
 console.log('revisi-regression.test.js OK');

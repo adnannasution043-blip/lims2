@@ -5,7 +5,8 @@ const { registerHardnessPatternRoutes, sanitizePatternSnapshot, cleanLayout } = 
 // ---- validasi susunan ----
 assert.deepStrictEqual(cleanLayout({ lines: ['', 'Root'], zones: [{ name: 'BM', points: '3' }, { name: 'x', points: 0 }] }),
   { lines: ['Line 1', 'Root'], zones: [{ name: 'BM', points: 3 }], total: 3 });
-assert.ok(cleanLayout({ lines: ['A'], zones: [{ name: 'Z', points: 16 }] }).error, 'lebih dari 15 titik ditolak');
+assert.ok(cleanLayout({ lines: ['A'], zones: [{ name: 'Z', points: 31 }] }).error, 'lebih dari 30 titik ditolak');
+assert.ok(!cleanLayout({ lines: ['A'], zones: [{ name: 'Z', points: 25 }] }).error, '25 titik boleh');
 assert.ok(cleanLayout({ lines: [], zones: [{ name: 'Z', points: 2 }] }).error, 'tanpa line ditolak');
 assert.strictEqual(cleanLayout({ lines: ['1', '2', '3', '4'], zones: [{ points: 1 }] }).lines.length, 3, 'maks. 3 line');
 const png = 'data:image/png;base64,iVBORw0KGgo=';
@@ -56,7 +57,10 @@ const call = (key, params, body) => new Promise(resolve => {
   assert.strictEqual(r.body.zones.length, 5);
   assert.strictEqual((await call('POST /api/hardness-patterns', {}, { name: 'Pertamina 3 line', lines: ['A'], zones })).status, 400, 'nama kembar');
   assert.strictEqual((await call('POST /api/hardness-patterns', {}, { name: '', lines: ['A'], zones })).status, 400, 'nama wajib');
-  assert.strictEqual((await call('POST /api/hardness-patterns', {}, { name: 'X', lines: ['A'], zones: [...zones, { name: 'Y', points: 1 }] })).status, 400, '16 titik');
+  assert.strictEqual((await call('POST /api/hardness-patterns', {}, { name: 'X', lines: ['A'], zones: [...zones, { name: 'Y', points: 16 }] })).status, 400, '31 titik');
+  const r25 = await call('POST /api/hardness-patterns', {}, { name: 'Butt Weld 25 titik', lines: ['A'], zones: [...zones, { name: 'Y', points: 10 }] });
+  assert.strictEqual(r25.status, 201, '25 titik boleh');
+  await call('DELETE /api/hardness-patterns/:id', { id: String(r25.body.id) });
   assert.strictEqual((await call('POST /api/hardness-patterns', {}, { name: 'X', lines: ['A'], zones, sketch: 'data:text/html;base64,AA==' })).status, 400, 'sketsa bukan gambar');
 
   r = await call('GET /api/hardness-patterns/:id', { id: String(id) });

@@ -581,10 +581,14 @@ function call(method, path, params, body) {
   assert.deepStrictEqual(r.body.fields.pattern.zones, [{ name: 'HAZ', points: 6 }]);
   const customHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(hid) } }, { setHeader() {}, send: resolve }));
   assert.ok(customHtml.includes('>216<') && customHtml.includes('>HAZ<') && !customHtml.includes('top:626px'), 'susunan khusus tanpa sketsa form');
-  // pola lebih dari 15 titik ditolak (tidak disimpan)
+  // pola lebih dari 30 titik ditolak (tidak disimpan); 25 titik per line boleh (dinaikkan dari 15) dan 25 nilai tersimpan
   r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
-    pattern: { name: 'x', kind: 'weld', lines: ['L1'], zones: [{ name: 'A', points: 16 }] } } });
-  assert.ok(!('pattern' in r.body.fields), 'pola > 15 titik ditolak');
+    pattern: { name: 'x', kind: 'weld', lines: ['L1'], zones: [{ name: 'A', points: 31 }] } } });
+  assert.ok(!('pattern' in r.body.fields), 'pola > 30 titik ditolak');
+  r = await call('PUT', '/api/test-reports/:id', { id: String(hid) }, { template: 'hard-weld', status: 'draft', fields: {
+    hardness: { lines: [Array.from({ length: 25 }, (_, i) => String(200 + i))] }, pattern: { id: null, name: 'Susunan khusus', kind: 'weld', lines: ['Line 1'], zones: [{ name: 'Weld Metal', points: 25 }] } } });
+  assert.strictEqual(r.body.fields.pattern.zones[0].points, 25);
+  assert.strictEqual(r.body.fields.hardness.lines[0].length, 25, '25 nilai per line tersimpan');
 
   // ---- Corrosion ----
   r = await call('POST', '/api/work-orders/:id/test-reports', { id: '1' }, { coupon_row_no: 1, test_name: 'Intergranular / Pitting Corrosion' });

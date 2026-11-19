@@ -4069,9 +4069,9 @@
     return `${patternSel}<div class="form-grid"><div class="field full"><label>Material Specification</label><input type="text" name="field_spec" value="${esc((state.testReport.fields || {}).spec)}"></div></div>${lines.join('')}${sketch}`;
   }
 
-  // Susunan khusus (permintaan klien): line (1-3) dan area/zona berurutan dengan jumlah titiknya, maks. 15 titik per line,
+  // Susunan khusus (permintaan klien): line (1-3) dan area/zona berurutan dengan jumlah titiknya, maks. 30 titik per line,
   // diatur langsung di Lembar tanpa membuat pola di Master Data. Disimpan sebagai pola tanpa id di isian Lembar.
-  const HARD_MAX_LINES = 3, HARD_MAX_POINTS = 15;
+  const HARD_MAX_LINES = 3, HARD_MAX_POINTS = 30;
   function hardCustomEditorHtml(pat) {
     const total = pat.zones.reduce((n, z) => n + (Number(z.points) || 0), 0);
     const over = total > HARD_MAX_POINTS;
@@ -8396,7 +8396,7 @@
   }
 
   const HP_KINDS = [['weld', 'Weld (DE.1/TR/11 HARD)'], ['material', 'Material (DE.1/TR/12 HARD)']];
-  const HP_MAX_LINES = 3, HP_MAX_POINTS = 15;
+  const HP_MAX_LINES = 3, HP_MAX_POINTS = 30;
 
   async function renderHardnessPatternMaster() {
     const wrap = document.getElementById('masterTabContent');
