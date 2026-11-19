@@ -68,6 +68,7 @@ const NO_DATA = 'Belum ada data hasil pengujian yang diisi';
 const one = [{ marking_specimen: 'S1' }];
 assert.ok(testReportProblems({ kind: 'general', template: 'hard-mat', body: { ...head, rows: one, fields: { type_test: 'Rockwell C', pattern: { name: 'P', lines: ['Line 1'], zones: [{ name: 'Z', points: 5 }] }, hardness: { lines: [[], [], []] } } } }).includes(NO_DATA));
 assert.ok(testReportProblems({ kind: 'general', template: 'chem-mat-pmi', body: { ...head, rows: one, fields: { elements: {}, extra_elements: ['Mo'] } } }).includes(NO_DATA));
+assert.ok(testReportProblems({ kind: 'general', template: 'chem-mat-pmi', body: { ...head, rows: one, fields: { elements: {}, element_order: ['Al', 'Fe'] } } }).includes(NO_DATA));
 assert.ok(testReportProblems({ kind: 'general', template: 'ferrite-mat', body: { ...head, rows: one, fields: { sample_id: 'S1', ferrite: { 'Base Metal': { n: '30', pt: '16', pi: [] } }, ferrite_locs: [{ name: 'Base Metal Cap', n: '30', pt: '16', pi: [] }] } } }).includes(NO_DATA));
 // ... dan lolos begitu nilai hasilnya diisi (termasuk hanya di spesimen ke-2)
 assert.deepStrictEqual(testReportProblems({ kind: 'general', template: 'hard-mat', body: { ...head, rows: one, fields: { type_test: 'Rockwell C', hardness: { lines: [['45']] } } } }), []);

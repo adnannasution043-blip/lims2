@@ -3329,6 +3329,7 @@
     state.testReport = data;
     state.testReportElements = { ...((data.fields || {}).elements || {}) };
     state.testReportElExtra = [...((data.fields || {}).extra_elements || [])];
+    state.testReportElOrder = [...((data.fields || {}).element_order || [])];
     ferriteStateOf(data.fields);
     state.testReportHard = hardStateOf(data.fields);
     specStateOf(data);
@@ -3796,17 +3797,31 @@
   // Form Chemical: satu isian per elemen (daftar elemen mengikuti varian form yang dipilih).
   // Unsur form + unsur tambahan yang diketik di Lembar (mis. PMI: hasil uji tidak baku, unsurnya berbeda-beda)
   function testReportElementsHtml(templateKey) {
-    const labels = ((state.testReport || {}).template_elements || {})[templateKey] || [];
-    const extra = (state.testReportElExtra || []).filter(l => !labels.includes(l));
-    const box = (l, own) => `
-      <div class="field"><label style="display:flex;justify-content:space-between;align-items:center;gap:4px;">${esc(l)}${own ? `<button type="button" class="btn btn-sm btn-danger" data-el-del="${esc(l)}" title="Hapus unsur ${esc(l)}" style="padding:0 6px;line-height:1.4;">&times;</button>` : ''}</label>
-        <input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`;
-    return `<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${labels.map(l => box(l, false)).join('')}${extra.map(l => box(l, true)).join('')}</div>
+    const formLabels = ((state.testReport || {}).template_elements || {})[templateKey] || [];
+    const own = state.testReportElOrder || [];
+    // susunan sendiri: kotak & urutan cetak persis mengikuti daftar (mis. PMI: Al Fe Ni Cu Mn)
+    const labels = own.length ? own : formLabels;
+    const extra = own.length ? [] : (state.testReportElExtra || []).filter(l => !formLabels.includes(l));
+    const orderRow = `
+      <div style="display:flex;gap:8px;align-items:flex-end;margin:0 0 12px;flex-wrap:wrap;padding:10px 12px;border:1px solid #d6dbe4;border-radius:8px;background:#f8f9fb;">
+        <div class="field" style="margin:0;flex:1;min-width:240px;"><label>Susunan unsur <span class="en">urutan kotak &amp; urutan cetak; pisahkan dengan spasi, mis. Al Fe Ni Cu Mn</span></label>
+          <input type="text" id="elOrderText" value="${esc(own.join(' '))}" placeholder="${esc(formLabels.join(' '))}"></div>
+        <button type="button" class="btn btn-sm" data-el-order-apply>Terapkan</button>
+        ${own.length ? '<button type="button" class="btn btn-sm" data-el-order-reset>Pakai unsur form</button>' : ''}
+        <span class="muted" style="font-size:12px;flex-basis:100%;">${own.length ? 'Memakai susunan sendiri: hanya unsur di daftar ini yang tampil dan tercetak, sesuai urutannya.' : 'Kosong = unsur bawaan form. Isi bila unsur hasil uji berbeda dari form (mis. PMI).'}</span>
+      </div>`;
+    const boxes = labels.map(l => box(l, own.length > 0)).join('') + extra.map(l => box(l, true)).join('');
+    return `${orderRow}<div class="form-grid" style="grid-template-columns:repeat(auto-fill,minmax(110px,1fr));">${boxes}</div>
       <div style="display:flex;gap:8px;align-items:flex-end;margin-top:10px;flex-wrap:wrap;">
         <div class="field" style="margin:0;width:160px;"><label>Unsur tambahan <span class="en">mis. Mo, Nb, W</span></label><input type="text" id="elAddName" maxlength="12" placeholder="Simbol unsur"></div>
         <button type="button" class="btn btn-sm" data-el-add>+ Unsur</button>
-        <span class="muted" style="font-size:12px;">Unsur tambahan ikut tercetak bila diisi; tabel unsur di report menyesuaikan.</span>
+        <span class="muted" style="font-size:12px;">${own.length ? 'Unsur baru ditambahkan di akhir susunan.' : 'Unsur tambahan ikut tercetak bila diisi; tabel unsur di report menyesuaikan.'}</span>
       </div>`;
+    function box(l, removable) {
+      return `
+      <div class="field"><label style="display:flex;justify-content:space-between;align-items:center;gap:4px;">${esc(l)}${removable ? `<button type="button" class="btn btn-sm btn-danger" data-el-del="${esc(l)}" title="Hapus unsur ${esc(l)}" style="padding:0 6px;line-height:1.4;">&times;</button>` : ''}</label>
+        <input type="text" inputmode="decimal" data-element="${esc(l)}" value="${esc(state.testReportElements[l] || '')}" placeholder="%"></div>`;
+    }
   }
 
   // Form Corrosion (Pitting / Intergranular): berat sebelum & sesudah uji (5 penimbangan), luas, jam uji, teks ringkasan
@@ -4605,26 +4620,49 @@
       const inp = document.getElementById('elAddName');
       const name = (inp.value || '').trim().slice(0, 12);
       if (!name) return;
-      const labels = (state.testReport.template_elements || {})[(document.getElementById('testReportTemplate') || {}).value || state.testReport.template] || [];
-      if (labels.includes(name) || (state.testReportElExtra || []).includes(name)) { toast(`Unsur ${name} sudah ada`, 'error'); return; }
-      state.testReportElExtra = [...(state.testReportElExtra || []), name];
+      const own = state.testReportElOrder || [];
+      const labels = own.length ? own : ((state.testReport.template_elements || {})[(document.getElementById('testReportTemplate') || {}).value || state.testReport.template] || []);
+      if (labels.includes(name) || (!own.length && (state.testReportElExtra || []).includes(name))) { toast(`Unsur ${name} sudah ada`, 'error'); return; }
+      if (own.length) state.testReportElOrder = [...own, name];   // susunan sendiri: unsur baru di akhir
+      else state.testReportElExtra = [...(state.testReportElExtra || []), name];
       state.testReportDirty = true;
       rerender();
       const box = wrap.querySelector(`[data-element="${CSS.escape(name)}"]`);
       if (box) box.focus();
     };
+    // Susunan unsur sendiri: daftar diketik (spasi / koma), unsur di luar daftar beserta nilainya dibuang
+    const applyOrder = () => {
+      const list = [...new Set(String((document.getElementById('elOrderText') || {}).value || '').split(/[\s,;]+/).map(x => x.trim().slice(0, 12)).filter(Boolean))].slice(0, 40);
+      if (!list.length) { toast('Ketik daftar unsur, mis. Al Fe Ni Cu Mn', 'error'); return; }
+      Object.keys(state.testReportElements).forEach(k => { if (!list.includes(k)) delete state.testReportElements[k]; });
+      state.testReportElOrder = list;
+      state.testReportElExtra = [];
+      state.testReportDirty = true;
+      rerender();
+    };
     wrap.addEventListener('click', e => {
       if (e.target.closest('[data-el-add]')) addOne();
+      if (e.target.closest('[data-el-order-apply]')) applyOrder();
+      if (e.target.closest('[data-el-order-reset]')) {
+        state.testReportElOrder = [];
+        state.testReportDirty = true;
+        rerender();
+      }
       const del = e.target.closest('[data-el-del]');
       if (del) {
         const name = del.dataset.elDel;
+        state.testReportElOrder = (state.testReportElOrder || []).filter(l => l !== name);
         state.testReportElExtra = (state.testReportElExtra || []).filter(l => l !== name);
         delete state.testReportElements[name];
         state.testReportDirty = true;
         rerender();
       }
     });
-    wrap.addEventListener('keydown', e => { if (e.target.id === 'elAddName' && e.key === 'Enter') { e.preventDefault(); addOne(); } });
+    wrap.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      if (e.target.id === 'elAddName') { e.preventDefault(); addOne(); }
+      if (e.target.id === 'elOrderText') { e.preventDefault(); applyOrder(); }
+    });
   }
 
   function renderTestReportForm() {
@@ -4886,7 +4924,7 @@
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
     payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
-      : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements, extra_elements: state.testReportElExtra || [] }
+      : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements, extra_elements: state.testReportElExtra || [], element_order: state.testReportElOrder || [] }
       : (state.testReport && state.testReport.template_locations ? ferritePayload()
         : (state.testReport && state.testReport.template_hard ? { hardness: { lines: state.testReportHard.lines, more: state.testReportHard.more.slice(0, Math.max(0, (state.testReport.hard_markings || []).length - 1)) }, sketch: state.testReportHard.sketch, pattern: hardActivePattern(payload.template || state.testReport.template) }
           : (state.testReport && state.testReport.template_corr ? { corr: state.testReportCorr } : {})));
@@ -4909,6 +4947,7 @@
       state.testReportRows = state.testReport.rows.map(r => ({ ...r }));
       state.testReportElements = { ...((state.testReport.fields || {}).elements || {}) };
       state.testReportElExtra = [...((state.testReport.fields || {}).extra_elements || [])];
+      state.testReportElOrder = [...((state.testReport.fields || {}).element_order || [])];
       state.testReportCorr = JSON.parse(JSON.stringify((state.testReport.fields || {}).corr || {})); state.testReportCorrIdx = 0;
       state.testReportHicLog = JSON.parse(JSON.stringify((state.testReport.fields || {}).hic_log || []));
       state.testReportPhotoSlots = new Set(state.testReport.photos || []);

@@ -423,6 +423,14 @@ function call(method, path, params, body) {
   const pmiHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(kid) } }, { setHeader() {}, send: resolve }));
   assert.ok(['Cr', 'Mo', 'Nb'].every(l => pmiHtml.includes('>' + l + '<')) && pmiHtml.includes('>2.1<'), 'unsur tambahan tercetak');
   assert.ok(!pmiHtml.includes('>W<') && !pmiHtml.includes('>Si<'), 'unsur kosong (form maupun tambahan) tidak tercetak');
+  // PMI: susunan unsur sendiri (daftar & urutan cetak), mis. hasil Al Fe Ni Cu Mn
+  r = await call('PUT', '/api/test-reports/:id', { id: String(kid) }, { template: 'chem-mat-pmi', status: 'draft',
+    fields: { elements: { Al: '0.5', Fe: 'Bal', Ni: '8.1', Cu: '0.2', Mn: '1.4', Si: '0.3' }, element_order: ['Al', 'Fe', 'Ni', 'Al', '', 7, 'Cu', 'Mn'] } });
+  assert.deepStrictEqual(r.body.fields.element_order, ['Al', 'Fe', 'Ni', 'Cu', 'Mn']);
+  const ordHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(kid) } }, { setHeader() {}, send: resolve }));
+  const pos = ['Al', 'Fe', 'Ni', 'Cu', 'Mn'].map(l => ordHtml.indexOf('>' + l + '<'));
+  assert.ok(pos.every((p, i) => p > 0 && (i === 0 || p > pos[i - 1])), 'unsur tercetak sesuai urutan susunan');
+  assert.ok(!ordHtml.includes('>Si<'), 'unsur di luar susunan tidak tercetak');
   // Qty > 1: spesimen ke-2 dst. disimpan di fields.more (hanya kunci hasil spesimen)
   r = await call('PUT', '/api/test-reports/:id', { id: String(kid) }, { template: 'chem-mat-ss', fields: { elements: { Cr: '17.9' }, more: [{ elements: { Cr: '18.4' }, evil: 1 }, 'x'] }, status: 'draft' });
   assert.deepStrictEqual(r.body.fields.more, [{ elements: { Cr: '18.4' } }, { elements: {} }]);
