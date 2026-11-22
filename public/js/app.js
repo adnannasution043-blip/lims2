@@ -3415,6 +3415,62 @@
 
   const CHARPY_NOTCH_POSITIONS = ['Weld Center Line', 'Base Metal', 'HAZ', 'Fusion Line', 'Fusion Line + 2 mm'];
 
+  // Foto tambahan per spesimen (Micro, HIC, SSCC): satu spesimen (Qty tetap) bisa diberi beberapa foto sesuai permintaan
+  // klien. Disimpan di baris spesimennya (more_photos [{ n, caption }]); fotonya di slot tetap "<form>/s<n>", n = 51..99.
+  const MORE_PHOTO_FROM = 51, MORE_PHOTO_TO = 99;
+  function morePhotoKey() {
+    const h = hicInfoNow();
+    if (h) return h.kind;
+    const sel = document.getElementById('testReportTemplate');
+    return (sel && sel.value) || state.testReport.template;
+  }
+  const morePhotoKinds = () => !!(state.testReport && (state.testReport.template_micro || state.testReport.template_hic));
+  function morePhotosHtml(r, idx) {
+    const key = morePhotoKey();
+    const list = Array.isArray(r.more_photos) ? r.more_photos : [];
+    const items = list.map((e, j) => {
+      const slot = key + '/s' + e.n;
+      const has = state.testReportPhotoSlots.has(slot);
+      return `<div data-more-item="${idx}:${j}" style="border-top:1px dashed #c9ced8;margin-top:6px;padding-top:5px;">
+        <div style="font-size:11px;font-weight:600;">Foto tambahan ${j + 1}</div>
+        ${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:110px;height:56px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">belum ada foto</span>'}
+        <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:3px;">
+        <input type="text" data-more-cap="${idx}:${j}" value="${esc(e.caption || '')}" maxlength="200" placeholder="Keterangan (opsional), mis. 500X" style="width:150px;font-size:12px;margin-top:3px;display:block;">
+        <button type="button" class="btn btn-sm btn-danger" data-more-del="${idx}:${j}" style="margin-top:3px;">Hapus foto tambahan</button></div>`;
+    }).join('');
+    return `${items}<button type="button" class="btn btn-sm" data-more-add="${idx}" style="margin-top:6px;display:block;" title="Tambah foto untuk spesimen ini tanpa menambah Qty">+ Foto</button>`;
+  }
+  function deleteMorePhotoSlot(slot) {
+    if (!state.testReportPhotoSlots.has(slot)) return;
+    state.testReportPhotoSlots.delete(slot);
+    fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' });
+  }
+  function handleMorePhotoClick(e) {
+    const t = e.target;
+    if (!t.dataset || (t.dataset.moreAdd === undefined && t.dataset.moreDel === undefined)) return;
+    const key = morePhotoKey();
+    if (t.dataset.moreAdd !== undefined) {
+      const row = state.testReportRows[Number(t.dataset.moreAdd)];
+      if (!row) return;
+      const used = new Set(state.testReportRows.flatMap(x => (x.more_photos || []).map(m => Number(m.n))));
+      let n = MORE_PHOTO_FROM;
+      while (n <= MORE_PHOTO_TO && used.has(n)) n++;
+      if (n > MORE_PHOTO_TO) { toast('Foto tambahan maksimal ' + (MORE_PHOTO_TO - MORE_PHOTO_FROM + 1) + ' per Lembar', 'error'); return; }
+      deleteMorePhotoSlot(key + '/s' + n);   // sisa foto lama yang tidak lagi terpakai di slot ini
+      row.more_photos = (row.more_photos || []).concat([{ n, caption: '' }]);
+    } else {
+      const [i, j] = t.dataset.moreDel.split(':').map(Number);
+      const row = state.testReportRows[i];
+      const m = row && (row.more_photos || [])[j];
+      if (!m) return;
+      if (state.testReportPhotoSlots.has(key + '/s' + m.n) && !confirm('Hapus foto tambahan ini?')) return;
+      deleteMorePhotoSlot(key + '/s' + m.n);
+      row.more_photos.splice(j, 1);
+    }
+    state.testReportDirty = true;
+    rerenderTestReportRows();
+  }
+
   function testReportRowsHtml() {
     if (state.testReport && state.testReport.template_tn) {
       const sel = document.getElementById('testReportTemplate');
@@ -3475,11 +3531,13 @@
             ${cell(idx, r, 'obs', 150, 'No Crack was Observed')}
             <td style="min-width:150px;">${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">Belum ada foto</span>'}
               <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
-              ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}</td>
+              ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:4px;">Hapus foto</button>` : ''}
+              ${morePhotosHtml(r, idx)}</td>
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>
+      <p class="muted" style="font-size:12px;margin-top:6px;">+ Foto: tambah foto untuk spesimen yang sama tanpa menambah Qty; foto tambahan tercetak di halaman hasil setelah foto utamanya. Klik Simpan setelah menambah.</p>
       `;
     }
     if (state.testReport && state.testReport.template_hic) {
@@ -3488,7 +3546,7 @@
       const inp = (idx, r, k, w, ph) => `<td><input type="text" inputmode="decimal" data-tfield="${k}" value="${esc(r[k] || '')}" placeholder="${ph || ''}" style="width:${w}px"></td>`;
       return `<div style="overflow-x:auto;"><table class="task-table">
         <thead>
-          <tr><th rowspan="2">Specimen No.</th><th rowspan="2">Orientation</th><th colspan="4">Section 1</th><th colspan="4">Section 2</th><th colspan="4">Section 3</th><th rowspan="2">Hasil (rata-rata 3 section)</th><th rowspan="2"></th></tr>
+          <tr><th rowspan="2">Specimen No.</th><th rowspan="2">Orientation</th><th colspan="4">Section 1</th><th colspan="4">Section 2</th><th colspan="4">Section 3</th><th rowspan="2">Hasil (rata-rata 3 section)</th><th rowspan="2">Foto spesimen <span class="en" style="font-weight:400">tidak menambah Qty</span></th><th rowspan="2"></th></tr>
           <tr>${[1, 2, 3].map(() => '<th>W (mm)</th><th>T (mm)</th><th>a (mm)</th><th>b (mm)</th>').join('')}</tr>
         </thead>
         <tbody>${state.testReportRows.map((r, idx) => `
@@ -3497,9 +3555,11 @@
             <td><input type="text" data-tfield="orient" value="${esc(r.orient || '')}" placeholder="Longitudinal" style="width:100px"></td>
             ${[1, 2, 3].map(k => inp(idx, r, 'w' + k, 62) + inp(idx, r, 't' + k, 62) + inp(idx, r, 'a' + k, 96, 'mis. 1.02 0.5') + inp(idx, r, 'b' + k, 96, 'mis. 0.4')).join('')}
             <td class="muted" data-hcalc style="white-space:nowrap;">${hicCalcText(r)}</td>
+            <td style="min-width:160px;">${morePhotosHtml(r, idx)}</td>
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
+      <p class="muted" style="font-size:12px;margin-top:6px;">+ Foto: foto spesimen tercetak di halaman "Specimen Photograph" (2 foto per halaman) setelah tabel hasil. Klik Simpan setelah menambah.</p>
       `;
     }
     if (state.testReport && state.testReport.template_pset) {
@@ -3573,10 +3633,11 @@
             <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
             ${info.thick ? [1, 2, 3, 4, 5].map(k => `<td><input type="text" inputmode="decimal" data-tfield="t${k}" value="${esc(r['t' + k] || '')}" style="width:70px"></td>`).join('') + `<td class="muted">${avg(r)}</td>` : ''}
             <td><input type="text" data-tfield="remarks" value="${esc(r.remarks || '')}" maxlength="300" placeholder="mis. Base Metal Cap" style="min-width:170px"></td>
-            <td style="min-width:160px;">${photoCell(idx)}</td>
+            <td style="min-width:160px;">${photoCell(idx)}${morePhotosHtml(r, idx)}</td>
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
+      <p class="muted" style="font-size:12px;margin-top:6px;">+ Foto: tambah foto untuk spesimen yang sama tanpa menambah Qty; tiap foto tambahan dicetak di halaman sendiri setelah halaman spesimennya (keterangan foto mengganti Remarks halaman itu). Klik Simpan setelah menambah.</p>
       `;
     }
     if (state.testReport && state.testReport.template_macro) {
@@ -3725,6 +3786,7 @@
     wrap.addEventListener('change', handleTestReportRowInput);
     wrap.addEventListener('change', handleMacroPhotoChange);
     wrap.addEventListener('click', handleMacroPhotoClick);
+    wrap.addEventListener('click', handleMorePhotoClick);
     wrap.querySelectorAll('[data-trow-remove]').forEach(btn => btn.addEventListener('click', () => {
       if (state.testReportRows.length <= 1) { toast('Minimal harus ada 1 baris', 'error'); return; }
       if (state.testReport.template_macro || state.testReport.template_micro || state.testReport.template_pset || (hicInfoNow() && hicInfoNow().kind !== 'hic')) {
@@ -3736,6 +3798,8 @@
           if (state.testReportPhotoSlots.has(slot)) { state.testReportPhotoSlots.delete(slot); fetch('/api/test-reports/' + state.testReport.id + '/photo?slot=' + encodeURIComponent(slot), { method: 'DELETE' }); }
         }
       }
+      const gone = state.testReportRows[Number(btn.dataset.trowRemove)];
+      if (gone && morePhotoKinds()) (gone.more_photos || []).forEach(e => deleteMorePhotoSlot(morePhotoKey() + '/s' + e.n));
       state.testReportRows.splice(Number(btn.dataset.trowRemove), 1);
       state.testReportDirty = true;
       rerenderTestReportRows();
@@ -3750,6 +3814,11 @@
       row.remarks = row.remarks || [];
       row.remarks[Number(e.target.dataset.tremark)] = e.target.value;
       state.testReportDirty = true;
+      return;
+    }
+    if (row && e.target.dataset.moreCap !== undefined) {
+      const m = (row.more_photos || [])[Number(e.target.dataset.moreCap.split(':')[1])];
+      if (m) { m.caption = e.target.value; state.testReportDirty = true; }
       return;
     }
     if (!row || !e.target.dataset.tfield) return;

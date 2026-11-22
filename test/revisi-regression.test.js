@@ -134,4 +134,39 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(gen.includes('September 29, 2026') && gen.includes('October 1, 2026'), 'report umum ikut format baru');
 }
 
+// 22 Nov: Micro, HIC & SSCC bisa tambah foto manual per spesimen tanpa menambah Qty (more_photos, slot tetap s51..s99)
+{
+  const { photoSlotIds } = require('../lib/testReportTemplatePrint');
+  const { sanitizeRows } = require('../lib/testReports');
+  const px = 'data:image/png;base64,QUJDWFlaMTIz';
+  const count = h => h.split('QUJDWFlaMTIz').length - 1;
+  ['micro-mat', 'micro-weld', 'micro-thick-mat', 'micro-thick-weld', 'hic', 'sscc-fpb', 'sscc-pr'].forEach(k => {
+    assert.ok(photoSlotIds(k).includes(k + '/s51') && photoSlotIds(k).includes(k + '/s99'), k + ': slot foto tambahan boleh diunggah');
+  });
+  assert.ok(!photoSlotIds('sem').includes('sem/s51'), 'form lain tidak berubah');
+  // sanitasi: n di luar rentang / ganda dibuang; baris tanpa foto tambahan tetap seperti dulu
+  const rows = sanitizeRows([{ marking_specimen: 'A', more_photos: [{ n: 51, caption: '500X' }, { n: 7 }, { n: 51 }] }, { marking_specimen: 'B', more_photos: [{ n: 51 }, { n: '52' }] }, { marking_specimen: 'C' }], [], 'micro');
+  assert.deepStrictEqual(rows[0].more_photos, [{ n: 51, caption: '500X' }]);
+  assert.deepStrictEqual(rows[1].more_photos, [{ n: 52, caption: '' }]);
+  assert.ok(!('more_photos' in rows[2]));
+  ['hic', 'sscc'].forEach(c => assert.deepStrictEqual(sanitizeRows([{ marking_specimen: 'CT1', more_photos: [{ n: 60 }] }], [], c)[0].more_photos, [{ n: 60, caption: '' }], c + ': more_photos tersimpan'));
+  // Micro: tiap foto tambahan halaman sendiri, keterangan mengganti Remarks spesimen
+  const mic = R({ ...base, template: 'micro-mat', test_name: 'Micro', rows: [{ marking_specimen: 'A1', remarks: 'Cap', more_photos: [{ n: 51, caption: 'Root 500X' }, { n: 52 }] }],
+    photo_data: { 'micro-mat/s2': px, 'micro-mat/s51': px, 'micro-mat/s52': px } });
+  assert.strictEqual(count(mic), 3, 'Micro: 1 foto utama + 2 foto tambahan tercetak');
+  assert.ok(mic.includes('Root 500X') && mic.includes('>Cap'), 'Micro: keterangan foto tambahan & Remarks spesimen tercetak');
+  assert.strictEqual(count(R({ ...base, template: 'micro-thick-mat', test_name: 'Micro', rows: [{ marking_specimen: 'A1', more_photos: [{ n: 51 }] }], photo_data: { 'micro-thick-mat/s1': px, 'micro-thick-mat/s51': px } })), 2, 'Micro Thickness: foto tambahan tercetak');
+  // SSCC: foto tambahan ikut di halaman hasil, tabel pembebanan tetap satu baris per spesimen
+  const ss = R({ ...base, template: 'sscc-pr', test_name: 'SSCC', rows: [{ marking_specimen: 'CT1', more_photos: [{ n: 51, caption: 'Side B no crack' }] }], photo_data: { 'sscc-pr/s1': px, 'sscc-pr/s51': px } });
+  assert.strictEqual(count(ss), 2, 'SSCC: foto utama + tambahan tercetak');
+  assert.ok(ss.includes('Side B no crack'), 'SSCC: keterangan foto tambahan tercetak sebagai observasi');
+  assert.strictEqual(count(R({ ...base, template: 'sscc-fpb', test_name: 'SSCC', rows: [{ marking_specimen: 'CT1', more_photos: [{ n: 51 }] }, { marking_specimen: 'CT2' }], photo_data: { 'sscc-fpb/s1': px, 'sscc-fpb/s2': px, 'sscc-fpb/s51': px } })), 3, 'SSCC FPB: foto spesimen lain tidak bergeser');
+  // HIC: halaman Specimen Photograph (2 foto per halaman), tanpa foto tidak ada halaman tambahan
+  const hic = R({ ...base, template: 'hic', test_name: 'HIC', rows: [{ marking_specimen: 'CT1', more_photos: [{ n: 51, caption: 'Section 1' }, { n: 52 }, { n: 53 }] }], photo_data: { 'hic/s51': px, 'hic/s52': px, 'hic/s53': px } });
+  assert.strictEqual(count(hic), 3, 'HIC: semua foto tercetak');
+  assert.strictEqual((hic.match(/Specimen Photograph/g) || []).length, 2, 'HIC: 3 foto = 2 halaman foto');
+  assert.ok(hic.includes('CT1 - Section 1'), 'HIC: keterangan foto = penanda spesimen + keterangan');
+  assert.ok(!R({ ...base, template: 'hic', test_name: 'HIC', rows: [{ marking_specimen: 'CT1' }] }).includes('Specimen Photograph'), 'HIC tanpa foto: tidak ada halaman foto');
+}
+
 console.log('revisi-regression.test.js OK');
