@@ -169,4 +169,26 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(!R({ ...base, template: 'hic', test_name: 'HIC', rows: [{ marking_specimen: 'CT1' }] }).includes('Specimen Photograph'), 'HIC tanpa foto: tidak ada halaman foto');
 }
 
+// Chat klien 2026-11-23: Qty 2 -> No. Laporan & Remarks bisa berbeda per spesimen (Spesimen 1 "Cap", Spesimen 2 "Root");
+// spesimen tanpa isian sendiri tetap memakai isian umum Lembar
+{
+  const { perSpecimenPages } = require('../lib/testReportTemplatePrint');
+  const meta = { spec_meta: [{}, { report_no: 'DE.1/1126/9002', remarks: 'ROOTREM' }] };
+  const two = [{ marking_specimen: 'S1' }, { marking_specimen: 'S2' }];
+  const pagesOf = html => html.split('class="paper').slice(1);
+  [['macro-butt', 'Macro'], ['micro-mat', 'Micro'], ['fwb-asme-pipe', 'Fillet Weld Break'], ['scc', 'SCC'], ['sem', 'SEM']].forEach(([t, n]) => {
+    assert.ok(perSpecimenPages(t), t + ': form satu halaman per spesimen');
+    const html = R({ ...base, template: t, test_name: n, report_no: 'DE.1/1126/9001', remarks: 'CAPREM', fields: meta, rows: two });
+    const pg = pagesOf(html);
+    const first = pg.find(x => x.includes('DE.1/1126/9001')), second = pg.find(x => x.includes('DE.1/1126/9002'));
+    assert.ok(first && first.includes('CAPREM') && !first.includes('ROOTREM'), t + ': spesimen 1 memakai No. Laporan & Remarks umum');
+    assert.ok(second && second.includes('ROOTREM') && !second.includes('CAPREM'), t + ': spesimen 2 memakai isian sendiri');
+  });
+  const hard = R({ ...base, template: 'hard-weld', test_name: 'Hardness', report_no: 'DE.1/1126/9001', remarks: 'CAPREM', fields: meta, rows: [], hard_markings: ['HD1', 'HD2'] });
+  assert.ok(hard.includes('DE.1/1126/9002') && hard.includes('ROOTREM'), 'Hardness: halaman hasil spesimen 2 memakai isian sendiri');
+  const plain = R({ ...base, template: 'macro-butt', test_name: 'Macro', report_no: 'DE.1/1126/9001', remarks: 'CAPREM', rows: two });
+  assert.ok(!plain.includes('9002') && plain.split('CAPREM').length === 3, 'tanpa isian per spesimen: semua halaman memakai isian umum');
+  assert.ok(!perSpecimenPages('bend-sec') && !perSpecimenPages('charpy-weld'), 'Bend/Charpy: semua spesimen satu halaman');
+}
+
 console.log('revisi-regression.test.js OK');

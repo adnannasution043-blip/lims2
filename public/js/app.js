@@ -4914,6 +4914,7 @@
               <input type="hidden" name="witnessed_by" id="witnessedByValue" value="${esc(r.witnessed_by)}"></div>
             <div class="field"><label>Test Conducted by</label><input type="text" name="test_conducted_by" value="${esc(r.test_conducted_by) || esc(r.testing_pic)}"></div>
             <div class="field full"><label>Remarks <span class="en">bila kosong terisi dari Note coupon di Permintaan Uji</span></label><textarea name="remarks">${esc(r.remarks)}</textarea></div>
+            ${specMetaHtml(r)}
           </div>
         </div>
 
@@ -5018,9 +5019,40 @@
     document.getElementById('btnReportDelete').addEventListener('click', () => deleteTestReport(state.testReport.id));
   }
 
+  // Qty > 1 pada form yang mencetak satu halaman per spesimen: No. Laporan & Remarks bisa diisi berbeda per spesimen
+  // (permintaan klien, mis. Spesimen 1 "Cap", Spesimen 2 "Root"). Spesimen 1 memakai isian umum di atas; kosong = ikut isian umum.
+  function specMetaHtml(r) {
+    const marks = r.spec_pages || [];
+    if (marks.length < 2) return '';
+    const meta = (r.fields || {}).spec_meta || [];
+    const cell = 'padding:6px 8px;border-bottom:1px solid var(--border, #e5e7eb);vertical-align:top;';
+    const rows = marks.map((m, i) => i === 0
+      ? `<tr><td style="${cell}white-space:nowrap;"><b>Spesimen 1</b><br><span class="muted" style="font-size:12px;">${esc(m)}</span></td>
+          <td colspan="2" style="${cell}" class="muted">memakai No. Laporan &amp; Remarks di atas</td></tr>`
+      : `<tr><td style="${cell}white-space:nowrap;"><b>Spesimen ${i + 1}</b><br><span class="muted" style="font-size:12px;">${esc(m)}</span></td>
+          <td style="${cell}"><input type="text" name="specmeta_no_${i}" value="${esc((meta[i] || {}).report_no || '')}" maxlength="80" placeholder="sama dengan di atas" style="width:100%"></td>
+          <td style="${cell}"><textarea name="specmeta_rem_${i}" rows="2" placeholder="sama dengan Remarks di atas" style="width:100%">${esc((meta[i] || {}).remarks || '')}</textarea></td></tr>`).join('');
+    return `<div class="field full"><label>No. Laporan &amp; Remarks per Spesimen <span class="en">tiap spesimen dicetak di halaman sendiri; kosong = sama dengan isian di atas</span></label>
+      <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:480px;">
+        <thead><tr><th style="${cell}text-align:left;width:18%;">Spesimen</th><th style="${cell}text-align:left;width:32%;">No. Laporan</th><th style="${cell}text-align:left;">Remarks</th></tr></thead>
+        <tbody>${rows}</tbody></table></div></div>`;
+  }
+  function specMetaPayload(payload) {
+    const meta = [];
+    Object.keys(payload).filter(k => /^specmeta_(no|rem)_d+$/.test(k)).forEach(k => {
+      const [, kind, i] = /^specmeta_(no|rem)_(d+)$/.exec(k);
+      const m = meta[Number(i)] || (meta[Number(i)] = { report_no: '', remarks: '' });
+      m[kind === 'no' ? 'report_no' : 'remarks'] = String(payload[k] || '').trim();
+      delete payload[k];
+    });
+    for (let i = 0; i < meta.length; i++) if (!meta[i]) meta[i] = { report_no: '', remarks: '' };
+    return meta;
+  }
+
   async function onTestReportSubmit(e) {
     e.preventDefault();
     const payload = Object.fromEntries(new FormData(e.target).entries());
+    const specMeta = specMetaPayload(payload);
     payload.fields = state.testReport && state.testReport.template_hic ? { hic_log: state.testReportHicLog }
       : state.testReport && state.testReport.template_elements ? { elements: state.testReportElements, extra_elements: state.testReportElExtra || [], element_order: state.testReportElOrder || [] }
       : (state.testReport && state.testReport.template_locations ? ferritePayload()
@@ -5030,6 +5062,8 @@
     payload.status = state.testReportPendingStatus || 'draft';
     payload.rows = state.testReportRows;
     specApplyPayload(payload);
+    if (specMeta.length) payload.fields.spec_meta = specMeta;
+    else if (((state.testReport || {}).fields || {}).spec_meta) payload.fields.spec_meta = state.testReport.fields.spec_meta;   // tabel tidak tampil (mis. Qty turun): isian lama tetap
     if (state.testReport && state.testReport.template_fwb) payload.fields.fwb_criteria = state.testReportFwbCrit;
     // teks form yang tidak diubah disimpan kosong, jadi tetap mengikuti teks form (mis. saat form diganti)
     const tplNow = payload.template || state.testReport.template;
