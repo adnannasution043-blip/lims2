@@ -182,6 +182,10 @@ const pool = {
       if (/^DELETE FROM test_report_files/.test(q)) { const i = F.findIndex(f => f.id === Number(params[0])); if (i >= 0) F.splice(i, 1); return { rowCount: i >= 0 ? 1 : 0 }; }
     }
     if (/^SELECT report_no FROM work_order_sample_marks WHERE work_order_id/.test(q)) return { rows: [{ report_no: couponReportNos[params[1]] || '' }] };
+    // No. Laporan per spesimen: dicek terhadap No. Laporan coupon lain
+    if (/^SELECT wsm[.]report_no FROM work_order_sample_marks wsm JOIN work_orders/.test(q)) {
+      return { rows: Object.entries(couponReportNos).filter(([row, v]) => Number(row) !== params[2] && params[0].includes(v)).map(([, v]) => ({ report_no: v })) };
+    }
     // No. Laporan diketik manual di Lembar: disimpan per coupon; nomor coupon lain ditolak (indeks unik)
     if (/^INSERT INTO work_order_sample_marks \(work_order_id, coupon_row_no, report_no\)/.test(q)) {
       if (params[2] && Object.entries(couponReportNos).some(([row, v]) => Number(row) !== params[1] && v === params[2])) { const e = new Error('dup'); e.code = '23505'; throw e; }
@@ -326,6 +330,13 @@ function call(method, path, params, body) {
   assert.strictEqual(dupNo.status, 400);
   assert.ok(/sudah dipakai/.test(dupNo.body.error));
   assert.strictEqual(couponReportNos[1], 'RPT-1');
+  // No. Laporan per spesimen: nomor coupon lain ditolak, nomor coupon sendiri / nomor baru boleh dan tersimpan di fields.spec_meta
+  const dupSpec = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { report_no: 'RPT-1', status: 'draft', rows: r.body.rows, fields: { spec_meta: [{}, { report_no: 'DE.1/1026/0002', remarks: 'Root' }] } });
+  assert.strictEqual(dupSpec.status, 400);
+  assert.ok(/per spesimen.*sudah dipakai/.test(dupSpec.body.error));
+  const okSpec = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { report_no: 'RPT-1', status: 'draft', rows: r.body.rows, fields: { spec_meta: [{}, { report_no: 'RPT-1B', remarks: 'Root' }] } });
+  assert.strictEqual(okSpec.status, 200);
+  assert.deepStrictEqual(okSpec.body.fields.spec_meta[1], { report_no: 'RPT-1B', remarks: 'Root' });
   assert.ok(!('evil' in r.body.rows[0]));
 
   r = await call('PUT', '/api/test-reports/:id', { id: String(id) }, { template: 'bend-mat', heat_no: 'H-9', pqr_no: 'PQR-2', rows: [{ marking_specimen: 'ABN.9.1-BR1', observation: 'No Crack was Observed', result: 'accepted' }], status: 'draft' });

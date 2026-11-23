@@ -6755,7 +6755,16 @@
         Object.assign(state, unBig(d.st || {}, pickState(TR_STATE)));
         const r = state.testReport;
         r.fields = { ...(r.fields || {}) };
-        Object.entries(d.fd || {}).forEach(([k, v]) => { if (k.startsWith('field_')) r.fields[k.slice(6)] = v; else r[k] = v; });
+        Object.entries(d.fd || {}).forEach(([k, v]) => {
+          const sm = /^specmeta_(no|rem)_(\d+)$/.exec(k);
+          if (sm) {
+            // No. Laporan & Remarks per spesimen dibaca tabelnya dari fields.spec_meta
+            const meta = r.fields.spec_meta = (r.fields.spec_meta || []).map(m => ({ ...(m || {}) }));
+            const i = Number(sm[2]);
+            for (let j = 0; j <= i; j++) meta[j] = meta[j] || { report_no: '', remarks: '' };
+            meta[i][sm[1] === 'no' ? 'report_no' : 'remarks'] = v;
+          } else if (k.startsWith('field_')) r.fields[k.slice(6)] = v; else r[k] = v;
+        });
         render();
       }
     },
