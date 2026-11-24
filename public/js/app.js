@@ -55,6 +55,7 @@
   let CUSTOMERS = [];
   let EQUIPMENT = [];
   let HARDNESS_PATTERNS = [];
+  let MACRO_PATTERNS = [];   // Master Data > Pola Macro (tabel ukur & sketsa report Macro)
   let ACCEPTANCE_SETS = [];   // Master Data > Acceptance Criteria (Fillet Weld Break / Peel)
   let state = { view: 'dashboard', editingId: null, couponRows: [], tableUI: {} };
 
@@ -3337,6 +3338,7 @@
     state.testReportHard = hardStateOf(data.fields);
     specStateOf(data);
     fwbCritStateOf(data.fields);
+    macroPatStateOf(data.fields);
     state.testReportCorr = JSON.parse(JSON.stringify((data.fields || {}).corr || {})); state.testReportCorrIdx = 0;
     state.testReportHicLog = JSON.parse(JSON.stringify((data.fields || {}).hic_log || []));
     state.testReportPhotoSlots = new Set(data.photos || []);
@@ -3425,7 +3427,8 @@
     return (sel && sel.value) || state.testReport.template;
   }
   const morePhotoKinds = () => !!(state.testReport && (state.testReport.template_micro || state.testReport.template_hic));
-  function morePhotosHtml(r, idx) {
+  // opts.noCaption: keterangan foto tambahan diisi di kolom Remarks (Micro), bukan di bawah fotonya
+  function morePhotosHtml(r, idx, opts = {}) {
     const key = morePhotoKey();
     const list = Array.isArray(r.more_photos) ? r.more_photos : [];
     const items = list.map((e, j) => {
@@ -3435,7 +3438,7 @@
         <div style="font-size:11px;font-weight:600;">Foto tambahan ${j + 1}</div>
         ${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:110px;height:56px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">belum ada foto</span>'}
         <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:3px;">
-        <input type="text" data-more-cap="${idx}:${j}" value="${esc(e.caption || '')}" maxlength="200" placeholder="Keterangan (opsional), mis. 500X" style="width:150px;font-size:12px;margin-top:3px;display:block;">
+        ${opts.noCaption ? '' : `<input type="text" data-more-cap="${idx}:${j}" value="${esc(e.caption || '')}" maxlength="200" placeholder="Keterangan (opsional), mis. 500X" style="width:150px;font-size:12px;margin-top:3px;display:block;">`}
         <button type="button" class="btn btn-sm btn-danger" data-more-del="${idx}:${j}" style="margin-top:3px;">Hapus foto tambahan</button></div>`;
     }).join('');
     return `${items}<button type="button" class="btn btn-sm" data-more-add="${idx}" style="margin-top:6px;display:block;" title="Tambah foto untuk spesimen ini tanpa menambah Qty">+ Foto</button>`;
@@ -3626,28 +3629,41 @@
           <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:3px;">
           ${has ? `<button type="button" class="btn btn-sm btn-danger" data-mphoto-del="${esc(slot)}" style="margin-top:3px;">Hapus foto</button>` : ''}</div>`;
       }).join('');
+      // Remarks tiap halaman cetak spesimen ini: foto utama lalu tiap foto tambahan (permintaan klien: keterangan foto tambahan
+      // diisi seperti Remarks, satu kotak isian lebar per foto). Foto tambahan yang dikosongkan memakai Remarks foto utama.
+      const microRemarksCell = (r, idx) => {
+        const extra = Array.isArray(r.more_photos) ? r.more_photos : [];
+        const box = (label, inner) => `<div style="margin-bottom:8px;">${extra.length ? `<div style="font-size:11px;font-weight:600;margin-bottom:2px;">${label}</div>` : ''}${inner}</div>`;
+        return box(esc(info.photoLabels[(info.showPhotos || [0])[0]] || 'Foto utama'), `<input type="text" data-tfield="remarks" value="${esc(r.remarks || '')}" maxlength="300" placeholder="mis. Base Metal Cap" style="min-width:170px;width:100%">`)
+          + extra.map((e, j) => box(`Foto tambahan ${j + 1}`, `<input type="text" data-more-cap="${idx}:${j}" value="${esc(e.caption || '')}" maxlength="200" placeholder="kosong = sama dengan Remarks foto utama" style="min-width:170px;width:100%">`)).join('');
+      };
       return `<div style="overflow-x:auto;"><table class="task-table">
         <thead><tr><th>Specimen No.</th>${info.thick ? [1, 2, 3, 4, 5].map(k => `<th>Spot ${k} (&micro;m)</th>`).join('') + '<th>Average (&micro;m)</th>' : ''}<th>Remarks <span class="en" style="font-weight:400">dicetak di baris Remarks halaman ini, mis. Base Metal Cap</span></th><th>Foto</th><th></th></tr></thead>
         <tbody>${state.testReportRows.map((r, idx) => `
           <tr data-trow="${idx}">
             <td><input type="text" data-tfield="marking_specimen" value="${esc(r.marking_specimen)}"></td>
             ${info.thick ? [1, 2, 3, 4, 5].map(k => `<td><input type="text" inputmode="decimal" data-tfield="t${k}" value="${esc(r['t' + k] || '')}" style="width:70px"></td>`).join('') + `<td class="muted">${avg(r)}</td>` : ''}
-            <td><input type="text" data-tfield="remarks" value="${esc(r.remarks || '')}" maxlength="300" placeholder="mis. Base Metal Cap" style="min-width:170px"></td>
-            <td style="min-width:160px;">${photoCell(idx)}${morePhotosHtml(r, idx)}</td>
+            <td>${microRemarksCell(r, idx)}</td>
+            <td style="min-width:160px;">${photoCell(idx)}${morePhotosHtml(r, idx, { noCaption: true })}</td>
             <td>${idx === last && state.testReportRows.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-trow-remove="${idx}">&#128465;</button>` : ''}</td>
           </tr>`).join('')}</tbody>
       </table></div>
-      <p class="muted" style="font-size:12px;margin-top:6px;">+ Foto: tambah foto untuk spesimen yang sama tanpa menambah Qty; tiap foto tambahan dicetak di halaman sendiri setelah halaman spesimennya (keterangan foto mengganti Remarks halaman itu). Klik Simpan setelah menambah.</p>
+      <p class="muted" style="font-size:12px;margin-top:6px;">+ Foto: tambah foto untuk spesimen yang sama tanpa menambah Qty; tiap foto tambahan dicetak di halaman sendiri setelah halaman spesimennya (Remarks foto tambahan diisi di kolom Remarks; kosong = sama dengan Remarks foto utama). Klik Simpan setelah menambah.</p>
       `;
     }
     if (state.testReport && state.testReport.template_macro) {
       // Macro-Etching: satu baris per spesimen (satu halaman cetak + satu foto makro per baris)
       const sel = document.getElementById('testReportTemplate');
       const key = (sel && sel.value) || state.testReport.template;
-      const info = state.testReport.template_macro[key] || { kv: [], magDef: '10X' };
+      const info0 = state.testReport.template_macro[key] || { kv: [], magDef: '10X' };
+      const mp = state.testReportMacroPat;
+      // Pola Macro aktif: kolom keterangan bawaan form diganti isian tabel ukur pola
+      const info = mp ? { ...info0, kv: [] } : info0;
+      const mcell = r => mp ? `<td style="min-width:${Math.max(160, Math.max(...mp.groups.map(g => g.points.length || 2)) * 70)}px;">${mp.groups.map((g, gi) => `<div style="margin-bottom:6px;"><div style="font-size:11px;font-weight:600;">${esc(g.label || 'Baris ' + (gi + 1))}</div>
+          <div style="display:flex;gap:4px;flex-wrap:nowrap;">${(g.points.length ? g.points : ['']).map((n, pi) => `<label style="display:flex;flex-direction:column;font-size:11px;">${esc(n) || '&nbsp;'}<input type="text" data-mval="${gi}:${pi}" value="${esc(((r.mvals || [])[gi] || [])[pi] || '')}" style="width:${g.points.length ? 64 : 134}px;min-width:0"></label>`).join('')}</div></div>`).join('')}</td>` : '';
       const last = state.testReportRows.length - 1;
-      return `<div style="overflow-x:auto;"><table class="task-table">
-        <thead><tr><th>Specimen No.</th><th>Thickness (mm)</th><th>Width (mm)</th><th>Magnification</th><th>Result</th>${info.kv.map(f => `<th>${esc(f.label)}</th>`).join('')}<th>Remarks <span class="en" style="font-weight:400">dicetak di baris Remarks halaman ini</span></th><th>Foto makro</th><th></th></tr></thead>
+      return `${macroPatternEditorHtml()}<div style="overflow-x:auto;"><table class="task-table">
+        <thead><tr><th>Specimen No.</th><th>Thickness (mm)</th><th>Width (mm)</th><th>Magnification</th><th>Result</th>${info.kv.map(f => `<th>${esc(f.label)}</th>`).join('')}${mp ? '<th>Tabel Ukur <span class="en" style="font-weight:400">menurut Pola Macro</span></th>' : ''}<th>Remarks <span class="en" style="font-weight:400">dicetak di baris Remarks halaman ini</span></th><th>Foto makro</th><th></th></tr></thead>
         <tbody>${state.testReportRows.map((r, idx) => {
           const slot = key + '/s' + (idx + 1);
           const has = state.testReportPhotoSlots.has(slot);
@@ -3659,6 +3675,7 @@
             <td><input type="text" data-tfield="mag" value="${esc(r.mag || '')}" placeholder="${esc(info.magDef)}" style="width:80px"></td>
             <td><input type="text" list="macroResultList" data-tfield="result" value="${esc(r.result || '')}" style="width:100px"></td>
             ${info.kv.map(f => `<td><input type="text" data-tfield="${f.key}" value="${esc(r[f.key] || '')}" placeholder="${esc(f.def || '')}" style="width:110px"></td>`).join('')}
+            ${mcell(r)}
             <td><input type="text" data-tfield="remarks" value="${esc(r.remarks || '')}" maxlength="300" placeholder="mis. Weld Metal Cap" style="min-width:170px"></td>
             <td style="min-width:150px;">${has ? `<img src="/api/test-reports/${state.testReport.id}/photo?slot=${encodeURIComponent(slot)}&v=${state.testReportPhotoVer[slot] || 0}" alt="" style="width:120px;height:60px;object-fit:contain;background:#111;border-radius:4px;display:block;">` : '<span class="muted" style="font-size:12px;">belum ada foto</span>'}
               <input type="file" accept="image/*" data-mphoto="${esc(slot)}" style="width:150px;font-size:11px;margin-top:4px;">
@@ -3813,6 +3830,14 @@
     if (row && e.target.dataset.tremark !== undefined) {
       row.remarks = row.remarks || [];
       row.remarks[Number(e.target.dataset.tremark)] = e.target.value;
+      state.testReportDirty = true;
+      return;
+    }
+    if (row && e.target.dataset.mval !== undefined) {
+      const [gi, pi] = e.target.dataset.mval.split(':').map(Number);
+      row.mvals = Array.isArray(row.mvals) ? row.mvals : [];
+      for (let k = 0; k <= gi; k++) row.mvals[k] = Array.isArray(row.mvals[k]) ? row.mvals[k] : [];
+      row.mvals[gi][pi] = e.target.value;
       state.testReportDirty = true;
       return;
     }
@@ -4280,6 +4305,93 @@
     try { ACCEPTANCE_SETS = (await api('/api/acceptance-criteria')).items; } catch (e) { ACCEPTANCE_SETS = []; }
   }
   const FWB_MAX_CRIT = 8;
+  // Pola Macro: tabel ukur & sketsa khusus report Macro (permintaan klien: report macro bisa custom seperti hardness).
+  // Dipilih dari Master Data > Pola Macro atau diatur sendiri di Lembar; isi pola disalin ke Lembar (fields.macro_pattern).
+  const MACRO_MAX_GROUPS = 10, MACRO_MAX_POINTS = 8;
+  function macroPatStateOf(fields) {
+    const p = (fields || {}).macro_pattern;
+    state.testReportMacroPat = p && Array.isArray(p.groups) && p.groups.length ? JSON.parse(JSON.stringify(p)) : null;
+  }
+  const macroPoints = v => String(v || '').split(/[,;\s]+/).map(x => x.trim()).filter(Boolean).slice(0, MACRO_MAX_POINTS);
+  function macroPatternEditorHtml() {
+    const own = state.testReportMacroPat;
+    const known = own && own.id && MACRO_PATTERNS.some(x => x.id === own.id);
+    return `<div style="margin:0 0 14px;padding:12px;border:1px solid #d6dbe4;border-radius:8px;background:#f8f9fb;">
+      <div class="field" style="margin:0 0 10px;"><label>Pola Macro <span class="en">dari Master Data &rarr; Pola Macro, atau susunan khusus sesuai report pelanggan (tabel ukur &amp; sketsa)</span></label>
+        <select id="macroPatSel">
+          <option value="">&mdash; Bawaan form (keterangan &amp; sketsa form resmi) &mdash;</option>
+          <option value="custom" ${own && !own.id ? 'selected' : ''}>Susunan khusus &mdash; atur tabel ukur &amp; sketsa di Lembar ini</option>
+          ${own && own.id && !known ? `<option value="snapshot" selected>${esc(own.name)} (tersimpan di Lembar ini)</option>` : ''}
+          ${MACRO_PATTERNS.map(x => `<option value="${x.id}" ${own && own.id === x.id ? 'selected' : ''}>${esc(x.name)}${x.customer ? ' &mdash; ' + esc(x.customer) : ''} (${(x.groups || []).length} baris ukur)</option>`).join('')}
+        </select></div>
+      ${own ? `<table class="task-table"><thead><tr><th style="width:36px;">No</th><th>Label baris <span class="en" style="font-weight:400">mis. Weld Size (mm)</span></th><th>Nama titik ukur <span class="en" style="font-weight:400">pisah koma, mis. A1, A2, A3 &middot; P_A1 = P subskrip A1 &middot; kosong = satu nilai</span></th><th style="width:50px;"></th></tr></thead><tbody>
+        ${own.groups.map((g, i) => `<tr><td>${i + 1}</td>
+          <td><input type="text" data-mgl="${i}" value="${esc(g.label)}" maxlength="60"></td>
+          <td><input type="text" data-mgp="${i}" value="${esc((g.points || []).join(', '))}" placeholder="mis. A1, A2, A3"></td>
+          <td><button type="button" class="btn btn-sm btn-danger" data-mg-del="${i}" title="Hapus baris">&#128465;</button></td></tr>`).join('')}
+      </tbody></table>
+      ${own.groups.length < MACRO_MAX_GROUPS ? '<button type="button" class="btn btn-sm" data-mg-add style="margin-top:6px;">+ Baris ukur</button>' : ''}
+      <div style="margin-top:12px;"><label style="font-weight:600;font-size:13px;">Sketsa <span class="en">dicetak di atas tabel ukur</span></label><br>
+        <input type="file" id="macroSketchFile" accept="image/png,image/jpeg,image/webp" style="margin-top:4px;">
+        ${own.sketch ? `<div style="margin-top:6px;display:flex;gap:10px;align-items:flex-start;"><img src="${own.sketch}" alt="Sketsa" style="max-width:260px;max-height:140px;border:1px solid #d6dbe4;border-radius:4px;background:#fff;"><button type="button" class="btn btn-sm btn-danger" data-mg-sketch-del>Hapus sketsa</button></div>` : '<p class="muted" style="margin:4px 0 0;">Belum ada sketsa.</p>'}</div>
+      <p class="muted" style="margin:8px 0 0;">Perubahan di sini hanya untuk Lembar ini; pola di Master Data tidak berubah. Saat dicetak, blok hasil form diganti tata letak: tabel spesimen + foto di kiri, sketsa + tabel ukur di kanan.</p>`
+      : '<p class="muted" style="margin:0;">Memakai keterangan &amp; sketsa bawaan form. Pilih pola atau Susunan khusus bila report pelanggan memakai tabel ukur sendiri (mis. Weld Size A1 A2 A3, Weld Penetration).</p>'}
+    </div>`;
+  }
+  // pola dari Master Data yang mulai diubah menjadi Susunan khusus Lembar ini
+  function macroOwnPattern() {
+    const p = state.testReportMacroPat;
+    if (p && p.id) { p.id = null; p.name = 'Susunan khusus'; const sel = document.getElementById('macroPatSel'); if (sel) sel.value = 'custom'; }
+    return p;
+  }
+  document.addEventListener('change', async e => {
+    if (!state.testReport || !state.testReport.template_macro) return;
+    const t = e.target;
+    if (t.id === 'macroPatSel') {
+      const v = t.value;
+      if (v === 'snapshot') return;
+      if (!v) state.testReportMacroPat = null;
+      else if (v === 'custom') {
+        const cur = state.testReportMacroPat;
+        state.testReportMacroPat = cur ? { ...JSON.parse(JSON.stringify(cur)), id: null, name: 'Susunan khusus' }
+          : { id: null, name: 'Susunan khusus', sketch: '', groups: [{ label: 'Weld Size (mm)', points: ['A1', 'A2', 'A3'] }] };
+      } else {
+        try {
+          const x = await api(`/api/macro-patterns/${v}`);
+          state.testReportMacroPat = { id: x.id, name: x.name, groups: x.groups, sketch: x.sketch || '' };
+        } catch (err) { toast(err.message, 'error'); return; }
+      }
+    } else if (t.dataset && t.dataset.mgp !== undefined) {
+      macroOwnPattern().groups[Number(t.dataset.mgp)].points = macroPoints(t.value);
+    } else if (t.id === 'macroSketchFile') {
+      if (!t.files[0]) return;
+      try { macroOwnPattern().sketch = await readSketchFile(t.files[0]); } catch (err) { toast(err.message, 'error'); return; }
+    } else return;
+    state.testReportDirty = true;
+    rerenderTestReportRows();
+  });
+  document.addEventListener('input', e => {
+    if (!state.testReport || !state.testReport.template_macro || !e.target.dataset || e.target.dataset.mgl === undefined) return;
+    macroOwnPattern().groups[Number(e.target.dataset.mgl)].label = e.target.value;
+    state.testReportDirty = true;
+  });
+  document.addEventListener('click', e => {
+    if (!state.testReport || !state.testReport.template_macro || !e.target.closest) return;
+    const add = e.target.closest('[data-mg-add]'), del = e.target.closest('[data-mg-del]'), sk = e.target.closest('[data-mg-sketch-del]');
+    if (!add && !del && !sk) return;
+    const own = macroOwnPattern();
+    if (add) own.groups.push({ label: '', points: [] });
+    else if (sk) own.sketch = '';
+    else {
+      const i = Number(del.dataset.mgDel);
+      own.groups.splice(i, 1);
+      state.testReportRows.forEach(r => { if (Array.isArray(r.mvals)) r.mvals.splice(i, 1); });   // nilai ukur ikut bergeser
+      if (!own.groups.length) state.testReportMacroPat = null;
+    }
+    state.testReportDirty = true;
+    rerenderTestReportRows();
+  });
+
   function fwbCritStateOf(fields) {
     const s = (fields || {}).fwb_criteria;
     state.testReportFwbCrit = s && Array.isArray(s.criteria) && s.criteria.length ? JSON.parse(JSON.stringify(s)) : null;
@@ -5065,6 +5177,7 @@
     if (specMeta.length) payload.fields.spec_meta = specMeta;
     else if (((state.testReport || {}).fields || {}).spec_meta) payload.fields.spec_meta = state.testReport.fields.spec_meta;   // tabel tidak tampil (mis. Qty turun): isian lama tetap
     if (state.testReport && state.testReport.template_fwb) payload.fields.fwb_criteria = state.testReportFwbCrit;
+    if (state.testReport && state.testReport.template_macro) payload.fields.macro_pattern = state.testReportMacroPat;
     // teks form yang tidak diubah disimpan kosong, jadi tetap mengikuti teks form (mis. saat form diganti)
     const tplNow = payload.template || state.testReport.template;
     ['type_test', 'method_note'].forEach(k => {
@@ -5092,6 +5205,7 @@
       state.testReportHard = hardStateOf(state.testReport.fields);
       specStateOf(state.testReport);
       fwbCritStateOf(state.testReport.fields);
+      macroPatStateOf(state.testReport.fields);
       state.testReportDirty = false;
       toast((payload.status === 'final' ? 'Lembar Hasil Uji difinalisasi' : 'Draft tersimpan')
         + (state.testReport.witness_linked ? ` · Witnessed By juga diisi di ${state.testReport.witness_linked} Lembar lain` : ''), 'success');
@@ -6744,7 +6858,7 @@
     });
   }
   const TR_STATE = ['testReportRows', 'testReportElements', 'testReportElExtra', 'testReportElOrder', 'testReportHard', 'testReportCorr',
-    'testReportCorrIdx', 'testReportHicLog', 'testReportFerrite', 'testReportFerriteOwn', 'testReportFerriteLocs', 'testReportSpec', 'testReportFwbCrit'];
+    'testReportCorrIdx', 'testReportHicLog', 'testReportFerrite', 'testReportFerriteOwn', 'testReportFerriteLocs', 'testReportSpec', 'testReportFwbCrit', 'testReportMacroPat'];
   const DRAFT_ADAPTERS = {
     'test-report-form': {
       label: 'Lembar Hasil Uji',
@@ -7903,6 +8017,7 @@
     { key: 'test-type-codes', label: 'Kode Jenis Pengujian' },
     { key: 'equipment', label: 'Equipment' },
     { key: 'hardness-patterns', label: 'Pola Hardness' },
+    { key: 'macro-patterns', label: 'Pola Macro' },
     { key: 'acceptance-criteria', label: 'Acceptance Criteria' }
   ];
 
@@ -7928,6 +8043,7 @@
     'test-type-codes': { icon: 'hash', desc: 'Kode singkat tiap Jenis Pengujian untuk membentuk Marking Specimen.' },
     'equipment': { icon: 'gauge', desc: 'Alat uji beserta status dan masa kalibrasinya.' },
     'hardness-patterns': { icon: 'target', desc: 'Sketsa posisi titik dan susunan titik uji Hardness (line, zona, jumlah titik) per client.' },
+    'macro-patterns': { icon: 'ruler', desc: 'Tabel ukur (mis. Weld Size A1 A2 A3, Weld Penetration) dan sketsa report Macro per client.' },
     'acceptance-criteria': { icon: 'check', desc: 'Kalimat Acceptance Criteria per standar pengujian untuk report Fillet Weld Break / Peel.' }
   };
   const MASTER_ICONS = {
@@ -7958,6 +8074,7 @@
       api('/api/test-type-codes').then(r => ['test-type-codes', (r.codes || []).length]),
       api('/api/equipment').then(r => ['equipment', (r.items || []).length]),
       api('/api/hardness-patterns').then(r => ['hardness-patterns', (r.items || []).length]),
+      api('/api/macro-patterns').then(r => ['macro-patterns', (r.items || []).length]),
       api('/api/acceptance-criteria').then(r => ['acceptance-criteria', (r.items || []).length])
     ];
     const done = await Promise.allSettled(jobs);
@@ -8020,6 +8137,8 @@
       await renderEquipmentMaster();
     } else if (activeTab === 'hardness-patterns') {
       await renderHardnessPatternMaster();
+    } else if (activeTab === 'macro-patterns') {
+      await renderMacroPatternMaster();
     } else if (activeTab === 'acceptance-criteria') {
       await renderAcceptanceCriteriaMaster();
     } else {
@@ -8493,6 +8612,14 @@
     });
   }
 
+  async function loadMacroPatterns() {
+    try {
+      MACRO_PATTERNS = (await api('/api/macro-patterns')).items;
+    } catch (e) {
+      MACRO_PATTERNS = [];
+    }
+  }
+
   async function loadHardnessPatterns() {
     try {
       HARDNESS_PATTERNS = (await api('/api/hardness-patterns')).items;
@@ -8667,6 +8794,157 @@
         toast(ed.id ? 'Pola diperbarui' : 'Pola ditambahkan', 'success');
         state.hpEdit = null;
         renderHardnessPatternMaster();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+  }
+
+  // Master Data > Pola Macro: baris ukur (label + nama titik) & sketsa report Macro. Dipilih di Lembar Macro; isi pola
+  // disalin ke Lembar, jadi laporan lama tidak berubah bila pola diedit.
+  async function renderMacroPatternMaster() {
+    const wrap = document.getElementById('masterTabContent');
+    await loadMacroPatterns();
+    const items = MACRO_PATTERNS;
+    let ed = state.mpEdit;
+    if (!ed) ed = state.mpEdit = { id: null, name: '', customer: '', notes: '', groups: [{ label: 'Weld Size (mm)', points: ['A1', 'A2', 'A3'] }], sketch: '', sketchChanged: false };
+    const companies = [...new Set(CUSTOMERS.map(customerCompany).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'id'));
+    const sub = t => esc(t).replace(/_([A-Za-z0-9]+)/g, '<sub>$1</sub>');
+    const layoutText = x => (x.groups || []).map(g => (g.label || '-') + (g.points.length ? ' (' + g.points.join(' ') + ')' : '')).join(' · ');
+    // pratinjau tabel ukur seperti tercetak
+    const preview = `<table style="border-collapse:collapse;font-size:12px;">${ed.groups.map(g => {
+      const lab = `<td rowspan="${g.points.length ? 2 : 1}" style="border:1px solid #333;padding:3px 8px;">${esc(g.label)}</td><td rowspan="${g.points.length ? 2 : 1}" style="padding:0 4px;">:</td>`;
+      if (!g.points.length) return `<tr>${lab}<td style="border:1px solid #333;padding:3px 14px;color:#888;">nilai</td></tr>`;
+      return `<tr>${lab}${g.points.map(n => `<td style="border:1px solid #333;border-bottom:0;padding:2px 10px;font-weight:700;text-align:center;">${sub(n)}</td>`).join('')}</tr><tr>${g.points.map(() => '<td style="border:1px solid #333;border-top:0;padding:2px 10px;color:#888;text-align:center;">0.00</td>').join('')}</tr>`;
+    }).join('<tr style="height:4px"></tr>')}</table>`;
+
+    wrap.innerHTML = `
+      <div class="card">
+        <p class="section-title">${ed.id ? `Edit Pola — ${esc(ed.name)}` : 'Tambah Pola Macro'}</p>
+        <form id="mpForm">
+          <div class="form-grid">
+            <div class="field"><label>Nama Pola</label><input type="text" name="name" value="${esc(ed.name)}" placeholder="mis. Fillet ganda — PT Contoh" autocomplete="off"></div>
+            <div class="field"><label>Customer <span class="en">opsional</span></label><input type="text" name="customer" value="${esc(ed.customer)}" list="mpCustomerList" autocomplete="off" placeholder="Kosongkan bila berlaku umum"></div>
+            <div class="field full"><label>Catatan</label><input type="text" name="notes" value="${esc(ed.notes)}" autocomplete="off"></div>
+          </div>
+
+          <p class="subcard-title" style="margin-top:16px;">Baris Ukur <span class="en">maks. 10 baris; nama titik dipisah koma (maks. 8), P_A1 = P subskrip A1; tanpa titik = satu nilai (mis. Fusion : Good)</span></p>
+          <table class="data-table">
+            <thead><tr><th>Label Baris</th><th>Nama Titik Ukur</th><th style="width:60px;"></th></tr></thead>
+            <tbody>${ed.groups.map((g, i) => `
+              <tr>
+                <td><input type="text" data-mp-label="${i}" value="${esc(g.label)}" placeholder="mis. Weld Size (mm)" list="mpLabelList"></td>
+                <td><input type="text" data-mp-points="${i}" value="${esc(g.points.join(', '))}" placeholder="mis. A1, A2, A3"></td>
+                <td>${ed.groups.length > 1 ? `<button type="button" class="btn btn-sm btn-danger" data-mp-del="${i}" aria-label="Hapus baris">&times;</button>` : ''}</td>
+              </tr>`).join('')}</tbody>
+          </table>
+          ${ed.groups.length < MACRO_MAX_GROUPS ? '<button type="button" class="btn btn-sm" id="mpAdd" style="margin-top:6px;">+ Tambah baris ukur</button>' : ''}
+
+          <p class="subcard-title" style="margin-top:16px;">Pratinjau Tabel Ukur <span class="en">seperti tercetak di sisi kanan report, di bawah sketsa</span></p>
+          <div style="overflow-x:auto;">${preview}</div>
+
+          <p class="subcard-title" style="margin-top:16px;">Sketsa <span class="en">dicetak di atas tabel ukur</span></p>
+          <input type="file" id="mpSketchFile" accept="image/png,image/jpeg,image/webp">
+          ${ed.sketch ? `<div class="hp-sketch"><img src="${ed.sketch}" alt="Sketsa pola"><button type="button" class="btn btn-sm btn-danger" id="mpSketchDel">Hapus sketsa</button></div>` : '<p class="muted" style="margin:6px 0 0;">Belum ada sketsa.</p>'}
+
+          <div class="form-actions">
+            <div>${ed.id ? '<button type="button" class="btn" id="mpCancel">Batal Edit</button>' : ''}</div>
+            <div class="right"><button type="submit" class="btn btn-primary">${ed.id ? 'Simpan Perubahan' : '+ Tambah Pola'}</button></div>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="padding:0;">
+        <div style="padding:22px 24px 8px;">
+          <p class="card-title">Daftar Pola Macro</p>
+          <p class="card-desc">${items.length} pola tersimpan &mdash; dipilih di Lembar Hasil Uji Macro; isi pola disalin ke Lembar, jadi laporan lama tidak berubah bila pola diedit</p>
+        </div>
+        <div id="mpTableArea"></div>
+      </div>
+      <datalist id="mpCustomerList">${companies.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <datalist id="mpLabelList"><option value="Weld Size (mm)"><option value="Weld Penetration (mm)"><option value="Root Penetration"><option value="Fusion"><option value="Crack"></datalist>
+    `;
+
+    renderSearchablePaginatedTable({
+      key: 'macro-patterns',
+      containerEl: document.getElementById('mpTableArea'),
+      allRows: items,
+      searchFields: ['name', 'customer', 'notes'],
+      searchPlaceholder: 'Cari nama pola atau customer...',
+      emptyHtml: '<p class="muted" style="padding:0 24px 16px;">Belum ada Pola Macro. Tambahkan lewat form di atas.</p>',
+      renderTableHtml: (pageRows) => `
+        <table class="data-table">
+          <thead><tr><th>Nama Pola</th><th>Customer</th><th>Baris Ukur</th><th>Sketsa</th><th></th></tr></thead>
+          <tbody>${pageRows.map(x => `
+            <tr>
+              <td><strong>${esc(x.name)}</strong>${x.notes ? `<br><span class="muted">${esc(x.notes)}</span>` : ''}</td>
+              <td>${esc(x.customer) || '<span class="muted">Umum</span>'}</td>
+              <td>${esc(layoutText(x))}</td>
+              <td>${x.has_sketch ? 'Ada' : '<span class="muted">Belum ada</span>'}</td>
+              <td style="white-space:nowrap;">
+                <button class="btn btn-sm" data-mp-edit="${x.id}">Edit</button>
+                <button class="btn btn-sm btn-danger" data-mp-remove="${x.id}">Hapus</button>
+              </td>
+            </tr>`).join('')}</tbody>
+        </table>`,
+      bindRowEvents: (container) => {
+        container.querySelectorAll('[data-mp-edit]').forEach(btn => btn.addEventListener('click', async () => {
+          try {
+            const x = await api(`/api/macro-patterns/${btn.dataset.mpEdit}`);
+            state.mpEdit = { id: x.id, name: x.name, customer: x.customer || '', notes: x.notes || '', groups: x.groups, sketch: x.sketch || '', sketchChanged: false };
+            renderMacroPatternMaster();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          } catch (err) { toast(err.message, 'error'); }
+        }));
+        container.querySelectorAll('[data-mp-remove]').forEach(btn => btn.addEventListener('click', async () => {
+          if (!confirm('Hapus Pola Macro ini? Lembar yang sudah memakai pola ini tidak berubah.')) return;
+          try {
+            await api(`/api/macro-patterns/${btn.dataset.mpRemove}`, { method: 'DELETE' });
+            toast('Pola dihapus', 'success');
+            if (state.mpEdit && state.mpEdit.id === Number(btn.dataset.mpRemove)) state.mpEdit = null;
+            renderMacroPatternMaster();
+          } catch (err) { toast(err.message, 'error'); }
+        }));
+      }
+    });
+
+    const form = document.getElementById('mpForm');
+    const syncHead = () => { ['name', 'customer', 'notes'].forEach(k => { ed[k] = form.elements[k].value; }); };
+    form.addEventListener('input', e => {
+      const t = e.target;
+      if (t.dataset.mpLabel !== undefined) ed.groups[Number(t.dataset.mpLabel)].label = t.value;
+      else if (t.dataset.mpPoints === undefined) syncHead();
+    });
+    form.addEventListener('change', e => {
+      const t = e.target;
+      if (t.dataset.mpPoints !== undefined) { syncHead(); ed.groups[Number(t.dataset.mpPoints)].points = macroPoints(t.value); renderMacroPatternMaster(); }
+      else if (t.dataset.mpLabel !== undefined) { syncHead(); renderMacroPatternMaster(); }
+    });
+    const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', () => { syncHead(); fn(); renderMacroPatternMaster(); }); };
+    on('mpAdd', () => ed.groups.push({ label: '', points: [] }));
+    on('mpSketchDel', () => { ed.sketch = ''; ed.sketchChanged = true; });
+    on('mpCancel', () => { state.mpEdit = null; });
+    form.querySelectorAll('[data-mp-del]').forEach(b => b.addEventListener('click', () => { syncHead(); ed.groups.splice(Number(b.dataset.mpDel), 1); renderMacroPatternMaster(); }));
+    document.getElementById('mpSketchFile').addEventListener('change', async e => {
+      if (!e.target.files[0]) return;
+      try {
+        syncHead();
+        ed.sketch = await readSketchFile(e.target.files[0]);
+        ed.sketchChanged = true;
+        renderMacroPatternMaster();
+      } catch (err) { toast(err.message, 'error'); }
+    });
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      syncHead();
+      form.querySelectorAll('[data-mp-points]').forEach(el => { ed.groups[Number(el.dataset.mpPoints)].points = macroPoints(el.value); });
+      if (!ed.name.trim()) { toast('Nama pola wajib diisi', 'error'); return; }
+      const payload = { name: ed.name, customer: ed.customer, notes: ed.notes, groups: ed.groups };
+      if (!ed.id || ed.sketchChanged) payload.sketch = ed.sketch;
+      try {
+        await api(ed.id ? `/api/macro-patterns/${ed.id}` : '/api/macro-patterns', {
+          method: ed.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        });
+        toast(ed.id ? 'Pola diperbarui' : 'Pola ditambahkan', 'success');
+        state.mpEdit = null;
+        renderMacroPatternMaster();
       } catch (err) { toast(err.message, 'error'); }
     });
   }
@@ -9073,6 +9351,7 @@
     await loadCustomers();
     await loadEquipment();
     await loadHardnessPatterns();
+    await loadMacroPatterns();
     await loadAcceptanceSets();
     draftInit();
     if (!can('dashboard')) {   // role tanpa akses Dashboard: buka menu pertama yang boleh

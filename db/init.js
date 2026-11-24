@@ -3,6 +3,7 @@ const { COMPANY_IDS } = require('./companyIds');
 const { TEST_METHOD_SEED } = require('./testMethodSeed');
 const { DEFAULT_ROLES, MACHINING_ROLE } = require('../lib/users');
 const { DEFAULT_PATTERNS } = require('../lib/hardnessPatterns');
+const { DEFAULT_PATTERNS: DEFAULT_MACRO_PATTERNS } = require('../lib/macroPatterns');
 
 // Railway (and most managed Postgres) inject DATABASE_URL automatically once
 // the Postgres plugin is attached to this service. For local dev, put your
@@ -514,6 +515,18 @@ async function initSchema() {
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Master Data > Pola Macro: baris ukur (label + nama titik) & sketsa report Macro-Etching per client
+    CREATE TABLE IF NOT EXISTS macro_patterns (
+      id SERIAL PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      customer TEXT,
+      groups JSONB NOT NULL DEFAULT '[]',    -- [{"label":"Weld Size (mm)","points":["A1","A2","A3"]}, ...]
+      notes TEXT,
+      sketch_image TEXT,                     -- data URL gambar sketsa
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+
     -- Berkas aplikasi tunggal (mis. stempel perusahaan 'company_stamp'), diunggah Administrator di Pengaturan
     CREATE TABLE IF NOT EXISTS app_files (
       key TEXT PRIMARY KEY,
@@ -791,6 +804,14 @@ async function initSchema() {
       );
     }
     await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_hardness_patterns', '1') ON CONFLICT (key) DO NOTHING`);
+  }
+  // Pola Macro contoh (dari report klien) ditambahkan sekali; boleh diubah atau dihapus di Master Data
+  const seededMacro = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_macro_patterns'`);
+  if (!seededMacro.rows.length) {
+    for (const p of DEFAULT_MACRO_PATTERNS) {
+      await pool.query(`INSERT INTO macro_patterns (name, groups, notes) VALUES ($1,$2,$3) ON CONFLICT (name) DO NOTHING`, [p.name, JSON.stringify(p.groups), p.notes]);
+    }
+    await pool.query(`INSERT INTO app_settings (key, value) VALUES ('seed_macro_patterns', '1') ON CONFLICT (key) DO NOTHING`);
   }
   // Acceptance Criteria bawaan (kalimat form resmi FWB / Peel) ditambahkan sekali; boleh diubah atau dihapus
   const seededCrit = await pool.query(`SELECT 1 FROM app_settings WHERE key = 'seed_acceptance_criteria'`);

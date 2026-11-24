@@ -44,6 +44,12 @@ const head = { report_no: 'DE.1/1126/0046', date_tested: '2026-10-20', test_cond
 // No. Laporan diketik manual: wajib sebelum Final
 assert.ok(testReportProblems({ kind: 'bending', template: 'bend-sec', body: { ...head, report_no: ' ', rows: [{ marking_specimen: 'BR1', result: 'accepted' }] } }).includes('No. Laporan belum diisi'));
 // isian bawaan (marking, observation) tidak dihitung sebagai data
+// Pola Macro & No. Laporan / Remarks per spesimen bukan data hasil: Lembar Macro tanpa nilai tetap ditolak; nilai ukur pola dihitung
+{
+  const macroBody = rows => ({ ...head, rows, fields: { macro_pattern: { name: 'P', groups: [{ label: 'Weld Size', points: ['A1'] }] }, spec_meta: [{}, { report_no: 'X/2', remarks: 'Root' }] } });
+  assert.ok(testReportProblems({ kind: 'macro', template: 'macro-fillet', body: macroBody([{ marking_specimen: 'MC1' }]) }).includes('Belum ada data hasil pengujian yang diisi'));
+  assert.ok(!testReportProblems({ kind: 'macro', template: 'macro-fillet', body: macroBody([{ marking_specimen: 'MC1', mvals: [['10.1']] }]) }).includes('Belum ada data hasil pengujian yang diisi'));
+}
 p = testReportProblems({ kind: 'bending', template: 'bend-sec', body: { ...head, rows: [{ marking_specimen: 'BR1', observation: 'No Open Discontinuity was Observed', result: '' }] } });
 assert.deepStrictEqual(p, ['Belum ada data hasil pengujian yang diisi']);
 p = testReportProblems({ kind: 'bending', template: 'bend-sec', body: { ...head, rows: [{ marking_specimen: 'BR1', result: 'accepted' }, { marking_specimen: 'BR2', result: '' }] } });

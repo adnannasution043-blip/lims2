@@ -94,6 +94,9 @@ assert.ok(!can(tech, 'PUT', '/api/hardness-patterns/3'));
 assert.ok(!can(tech, 'DELETE', '/api/hardness-patterns/3'));
 assert.ok(can(masterEditor, 'POST', '/api/hardness-patterns'));
 assert.ok(can(masterEditor, 'DELETE', '/api/hardness-patterns/3'));
+assert.ok(can(tech, 'GET', '/api/macro-patterns'));
+assert.ok(!can(tech, 'POST', '/api/macro-patterns'));
+assert.ok(can(masterEditor, 'PUT', '/api/macro-patterns/2'));
 
 // ---- token ----
 const secret = 'rahasia-uji-yang-cukup-panjang';
