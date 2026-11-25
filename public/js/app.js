@@ -5138,21 +5138,30 @@
     if (marks.length < 2) return '';
     const meta = (r.fields || {}).spec_meta || [];
     const cell = 'padding:6px 8px;border-bottom:1px solid var(--border, #e5e7eb);vertical-align:top;';
+    // Spesimen 1: kotak isian tersambung dua arah dengan No. Laporan & Remarks di atas (tanpa name, jadi tidak tersimpan dobel)
     const rows = marks.map((m, i) => i === 0
       ? `<tr><td style="${cell}white-space:nowrap;"><b>Spesimen 1</b><br><span class="muted" style="font-size:12px;">${esc(m)}</span></td>
-          <td colspan="2" style="${cell}" class="muted">memakai No. Laporan &amp; Remarks di atas</td></tr>`
+          <td style="${cell}"><input type="text" data-spec1="report_no" value="${esc(r.report_no || '')}" maxlength="80" placeholder="mis. DE.1/1126/0046" style="width:100%"></td>
+          <td style="${cell}"><textarea data-spec1="remarks" rows="2" placeholder="mis. Cap" style="width:100%">${esc(r.remarks || '')}</textarea></td></tr>`
       : `<tr><td style="${cell}white-space:nowrap;"><b>Spesimen ${i + 1}</b><br><span class="muted" style="font-size:12px;">${esc(m)}</span></td>
           <td style="${cell}"><input type="text" name="specmeta_no_${i}" value="${esc((meta[i] || {}).report_no || '')}" maxlength="80" placeholder="sama dengan di atas" style="width:100%"></td>
           <td style="${cell}"><textarea name="specmeta_rem_${i}" rows="2" placeholder="sama dengan Remarks di atas" style="width:100%">${esc((meta[i] || {}).remarks || '')}</textarea></td></tr>`).join('');
-    return `<div class="field full"><label>No. Laporan &amp; Remarks per Spesimen <span class="en">tiap spesimen dicetak di halaman sendiri; kosong = sama dengan isian di atas</span></label>
+    return `<div class="field full"><label>No. Laporan &amp; Remarks per Spesimen <span class="en">tiap spesimen dicetak di halaman sendiri; Spesimen 1 = isian di atas; spesimen lain kosong = sama dengan Spesimen 1</span></label>
       <div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:480px;">
         <thead><tr><th style="${cell}text-align:left;width:18%;">Spesimen</th><th style="${cell}text-align:left;width:32%;">No. Laporan</th><th style="${cell}text-align:left;">Remarks</th></tr></thead>
         <tbody>${rows}</tbody></table></div></div>`;
   }
+  // Spesimen 1 di tabel <-> No. Laporan & Remarks di atas: isian salah satu langsung tampil di yang lain
+  document.addEventListener('input', e => {
+    const t = e.target, form = t && t.form;
+    if (!form || form.id !== 'testReportForm') return;
+    if (t.dataset && t.dataset.spec1) { const f = form.elements[t.dataset.spec1]; if (f) f.value = t.value; return; }
+    if (t.name === 'report_no' || t.name === 'remarks') { const m = form.querySelector(`[data-spec1="${t.name}"]`); if (m) m.value = t.value; }
+  });
   function specMetaPayload(payload) {
     const meta = [];
-    Object.keys(payload).filter(k => /^specmeta_(no|rem)_d+$/.test(k)).forEach(k => {
-      const [, kind, i] = /^specmeta_(no|rem)_(d+)$/.exec(k);
+    Object.keys(payload).filter(k => /^specmeta_(no|rem)_\d+$/.test(k)).forEach(k => {
+      const [, kind, i] = /^specmeta_(no|rem)_(\d+)$/.exec(k);
       const m = meta[Number(i)] || (meta[Number(i)] = { report_no: '', remarks: '' });
       m[kind === 'no' ? 'report_no' : 'remarks'] = String(payload[k] || '').trim();
       delete payload[k];
