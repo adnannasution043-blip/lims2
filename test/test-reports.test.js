@@ -664,7 +664,7 @@ function call(method, path, params, body) {
   assert.strictEqual(r.body.fields.corr.more[0].sample_id, 'PT-2');
   assert.ok(!('evil' in r.body.fields.corr.more[0]) && !('hours' in r.body.fields.corr.more[0]));
   assert.strictEqual((await upload('corr-pit-weld-ph1/n2-s1', 'image/png', png1)).status, 201);   // slot foto spesimen 2
-  assert.strictEqual((await upload('corr-pit-weld-ph1/n11-s1', 'image/png', png1)).status, 400);
+  assert.strictEqual((await upload('corr-pit-weld-ph1/n31-s1', 'image/png', png1)).status, 400);   // maks. 30 spesimen
   corrHtml = await new Promise(resolve => routes['GET /test-reports/:id/print']({ params: { id: String(cid2) } }, { setHeader() {}, send: resolve }));
   assert.strictEqual((corrHtml.match(/class="paper"/g) || []).length, 6);
   assert.ok(corrHtml.includes('>PT-1<') && corrHtml.includes('>PT-2<') && corrHtml.includes('Pit 2'));
@@ -777,6 +777,12 @@ function call(method, path, params, body) {
       assert.ok(gr.includes('>7.5<') && gr.includes('>8.0<') && gr.indexOf('PDS.1-CM2') < gr.indexOf('>8.0<'));
       const one = renderTemplateReportHtml({ ...base, spec_markings: ['PDS.1-CM1'], template: 'chem-mat-ss', test_name: 'Chemical Composition Test', rows: [{}], fields: { elements: {} } });
       assert.strictEqual((one.match(/class="paper"/g) || []).length, 1, 'Qty 1 tidak berubah');
+      // PMI Qty 12 (klien 2026-11-27): lebih dari 10 spesimen tetap tercetak semua
+      const marks12 = Array.from({ length: 12 }, (_, i) => 'LKM.11.9-CA' + (i + 1));
+      const more11 = Array.from({ length: 11 }, (_, i) => ({ elements: { Cr: String(20 + i) } }));
+      const twelve = renderTemplateReportHtml({ ...base, spec_markings: marks12, template: 'chem-mat-ss', test_name: 'Chemical Composition Test', rows: [{}], fields: { elements: { Cr: '19' }, more: more11 } });
+      assert.strictEqual((twelve.match(/class="paper"/g) || []).length, 12, 'Qty 12: 12 halaman');
+      assert.ok(twelve.includes('LKM.11.9-CA12') && twelve.includes('>30<'), 'spesimen ke-12 tercetak dengan hasilnya');
     }
     // Material Type/Grade "A to B" dipecah tepat setelah "to" (tidak di tengah nama grade)
     {
