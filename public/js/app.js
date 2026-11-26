@@ -1968,9 +1968,12 @@
     pageSubtitle.textContent = `Work Order — ${tr.job_number || ''}`;
     topbarActions.innerHTML = `
       <button class="btn" id="btnWoBack">&larr; Kembali ke Daftar</button>
+      <button type="button" class="btn" id="btnWoCouponLabels" title="Kertas penanda material per coupon; isi bisa diubah sebelum dicetak">Label Coupon</button>
       <button type="button" class="btn" id="btnWoExportPdf">Export PDF</button>
     `;
     document.getElementById('btnWoBack').addEventListener('click', () => { state.view = 'wo-list'; render(); });
+    document.getElementById('btnWoCouponLabels').addEventListener('click', () =>
+      window.open(`/work-orders/${state.woEditingId}/coupon-labels`, '_blank'));
     document.getElementById('btnWoExportPdf').addEventListener('click', () =>
       window.open(`/work-orders/${state.woEditingId}/print`, '_blank'));
 

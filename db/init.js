@@ -243,6 +243,8 @@ async function initSchema() {
     -- No. Laporan per coupon (DE.1/MMYY/nnnn), dibuat otomatis sekali per coupon Work Order dan sekaligus menjadi
     -- No. LHU coupon itu. Unik lewat indeks parsial (lib/integrity.js ensureUniqueNumbers).
     ALTER TABLE work_order_sample_marks ADD COLUMN IF NOT EXISTS report_no TEXT;
+    -- Label Coupon (kertas penanda material) yang sudah diubah di halaman cetak; NULL = isi bawaan dari data coupon
+    ALTER TABLE work_order_sample_marks ADD COLUMN IF NOT EXISTS label_data JSONB;
     -- LHU kini satu per coupon: distribusi & attachment dicatat per coupon (NULL = data lama tingkat Work Order)
     ALTER TABLE lhu_distributions ADD COLUMN IF NOT EXISTS coupon_row_no INTEGER;
     ALTER TABLE lhu_attachments ADD COLUMN IF NOT EXISTS coupon_row_no INTEGER;

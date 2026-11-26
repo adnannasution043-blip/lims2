@@ -11,6 +11,7 @@ const { registerTestReportRoutes, canonicalTestName, formAliases, templateOption
 const { registerEquipmentRoutes } = require('./lib/equipment');
 const { registerHardnessPatternRoutes } = require('./lib/hardnessPatterns');
 const { registerMacroPatternRoutes } = require('./lib/macroPatterns');
+const { registerCouponLabelRoutes } = require('./lib/couponLabels');
 const { registerAcceptanceCriteriaRoutes } = require('./lib/acceptanceCriteria');
 const { registerWitnessRoutes } = require('./lib/witness');
 const { registerBackupRoutes } = require('./lib/backup');
@@ -1017,6 +1018,9 @@ app.delete('/api/work-orders/:id', async (req, res) => {
     res.status(500).json({ error: 'Gagal menghapus Work Order' });
   }
 });
+
+// Label Coupon / kertas penanda material per coupon (bisa diubah & disimpan di halaman cetaknya)
+registerCouponLabelRoutes(app, { pool, getFullWorkOrder });
 
 app.get('/work-orders/:id/print', async (req, res) => {
   try {
