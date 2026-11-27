@@ -191,4 +191,17 @@ KEYS.filter(k => /^corr-/.test(k)).forEach(k => {
   assert.ok(!perSpecimenPages('bend-sec') && !perSpecimenPages('charpy-weld'), 'Bend/Charpy: semua spesimen satu halaman');
 }
 
+// Footer rapat (chat klien 2026-11-28): kotak Term & Conditions dan nama/alamat perusahaan setinggi teksnya, bukan setinggi
+// kotak gabungan Excel; berlaku di semua form
+{
+  const html = R({ template: 'hard-weld', test_name: 'Hardness Test', test_request: {}, rows: [{}], hard_markings: ['X-HD1'], coupon: {}, fields: {} });
+  assert.ok(/<td class="s\d+ rt-foot"[^>]*>Term &amp; Conditions/.test(html), 'kotak Term & Conditions memakai tinggi teks');
+  assert.ok(/<td class="s\d+ rt-foot"[^>]*>PT DETECH PROFESIONAL/.test(html), 'kotak nama & alamat perusahaan memakai tinggi teks');
+  assert.ok(html.includes('.rt td.rt-foot{padding-bottom:6px}'));
+  KEYS.forEach(k => {
+    const t = loadTemplate(k);
+    assert.ok(t.rows.some(r => r.cells.some(c => /^Term & Condition/.test(String(c.v || '')))), k + ': footer Term & Conditions ada');
+  });
+}
+
 console.log('revisi-regression.test.js OK');
